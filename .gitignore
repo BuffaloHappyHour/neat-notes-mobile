@@ -1,0 +1,70 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+app-example
+
+# generated native folders
+/ios
+/android
+
+# --- Neat Notes: env + legacy (added) ---
+.env
+.env.*
+legacy/
+_quarantine/
+
+# --- Store build hygiene ---
+node_modules/
+.expo/
+.venv/
+
+# --- Non-app tooling/data (keep out of git) ---
+transcripts/
+transcript_pipeline/
+backup/
+data/
+legacy/
+_quarantine_junk/
+node_modules/
+.next/
+.env.local
+# --- neatnotes-web (Next.js) generated files ---
+neatnotes-web/node_modules/
+neatnotes-web/.next/
+neatnotes-web/.env.local
+neatnotes-web/git
