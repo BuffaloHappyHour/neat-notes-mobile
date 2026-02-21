@@ -1,0 +1,22 @@
+import { View, Text } from "react-native";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+
+export default function LogTab() {
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: COLORS.bg,
+        padding: SPACING.md,
+        gap: SPACING.sm,
+      }}
+    >
+      <Text style={{ fontSize: TEXT.h1, fontWeight: "800", color: COLORS.ink }}>
+        Log
+      </Text>
+      <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+        Tab screen placeholder.
+      </Text>
+    </View>
+  );
+}

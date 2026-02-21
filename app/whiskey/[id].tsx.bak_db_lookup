@@ -1,0 +1,258 @@
+import { useEffect, useState } from "react";
+import { View, Text, Image, ScrollView, Pressable, Linking } from "react-native";
+import { router, useLocalSearchParams, Stack } from "expo-router";
+import { getWhiskeyById } from "../../lib/whiskeys";
+import { COLORS, SPACING, TEXT as TEXTS } from "../../constants/theme";
+import { Card } from "../../components/ui/Card";
+import { SectionTitle } from "../../components/ui/SectionTitle";
+import { Divider } from "../../components/ui/Divider";
+import { PrimaryButton } from "../../components/ui/PrimaryButton";
+import {
+  getTastingsForWhiskey,
+  getWhiskeySnapshot,
+  DbTastingRow,
+  getBhhReviewsForWhiskey,
+  DbBhhReviewRow,
+} from "../../lib/db";
+
+function asString(v: string | string[] | undefined) {
+  if (Array.isArray(v)) return v[0];
+  return v ?? "";
+}
+
+function formatAvg(avg: number | null) {
+  if (avg === null) return "—";
+  const rounded = Math.round(avg * 10) / 10;
+  return String(rounded);
+}
+
+function displayScore(score: number) {
+  return score === 0 ? "Coming Soon" : String(score);
+}
+
+export default function WhiskeyDetailsScreen() {
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = asString(params.id);
+
+  const whiskey = getWhiskeyById(id);
+
+  const [snapshot, setSnapshot] = useState<{
+    totalTastings: number;
+    ratedCount: number;
+    avgRating: number | null;
+  }>({ totalTastings: 0, ratedCount: 0, avgRating: null });
+
+  const [recent, setRecent] = useState<DbTastingRow[]>([]);
+  const [bhh, setBhh] = useState<DbBhhReviewRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      if (!id) return;
+      setLoading(true);
+      try {
+        const [snap, rows, bhhRows] = await Promise.all([
+          getWhiskeySnapshot(id),
+          getTastingsForWhiskey(id, 5),
+          getBhhReviewsForWhiskey(id),
+        ]);
+        if (cancelled) return;
+
+        setSnapshot({
+          totalTastings: snap.totalTastings,
+          ratedCount: snap.ratedCount,
+          avgRating: snap.avgRating,
+        });
+        setRecent(rows);
+        setBhh(bhhRows);
+      } catch (e) {
+        console.log("Whiskey load failed:", e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: COLORS.bg }}
+      contentContainerStyle={{ padding: SPACING.md, gap: SPACING.md }}
+    >
+      <Stack.Screen options={{ title: whiskey?.name ?? "Whiskey" }} />
+
+      {!whiskey ? (
+        <Card>
+          <Text style={{ fontSize: TEXTS.h1, fontWeight: "900", color: COLORS.ink }}>
+            Whiskey not found
+          </Text>
+          <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+            ID: {id || "(none)"}
+          </Text>
+        </Card>
+      ) : (
+        <>
+          {whiskey.image ? (
+            <Image
+              source={whiskey.image}
+              style={{ width: "100%", height: 240, borderRadius: 18 }}
+              resizeMode="cover"
+            />
+          ) : null}
+
+          <View style={{ gap: 4 }}>
+            <Text style={{ fontSize: 28, fontWeight: "900", color: COLORS.ink }}>
+              {whiskey.name}
+            </Text>
+            <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+              {whiskey.distillery} • {whiskey.region}
+            </Text>
+          </View>
+
+          <PrimaryButton
+            label="Log Your Tasting"
+            onPress={() =>
+              router.push({
+                pathname: "/log/tasting",
+                params: { id: whiskey.id },
+              })
+            }
+          />
+
+          <Card>
+            <SectionTitle>Details</SectionTitle>
+            <View style={{ height: SPACING.sm }} />
+
+            <Text style={{ color: COLORS.ink }}>
+              <Text style={{ fontWeight: "800" }}>Type:</Text> {whiskey.type}
+            </Text>
+
+            <View style={{ height: 8 }} />
+
+            <Text style={{ color: COLORS.ink }}>
+              <Text style={{ fontWeight: "800" }}>Age:</Text>{" "}
+              {whiskey.age ? `${whiskey.age} years` : "N/A"}
+            </Text>
+
+            <View style={{ height: 8 }} />
+
+            <Text style={{ color: COLORS.ink }}>
+              <Text style={{ fontWeight: "800" }}>ABV:</Text>{" "}
+              {whiskey.abv ? `${whiskey.abv}%` : "N/A"}
+            </Text>
+
+            {whiskey.notes ? (
+              <>
+                <View style={{ height: SPACING.md }} />
+                <Divider />
+                <View style={{ height: SPACING.md }} />
+                <Text style={{ fontWeight: "900", color: COLORS.ink, marginBottom: 6 }}>
+                  Notes
+                </Text>
+                <Text style={{ color: COLORS.ink, opacity: 0.85 }}>{whiskey.notes}</Text>
+              </>
+            ) : null}
+          </Card>
+
+          <Card>
+            <SectionTitle>Your Snapshot</SectionTitle>
+            <View style={{ height: SPACING.sm }} />
+
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <View style={{ gap: 2 }}>
+                <Text style={{ opacity: 0.7, color: COLORS.ink }}>Avg Rating</Text>
+                <Text style={{ fontSize: TEXTS.h1, fontWeight: "900", color: COLORS.ink }}>
+                  {loading ? "…" : formatAvg(snapshot.avgRating)}
+                </Text>
+                <Text style={{ opacity: 0.7, color: COLORS.ink }}>
+                  Rated: {loading ? "…" : snapshot.ratedCount}
+                </Text>
+              </View>
+
+              <View style={{ gap: 2, alignItems: "flex-end" }}>
+                <Text style={{ opacity: 0.7, color: COLORS.ink }}>Total Tastings</Text>
+                <Text style={{ fontSize: TEXTS.h1, fontWeight: "900", color: COLORS.ink }}>
+                  {loading ? "…" : snapshot.totalTastings}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ height: SPACING.md }} />
+            <Divider />
+            <View style={{ height: SPACING.md }} />
+
+            <Text style={{ fontWeight: "900", color: COLORS.ink, marginBottom: 6 }}>
+              Recent Tastings
+            </Text>
+
+            {recent.length === 0 ? (
+              <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+                None yet — log your first tasting.
+              </Text>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {recent.map((t) => (
+                  <View key={t.id} style={{ gap: 2 }}>
+                    <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+                      {new Date(t.createdAt).toLocaleString()}
+                    </Text>
+                    <Text style={{ color: COLORS.ink }}>
+                      Rating:{" "}
+                      <Text style={{ fontWeight: "900" }}>{t.rating ?? "—"}</Text> • Would buy
+                      again:{" "}
+                      <Text style={{ fontWeight: "900" }}>
+                        {t.wouldBuyAgain ? "Yes" : "No"}
+                      </Text>
+                    </Text>
+                    <Divider />
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+
+          <Card>
+            <SectionTitle>BHH Review</SectionTitle>
+            <View style={{ height: SPACING.sm }} />
+
+            {bhh.length === 0 ? (
+              <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+                No BHH reviews yet. Import the playlist in Profile.
+              </Text>
+            ) : (
+              <View style={{ gap: 12 }}>
+                {bhh.map((r) => (
+                  <Pressable
+                    key={r.id}
+                    onPress={() => Linking.openURL(r.youtubeUrl)}
+                    style={{ gap: 4 }}
+                  >
+                    <Text style={{ fontWeight: "900", color: COLORS.ink }}>
+                      {r.whiskeyName} — {displayScore(r.score)}
+                    </Text>
+
+                    <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+                      {new Date(r.reviewedAt).toLocaleDateString()}
+                    </Text>
+
+                    <Text style={{ color: COLORS.lightBlue, fontWeight: "800" }}>
+                      Open on YouTube
+                    </Text>
+
+                    <Divider />
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </Card>
+        </>
+      )}
+    </ScrollView>
+  );
+}

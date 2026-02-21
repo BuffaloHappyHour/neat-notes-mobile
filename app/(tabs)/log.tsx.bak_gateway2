@@ -1,0 +1,217 @@
+// app/(tabs)/log.tsx
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+import { initDb, db } from "../../lib/db";
+import { ensureWhiskeyCatalogReady } from "../../lib/catalog/whiskeyCatalog";
+import { WhiskeyAutocompleteField, WhiskeySelection } from "../../lib/catalog/WhiskeyAutocompleteField";
+
+function makeId() {
+  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+export default function LogTab() {
+  const [ready, setReady] = useState(false);
+
+  const [whiskey, setWhiskey] = useState<WhiskeySelection>({ kind: "none" });
+  const [ratingText, setRatingText] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Basic derived fields
+  const displayWhiskeyName = useMemo(() => {
+    if (whiskey.kind === "catalog") return whiskey.name;
+    if (whiskey.kind === "custom") return whiskey.name.trim();
+    return "";
+  }, [whiskey]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        // Ensure base schema exists
+        await initDb();
+
+        // Ensure catalog exists and seed it from BHH review names (fast, one-time)
+        await ensureWhiskeyCatalogReady([]);
+
+        setReady(true);
+      } catch (e: any) {
+        console.error(e);
+        Alert.alert("DB error", e?.message ?? "Failed to initialize database.");
+      }
+    })();
+  }, []);
+
+  async function onSave() {
+    const whiskeyName = displayWhiskeyName;
+
+    if (!whiskeyName) {
+      Alert.alert("Missing whiskey", "Please enter a whiskey name or pick one from the list.");
+      return;
+    }
+
+    // rating optional; if entered validate 0-100 (or 0-10, adjust later)
+    let rating: number | null = null;
+    const rt = ratingText.trim();
+    if (rt.length > 0) {
+      const n = Number(rt);
+      if (!Number.isFinite(n)) {
+        Alert.alert("Invalid rating", "Rating must be a number.");
+        return;
+      }
+      if (n < 0 || n > 100) {
+        Alert.alert("Invalid rating", "Rating must be between 0 and 100.");
+        return;
+      }
+      rating = n;
+    }
+
+    setSaving(true);
+    try {
+      await initDb(); // ensures new columns exist if you recently added them
+
+      const id = makeId();
+      const createdAt = new Date().toISOString();
+
+      const catalogWhiskeyId = whiskey.kind === "catalog" ? whiskey.id : null;
+      const customWhiskeyName = whiskey.kind === "catalog" ? null : whiskeyName;
+
+      // Insert: keep legacy columns (whiskeyId/whiskeyName) populated for compatibility
+      // - whiskeyId: leave null for custom (or catalog too, unless you have a real whiskeyId system)
+      // - whiskeyName: always store display name for quick UI
+      await db.runAsync(
+        `INSERT INTO tastings
+          (id, whiskeyId, whiskeyName, rating, notes, createdAt, catalogWhiskeyId, customWhiskeyName)
+         VALUES
+          (?,  ?,        ?,          ?,      ?,     ?,         ?,               ?)`,
+        [
+          id,
+          null,
+          whiskeyName,
+          rating,
+          notes.trim().length ? notes.trim() : null,
+          createdAt,
+          catalogWhiskeyId,
+          customWhiskeyName,
+        ]
+      );
+
+      Alert.alert("Saved", "Your tasting was logged.");
+
+      // Reset form
+      setWhiskey({ kind: "none" });
+      setRatingText("");
+      setNotes("");
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert("Save failed", e?.message ?? "Could not save tasting.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: COLORS.bg,
+      }}
+    >
+      <ScrollView
+        contentContainerStyle={{
+          padding: SPACING.md,
+          gap: SPACING.md,
+        }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={{ fontSize: TEXT.h1, fontWeight: "800", color: COLORS.ink }}>
+          Log a Tasting
+        </Text>
+
+        <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+          Start typing a whiskey to pick from the catalog, or enter a custom bottle.
+        </Text>
+
+        <View style={{ gap: SPACING.sm }}>
+          <WhiskeyAutocompleteField
+            label="Whiskey"
+            value={whiskey}
+            onChange={setWhiskey}
+            placeholder="Type a whiskey name…"
+            borderColor={COLORS.border}
+            textColor={COLORS.ink}
+          />
+
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: COLORS.ink }}>
+              Rating (0–100, optional)
+            </Text>
+            <TextInput
+              value={ratingText}
+              onChangeText={setRatingText}
+              keyboardType="numeric"
+              placeholder="e.g. 88"
+              placeholderTextColor={COLORS.ink}
+              style={{
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                fontSize: 16,
+                color: COLORS.ink,
+              }}
+            />
+          </View>
+
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: COLORS.ink }}>
+              Notes (optional)
+            </Text>
+            <TextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Nose, palate, finish…"
+              placeholderTextColor={COLORS.ink}
+              multiline
+              style={{
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                minHeight: 110,
+                textAlignVertical: "top",
+                fontSize: 16,
+                color: COLORS.ink,
+              }}
+            />
+          </View>
+        </View>
+
+        <Pressable
+          disabled={!ready || saving}
+          onPress={onSave}
+          style={({ pressed }) => ({
+            marginTop: SPACING.sm,
+            paddingVertical: 14,
+            borderRadius: 14,
+            alignItems: "center",
+            backgroundColor: !ready || saving ? COLORS.border : COLORS.brand,
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <Text style={{ color: COLORS.bg, fontWeight: "800", fontSize: 16 }}>
+            {saving ? "Saving…" : "Save Tasting"}
+          </Text>
+        </Pressable>
+
+        {!ready ? (
+          <Text style={{ marginTop: 8, color: COLORS.ink, opacity: 0.7 }}>
+            Initializing database…
+          </Text>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}

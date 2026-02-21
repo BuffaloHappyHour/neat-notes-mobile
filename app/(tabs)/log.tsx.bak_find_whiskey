@@ -1,0 +1,86 @@
+// app/(tabs)/log.tsx
+import React, { useMemo, useState } from "react";
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useRouter } from "expo-router";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+
+export default function LogTab() {
+  const router = useRouter();
+
+  const [whiskeyNameInput, setWhiskeyNameInput] = useState("");
+
+  const whiskeyName = useMemo(() => whiskeyNameInput.trim(), [whiskeyNameInput]);
+
+  function onLogTasting() {
+    if (!whiskeyName) {
+      Alert.alert("Pick a whiskey", "Type a whiskey name, then tap “Log your tasting”.");
+      return;
+    }
+
+    router.push({
+      pathname: "/log/tasting" as any,
+      params: {
+        whiskeyName,
+        source: "logTab",
+      },
+    });
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <ScrollView
+        contentContainerStyle={{
+          padding: SPACING.md,
+          gap: SPACING.md,
+        }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={{ fontSize: TEXT.h1, fontWeight: "800", color: COLORS.ink }}>
+          Log
+        </Text>
+
+        <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+          Type your whiskey, then tap “Log your tasting”.
+        </Text>
+
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: COLORS.ink }}>Whiskey</Text>
+          <TextInput
+            value={whiskeyNameInput}
+            onChangeText={setWhiskeyNameInput}
+            placeholder="Type a whiskey name…"
+            placeholderTextColor={COLORS.ink}
+            autoCapitalize="words"
+            autoCorrect={false}
+            style={{
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 16,
+              color: COLORS.ink,
+            }}
+          />
+        </View>
+
+        <Pressable
+          onPress={onLogTasting}
+          style={({ pressed }) => ({
+            marginTop: SPACING.sm,
+            paddingVertical: 14,
+            borderRadius: 14,
+            alignItems: "center",
+            backgroundColor: COLORS.brand,
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <Text style={{ color: COLORS.bg, fontWeight: "800", fontSize: 16 }}>
+            Log your tasting
+          </Text>
+        </Pressable>
+      </ScrollView>
+    </View>
+  );
+}
+

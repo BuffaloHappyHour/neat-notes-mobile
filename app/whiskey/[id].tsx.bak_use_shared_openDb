@@ -1,0 +1,383 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  Linking,
+  ActivityIndicator,
+} from "react-native";
+import { Stack, useLocalSearchParams, router } from "expo-router";
+import * as SQLite from "expo-sqlite";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+
+type BhhReviewRow = {
+  id: string;
+  whiskeyId: string | null;
+  whiskeyName: string;
+  reviewer: string;
+  score: number;
+  reviewedAt: string | null;
+  youtubeUrl: string | null;
+  title: string | null;
+  meta: string | null;
+};
+
+type TastingRow = {
+  id: string;
+  whiskeyId: string | null;
+  whiskeyName: string;
+  rating: number | null;
+  createdAt: string | null;
+  distillery: string | null;
+  region: string | null;
+};
+
+function asString(v: string | string[] | undefined) {
+  if (Array.isArray(v)) return v[0];
+  return v;
+}
+
+function slugifyLocal(input: string) {
+  return (input ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function openDbWithRequiredTables() {
+  const candidates = [
+    "whiskeyappbeta.db",
+    "WhiskeyAppBeta.db",
+    "whiskey.db",
+    "app.db",
+    "database.db",
+    "db.db",
+    "default.db",
+  ];
+
+  for (const name of candidates) {
+    try {
+      const db = SQLite.openDatabaseSync(name);
+      const hit = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='bhh_reviews' LIMIT 1;"
+      );
+      const hit2 = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='tastings' LIMIT 1;"
+      );
+      if (hit?.name === "bhh_reviews" && hit2?.name === "tastings") return db;
+    } catch {}
+  }
+
+  return SQLite.openDatabaseSync("default.db");
+}
+
+export default function WhiskeyDetailScreen() {
+  const params = useLocalSearchParams<{ id?: string | string[]; name?: string | string[] }>();
+  const id = asString(params.id) ?? "";
+  const typedName = (asString(params.name) ?? "").trim();
+
+  const [loading, setLoading] = useState(true);
+  const [bhh, setBhh] = useState<BhhReviewRow[]>([]);
+  const [recent, setRecent] = useState<TastingRow[]>([]);
+  const [snapshot, setSnapshot] = useState<{ total: number; avg: number | null }>({
+    total: 0,
+    avg: null,
+  });
+
+  const displayName = useMemo(() => {
+    if (typedName) return typedName;
+    return id.replace(/-/g, " ").trim() || "Whiskey";
+  }, [typedName, id]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      setLoading(true);
+      try {
+        const db = await openDbWithRequiredTables();
+
+        // BHH lookup (id/name/title fallbacks)
+        let reviews: BhhReviewRow[] = [];
+
+        // 1) by whiskeyId
+        try {
+          reviews = await db.getAllAsync<BhhReviewRow[]>(
+            `SELECT id, whiskeyId, whiskeyName, reviewer, score, reviewedAt, youtubeUrl, title, meta
+             FROM bhh_reviews
+             WHERE whiskeyId = ?
+             ORDER BY reviewedAt DESC`,
+            [id]
+          );
+        } catch {}
+
+        // 2) by typedName
+        if ((!reviews || reviews.length === 0) && typedName) {
+          const like = `%${typedName}%`;
+          try {
+            reviews = await db.getAllAsync<BhhReviewRow[]>(
+              `SELECT id, whiskeyId, whiskeyName, reviewer, score, reviewedAt, youtubeUrl, title, meta
+               FROM bhh_reviews
+               WHERE (whiskeyName IS NOT NULL AND LOWER(whiskeyName) LIKE LOWER(?))
+                  OR (title IS NOT NULL AND LOWER(title) LIKE LOWER(?))
+               ORDER BY reviewedAt DESC`,
+              [like, like]
+            );
+          } catch {}
+        }
+
+        // 3) by unslug id
+        if ((!reviews || reviews.length === 0) && id) {
+          const unslug = id.replace(/-/g, " ").trim();
+          if (unslug.length >= 2) {
+            const like = `%${unslug}%`;
+            try {
+              reviews = await db.getAllAsync<BhhReviewRow[]>(
+                `SELECT id, whiskeyId, whiskeyName, reviewer, score, reviewedAt, youtubeUrl, title, meta
+                 FROM bhh_reviews
+                 WHERE (whiskeyName IS NOT NULL AND LOWER(whiskeyName) LIKE LOWER(?))
+                    OR (title IS NOT NULL AND LOWER(title) LIKE LOWER(?))
+                 ORDER BY reviewedAt DESC`,
+                [like, like]
+              );
+            } catch {}
+          }
+        }
+
+        // Tastings
+        let tastings: TastingRow[] = [];
+        try {
+          tastings = await db.getAllAsync<TastingRow[]>(
+            `SELECT id, whiskeyId, whiskeyName, rating, createdAt, distillery, region
+             FROM tastings
+             WHERE whiskeyId = ?
+             ORDER BY createdAt DESC
+             LIMIT 10`,
+            [id]
+          );
+        } catch {}
+
+        // Snapshot stats
+        try {
+          const row = await db.getFirstAsync<{ total: number; avg: number | null }>(
+            `SELECT COUNT(*) as total, AVG(rating) as avg
+             FROM tastings
+             WHERE whiskeyId = ?`,
+            [id]
+          );
+
+          if (mounted) {
+            setSnapshot({
+              total: row?.total ?? 0,
+              avg:
+                typeof row?.avg === "number" && Number.isFinite(row.avg)
+                  ? Math.round(row.avg * 10) / 10
+                  : null,
+            });
+          }
+        } catch {}
+
+        if (!mounted) return;
+        setBhh((reviews as any) ?? []);
+        setRecent((tastings as any) ?? []);
+      } catch (e) {
+        console.log("Whiskey load failed:", e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [id, typedName]);
+
+  const bhhBest = useMemo(() => {
+    if (!bhh || bhh.length === 0) return null;
+    const nonZero = bhh.find((r) => (r.score ?? 0) > 0);
+    return nonZero ?? bhh[0];
+  }, [bhh]);
+
+  const bhhScore = useMemo(() => {
+    if (!bhhBest) return null;
+    const n = Number(bhhBest.score ?? 0);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [bhhBest]);
+
+  const compareText = useMemo(() => {
+    if (bhhScore == null || snapshot.avg == null) return "Not enough data to compare yet.";
+    // BHH is often 0-100-ish, community rating might be 1-10 depending on your app.
+    // If your community is 1-10, we compare within that scale by mapping BHH/10.
+    const bhhScaled = Math.round((bhhScore / 10) * 10) / 10; // 0-10-ish
+    const diff = Math.round((snapshot.avg - bhhScaled) * 10) / 10;
+    if (Math.abs(diff) <= 0.4) return "Community is close to BHH.";
+    if (diff > 0) return `Community is higher than BHH by ~${diff}.`;
+    return `Community is lower than BHH by ~${Math.abs(diff)}.`;
+  }, [bhhScore, snapshot.avg]);
+
+  function logThisWhiskey() {
+    // pass id + whiskeyName for prefill
+    router.push({
+      pathname: "/log/tasting",
+      params: { id, whiskeyName: typedName || displayName },
+    });
+  }
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <Stack.Screen options={{ title: "Whiskey" }} />
+
+      <View style={{ padding: SPACING.md, gap: SPACING.md }}>
+        <Text style={{ fontSize: TEXT.h1, fontWeight: "900", color: COLORS.ink }}>
+          {typedName || bhhBest?.whiskeyName || displayName}
+        </Text>
+
+        {loading ? (
+          <View style={{ paddingVertical: 20 }}>
+            <ActivityIndicator />
+            <Text style={{ marginTop: 10, color: COLORS.ink, opacity: 0.7 }}>
+              Loading whiskey…
+            </Text>
+          </View>
+        ) : null}
+
+        {/* BHH */}
+        <View
+          style={{
+            backgroundColor: COLORS.card,
+            borderRadius: 16,
+            padding: SPACING.md,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            gap: 10,
+          }}
+        >
+          <Text style={{ fontSize: 18, fontWeight: "900", color: COLORS.ink }}>
+            Buffalo Happy Hour
+          </Text>
+
+          <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+            Score:{" "}
+            <Text style={{ fontWeight: "900" }}>
+              {bhhScore == null ? "Coming Soon" : String(bhhScore)}
+            </Text>
+          </Text>
+
+          {bhhBest?.youtubeUrl ? (
+            <Pressable
+              onPress={() => Linking.openURL(bhhBest.youtubeUrl!)}
+              style={({ pressed }) => ({
+                paddingVertical: 12,
+                borderRadius: 14,
+                alignItems: "center",
+                backgroundColor: COLORS.primary,
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={{ color: COLORS.bg, fontWeight: "900" }}>
+                Watch on YouTube
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={{ color: COLORS.ink, opacity: 0.65, fontSize: 12 }}>
+              No linked BHH video found for this whiskey yet.
+            </Text>
+          )}
+        </View>
+
+        {/* Community vs BHH */}
+        <View
+          style={{
+            backgroundColor: COLORS.card,
+            borderRadius: 16,
+            padding: SPACING.md,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            gap: 8,
+          }}
+        >
+          <Text style={{ fontSize: 18, fontWeight: "900", color: COLORS.ink }}>
+            Community vs BHH
+          </Text>
+
+          <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+            Community Avg: <Text style={{ fontWeight: "900" }}>{snapshot.avg ?? "—"}</Text>
+            {"  •  "}
+            Total Tastings: <Text style={{ fontWeight: "900" }}>{snapshot.total}</Text>
+          </Text>
+
+          <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+            {compareText}
+          </Text>
+        </View>
+
+        {/* Log */}
+        <View
+          style={{
+            backgroundColor: COLORS.card,
+            borderRadius: 16,
+            padding: SPACING.md,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            gap: 10,
+          }}
+        >
+          <Text style={{ fontSize: 18, fontWeight: "900", color: COLORS.ink }}>
+            Your Snapshot
+          </Text>
+
+          <Pressable
+            onPress={logThisWhiskey}
+            style={({ pressed }) => ({
+              paddingVertical: 12,
+              borderRadius: 14,
+              alignItems: "center",
+              backgroundColor: COLORS.primary,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: COLORS.bg, fontWeight: "900" }}>
+              Log Your Tasting
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Recent tastings */}
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontSize: 18, fontWeight: "900", color: COLORS.ink }}>
+            Recent Tastings
+          </Text>
+
+          {recent.length === 0 ? (
+            <Text style={{ color: COLORS.ink, opacity: 0.7 }}>
+              None yet — log your first tasting.
+            </Text>
+          ) : (
+            recent.map((t) => (
+              <View
+                key={t.id}
+                style={{
+                  backgroundColor: COLORS.card,
+                  borderRadius: 14,
+                  padding: SPACING.md,
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                }}
+              >
+                <Text style={{ color: COLORS.ink, fontWeight: "900" }}>
+                  Rating: {t.rating ?? "—"}
+                </Text>
+                <Text style={{ color: COLORS.ink, opacity: 0.7, marginTop: 4 }}>
+                  {t.region ? t.region : ""}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+      </View>
+    </ScrollView>
+  );
+}

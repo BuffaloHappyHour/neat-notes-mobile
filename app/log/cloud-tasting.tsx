@@ -169,7 +169,6 @@ function SimpleSlider({
 
   const pct = max === min ? 0 : ((clamp(value) - min) / (max - min)) * 100;
 
-  // ✅ Fix: clamp thumb position so it never goes negative / off-track (stops “jumping”)
   const THUMB = 24;
   const thumbLeft = useMemo(() => {
     if (trackW <= 0) return 0;
@@ -344,6 +343,7 @@ function NotesList({
             disabled={disabled || atLimit}
             onPress={() => onToggle(t)}
             style={({ pressed }) => ({
+              width: "100%",
               paddingVertical: 11,
               paddingHorizontal: 12,
               borderRadius: radii.md,
@@ -391,6 +391,12 @@ function NotesList({
   );
 }
 
+/**
+ * ✅ 2-column centered grid (no empty middle column)
+ * - Same “button feel” as the other sections
+ * - Centered rows
+ * - Stable across devices
+ */
 function NotesGrid({
   tags,
   selected,
@@ -404,9 +410,18 @@ function NotesGrid({
   max: number;
   disabled?: boolean;
 }) {
+  const GAP = 10;
+
   return (
     <View style={{ gap: spacing.sm }}>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: GAP,
+        }}
+      >
         {tags.map((t) => {
           const active = selected.includes(t);
           const atLimit = selected.length >= max && !active;
@@ -417,10 +432,14 @@ function NotesGrid({
               disabled={disabled || atLimit}
               onPress={() => onToggle(t)}
               style={({ pressed }) => ({
-                width: "31%",
-                minWidth: 92,
+                // ✅ Always 2 columns: each item takes ~half, minus gap
+                flexGrow: 0,
+                flexShrink: 0,
+                flexBasis: "46%",     // slightly wider than 47 to match “width you liked”
+                maxWidth: "46%",
+
                 paddingVertical: 11,
-                paddingHorizontal: 10,
+                paddingHorizontal: 12,
                 borderRadius: radii.md,
                 borderWidth: active ? 2 : 1,
                 borderColor: active ? colors.accent : colors.divider,
@@ -432,8 +451,10 @@ function NotesGrid({
                   : pressed
                   ? 0.92
                   : 1,
+
                 alignItems: "center",
                 justifyContent: "center",
+                minHeight: 46, // ✅ keeps shape consistent
               })}
             >
               <Text
@@ -444,10 +465,10 @@ function NotesGrid({
                     textAlign: "center",
                     opacity: active ? 1 : 0.9,
                     fontSize: 13,
-                    lineHeight: 16,
                   },
                 ]}
-                numberOfLines={2}
+                numberOfLines={1}          // ✅ NEVER WRAP
+                ellipsizeMode="tail"       // ✅ show … if needed
               >
                 {t}
               </Text>
@@ -519,15 +540,12 @@ export default function CloudTastingScreen() {
   const [nose, setNose] = useState<Reaction>(null);
   const [taste, setTaste] = useState<Reaction>(null);
 
-  // ✅ Optional "freeform" notes that are NOT used for intelligence (for now)
   const [personalNotes, setPersonalNotes] = useState("");
 
-  // ✅ single source of truth: store UUID if it’s valid
   const [whiskeyId, setWhiskeyId] = useState<string | null>(
     isUuid(routeWhiskeyIdRaw) ? routeWhiskeyIdRaw : null
   );
 
-  // ✅ show “robust whiskey info” when we have a canonical whiskeyId
   const [whiskeyMeta, setWhiskeyMeta] = useState<WhiskeyMeta | null>(null);
 
   const FLAVOR_TAGS = useMemo(
@@ -558,7 +576,7 @@ export default function CloudTastingScreen() {
       "Too Grainy",
       "Too Herbal",
       "Too Peaty",
-      "Too Hot",
+      "Too Hot (proof)",
     ],
     []
   );
@@ -566,9 +584,7 @@ export default function CloudTastingScreen() {
   const [flavorTags, setFlavorTags] = useState<string[]>([]);
   const [dislikeTags, setDislikeTags] = useState<string[]>([]);
 
-  const [sourceType, setSourceType] = useState<"purchased" | "bar">(
-    "purchased"
-  );
+  const [sourceType, setSourceType] = useState<"purchased" | "bar">("purchased");
   const [barName, setBarName] = useState("");
 
   const [snapshot, setSnapshot] = useState<{
@@ -585,12 +601,6 @@ export default function CloudTastingScreen() {
   } | null>(null);
 
   const canEdit = !locked;
-  const canEditName = canEdit && !(!isExisting && lockName);
-
-  const title = useMemo(
-    () => (isExisting ? "Tasting" : "New Tasting"),
-    [isExisting]
-  );
 
   function toggleFlavor(tag: string) {
     setFlavorTags((prev) => {
@@ -617,11 +627,9 @@ export default function CloudTastingScreen() {
     setRating(clamp100(base + delta));
   }
 
-  // ✅ Press-and-hold auto-repeat for +/- (premium feel)
   const repeatRef = useRef<any>(null);
   function startRepeat(delta: number) {
     if (!canEdit) return;
-    // immediate tick
     stepRating(delta);
 
     if (repeatRef.current) clearInterval(repeatRef.current);
@@ -637,7 +645,6 @@ export default function CloudTastingScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ Load whiskey meta (safe fallback if some columns don't exist)
   const loadWhiskeyMeta = useCallback(async () => {
     if (!whiskeyId || !isUuid(whiskeyId)) {
       setWhiskeyMeta(null);
@@ -645,10 +652,8 @@ export default function CloudTastingScreen() {
     }
 
     try {
-      // Try richer select first (if you later add these columns)
       const { data, error } = await supabase
         .from("whiskeys")
-        // NOTE: If age/distillery don't exist, Supabase will error and we fall back.
         .select("whiskey_type, proof, age, distillery")
         .eq("id", whiskeyId)
         .maybeSingle();
@@ -662,12 +667,14 @@ export default function CloudTastingScreen() {
           row.proof == null || !Number.isFinite(Number(row.proof))
             ? null
             : Number(row.proof),
-        age: row.age == null || !Number.isFinite(Number(row.age)) ? null : Number(row.age),
+        age:
+          row.age == null || !Number.isFinite(Number(row.age))
+            ? null
+            : Number(row.age),
         distillery: row.distillery != null ? String(row.distillery) : null,
       });
     } catch {
       try {
-        // Fallback: columns we know exist in your current build
         const { data, error } = await supabase
           .from("whiskeys")
           .select("whiskey_type, proof")
@@ -892,9 +899,6 @@ export default function CloudTastingScreen() {
 
         await hapticSuccess();
 
-        // ✅ Better post-save routing:
-        // - If canonical whiskeyId exists, go to whiskey profile
-        // - If custom, send to Profile (feels “done”, not bounced back)
         if (safeWhiskeyId) router.replace(`/whiskey/${encodeURIComponent(safeWhiskeyId)}`);
         else router.replace("/profile");
       }
@@ -946,14 +950,13 @@ export default function CloudTastingScreen() {
 
   const distilleryText = whiskeyMeta?.distillery ? String(whiskeyMeta.distillery) : null;
 
-  const hasBottleDetails =
-    !!typeText || !!proofText || !!ageText || !!distilleryText;
+  const hasBottleDetails = !!typeText || !!proofText || !!ageText || !!distilleryText;
 
   return (
     <>
       <Stack.Screen
         options={{
-          title,
+          title: isExisting ? "Tasting" : "New Tasting",
           headerStyle: { backgroundColor: colors.background as any },
           headerTintColor: colors.textPrimary as any,
           headerShadowVisible: false,
@@ -1017,80 +1020,83 @@ export default function CloudTastingScreen() {
 
           {/* Whiskey */}
           <Card>
-            <Text style={type.sectionHeader}>Whiskey</Text>
+             <TextInput
+    value={name}
+    onChangeText={(t) => {
+      setName(t);
+      if (!lockName) setWhiskeyId(null);
+    }}
+    editable={!locked && !(!isExisting && lockName)}
+    placeholder="Whiskey name"
+    placeholderTextColor={colors.textSecondary}
+    autoCapitalize="words"
+    multiline
+    numberOfLines={2}
+    textAlignVertical="top"
+    style={{
+      // tighter top spacing (no extra header gap)
+      marginTop: 0,
 
-            <TextInput
-              value={name}
-              onChangeText={(t) => {
-                setName(t);
-                if (!lockName) setWhiskeyId(null);
-              }}
-              editable={canEditName}
-              placeholder="Whiskey name"
-              placeholderTextColor={colors.textSecondary}
-              autoCapitalize="words"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              style={{
-                marginTop: spacing.md,
-                paddingVertical: spacing.md,
-                paddingHorizontal: spacing.md,
-                borderRadius: radii.md,
-                borderWidth: 1,
-                borderColor: colors.divider,
-                backgroundColor: "transparent",
-                color: colors.textPrimary,
-                fontSize: 16,
-                fontFamily: type.body.fontFamily,
-                opacity: canEditName ? 1 : 0.75,
-                minHeight: 64,
-              }}
-            />
+      // ✅ make the whiskey name pop
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.divider,
+      backgroundColor: "transparent",
+      color: colors.textPrimary,
 
-            {/* ✅ Bottle details (clean like Whiskey Profile — no pills) */}
-            {whiskeyId && whiskeyMeta && hasBottleDetails ? (
-              <View
-                style={{
-                  marginTop: spacing.lg,
-                  gap: 8,
-                  paddingTop: spacing.md,
-                  borderTopWidth: 1,
-                  borderTopColor: colors.divider,
-                }}
-              >
-                <Text style={[type.body, { opacity: 0.75, fontSize: 12 }]}>
-                  Bottle details
-                </Text>
+      fontSize: 20,
+      lineHeight: 24,
+      fontWeight: "900",
+      fontFamily: type.screenTitle?.fontFamily ?? type.body.fontFamily,
 
-                {distilleryText ? (
-                  <Text style={[type.body, { opacity: 0.8 }]}>
-                    Distillery:{" "}
-                    <Text style={{ fontWeight: "900" }}>{distilleryText}</Text>
-                  </Text>
-                ) : null}
+      opacity: !locked && !(!isExisting && lockName) ? 1 : 0.75,
+      minHeight: 56,
+    }}
+  />
 
-                {typeText ? (
-                  <Text style={[type.body, { opacity: 0.8 }]}>
-                    Type: <Text style={{ fontWeight: "900" }}>{typeText}</Text>
-                  </Text>
-                ) : null}
+  {/* Bottle details (UPDATED: shortened spacing above + tighter layout) */}
+  {whiskeyId && whiskeyMeta && hasBottleDetails ? (
+    <View
+      style={{
+        marginTop: spacing.sm,          // ✅ was spacing.lg
+        gap: 6,                        // ✅ was 8
+        paddingTop: spacing.sm,        // ✅ was spacing.md
+        borderTopWidth: 1,
+        borderTopColor: colors.divider,
+      }}
+    >
+      <Text style={[type.body, { opacity: 0.75, fontSize: 12 }]}>
+        Bottle details
+      </Text>
 
-                {proofText ? (
-                  <Text style={[type.body, { opacity: 0.8 }]}>
-                    Proof: <Text style={{ fontWeight: "900" }}>{proofText}</Text>
-                  </Text>
-                ) : null}
+      {distilleryText ? (
+        <Text style={[type.body, { opacity: 0.8 }]}>
+          Distillery: <Text style={{ fontWeight: "900" }}>{distilleryText}</Text>
+        </Text>
+      ) : null}
 
-                {ageText ? (
-                  <Text style={[type.body, { opacity: 0.8 }]}>
-                    Age: <Text style={{ fontWeight: "900" }}>{ageText}</Text>
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
-          </Card>
+      {typeText ? (
+        <Text style={[type.body, { opacity: 0.8 }]}>
+          Type: <Text style={{ fontWeight: "900" }}>{typeText}</Text>
+        </Text>
+      ) : null}
 
+      {proofText ? (
+        <Text style={[type.body, { opacity: 0.8 }]}>
+          Proof: <Text style={{ fontWeight: "900" }}>{proofText}</Text>
+        </Text>
+      ) : null}
+
+      {ageText ? (
+        <Text style={[type.body, { opacity: 0.8 }]}>
+          Age: <Text style={{ fontWeight: "900" }}>{ageText}</Text>
+        </Text>
+      ) : null}
+    </View>
+  ) : null}
+</Card>
           {/* Rating */}
           <Card>
             <Text style={type.sectionHeader}>Rating</Text>
@@ -1100,7 +1106,7 @@ export default function CloudTastingScreen() {
 
             <View style={{ marginTop: spacing.lg, gap: spacing.md }}>
               <SimpleSlider
-                disabled={!canEdit}
+                disabled={locked}
                 value={rating == null ? 0 : rating}
                 min={0}
                 max={100}
@@ -1119,7 +1125,7 @@ export default function CloudTastingScreen() {
                   onPress={() => stepRating(-1)}
                   onPressIn={() => startRepeat(-1)}
                   onPressOut={stopRepeat}
-                  disabled={!canEdit}
+                  disabled={locked}
                   style={({ pressed }) => ({
                     width: 54,
                     height: 54,
@@ -1129,7 +1135,7 @@ export default function CloudTastingScreen() {
                     borderWidth: 1,
                     borderColor: colors.divider,
                     backgroundColor: pressed ? colors.highlight : "transparent",
-                    opacity: !canEdit ? 0.5 : 1,
+                    opacity: locked ? 0.5 : 1,
                   })}
                 >
                   <Text style={[type.button, { fontSize: 22, color: colors.textPrimary }]}>
@@ -1141,7 +1147,7 @@ export default function CloudTastingScreen() {
                   onPress={() => stepRating(1)}
                   onPressIn={() => startRepeat(1)}
                   onPressOut={stopRepeat}
-                  disabled={!canEdit}
+                  disabled={locked}
                   style={({ pressed }) => ({
                     width: 54,
                     height: 54,
@@ -1151,7 +1157,7 @@ export default function CloudTastingScreen() {
                     borderWidth: 1,
                     borderColor: colors.divider,
                     backgroundColor: pressed ? colors.highlight : "transparent",
-                    opacity: !canEdit ? 0.5 : 1,
+                    opacity: locked ? 0.5 : 1,
                   })}
                 >
                   <Text style={[type.button, { fontSize: 22, color: colors.textPrimary }]}>
@@ -1187,14 +1193,14 @@ export default function CloudTastingScreen() {
               <View style={{ flex: 1 }}>
                 <View style={{ gap: spacing.sm }}>
                   <ColumnHeader title="Nose" />
-                  <ReactionList value={nose} onChange={setNose} disabled={!canEdit} />
+                  <ReactionList value={nose} onChange={setNose} disabled={locked} />
                 </View>
 
                 <View style={{ height: spacing.xl }} />
 
                 <View style={{ gap: spacing.sm }}>
                   <ColumnHeader title="Taste" />
-                  <ReactionList value={taste} onChange={setTaste} disabled={!canEdit} />
+                  <ReactionList value={taste} onChange={setTaste} disabled={locked} />
                 </View>
               </View>
 
@@ -1229,14 +1235,14 @@ export default function CloudTastingScreen() {
                     selected={flavorTags}
                     onToggle={toggleFlavor}
                     max={3}
-                    disabled={!canEdit}
+                    disabled={locked}
                   />
                 </View>
               </View>
             </View>
           </Card>
 
-          {/* Dislike */}
+          {/* Dislike (✅ 2-column centered grid) */}
           {taste === "NOT_FOR_ME" ? (
             <Card>
               <Text style={type.sectionHeader}>What did you dislike?</Text>
@@ -1249,7 +1255,7 @@ export default function CloudTastingScreen() {
                 selected={dislikeTags}
                 onToggle={toggleDislike}
                 max={3}
-                disabled={!canEdit}
+                disabled={locked}
               />
             </Card>
           ) : null}
@@ -1264,7 +1270,7 @@ export default function CloudTastingScreen() {
             <TextInput
               value={personalNotes}
               onChangeText={setPersonalNotes}
-              editable={canEdit}
+              editable={!locked}
               placeholder="Add a personal note…"
               placeholderTextColor={colors.textSecondary}
               multiline
@@ -1281,7 +1287,7 @@ export default function CloudTastingScreen() {
                 color: colors.textPrimary,
                 fontSize: 16,
                 fontFamily: type.body.fontFamily,
-                opacity: canEdit ? 1 : 0.75,
+                opacity: !locked ? 1 : 0.75,
                 minHeight: 120,
               }}
             />
@@ -1293,7 +1299,7 @@ export default function CloudTastingScreen() {
 
             <View style={{ flexDirection: "row", gap: spacing.md, marginTop: spacing.md }}>
               <Pressable
-                disabled={!canEdit}
+                disabled={locked}
                 onPress={() => setSourceType("purchased")}
                 style={({ pressed }) => ({
                   flex: 1,
@@ -1302,7 +1308,7 @@ export default function CloudTastingScreen() {
                   borderWidth: 1,
                   borderColor: sourceType === "purchased" ? colors.accent : colors.divider,
                   backgroundColor: sourceType === "purchased" ? colors.highlight : colors.surface,
-                  opacity: !canEdit ? 0.6 : pressed ? 0.92 : 1,
+                  opacity: locked ? 0.6 : pressed ? 0.92 : 1,
                   alignItems: "center",
                   justifyContent: "center",
                 })}
@@ -1313,7 +1319,7 @@ export default function CloudTastingScreen() {
               </Pressable>
 
               <Pressable
-                disabled={!canEdit}
+                disabled={locked}
                 onPress={() => setSourceType("bar")}
                 style={({ pressed }) => ({
                   flex: 1,
@@ -1322,7 +1328,7 @@ export default function CloudTastingScreen() {
                   borderWidth: 1,
                   borderColor: sourceType === "bar" ? colors.accent : colors.divider,
                   backgroundColor: sourceType === "bar" ? colors.highlight : colors.surface,
-                  opacity: !canEdit ? 0.6 : pressed ? 0.92 : 1,
+                  opacity: locked ? 0.6 : pressed ? 0.92 : 1,
                   alignItems: "center",
                   justifyContent: "center",
                 })}
@@ -1340,7 +1346,7 @@ export default function CloudTastingScreen() {
                 <TextInput
                   value={barName}
                   onChangeText={setBarName}
-                  editable={canEdit}
+                  editable={!locked}
                   placeholder="Enter bar name…"
                   placeholderTextColor={colors.textSecondary}
                   style={{
@@ -1353,7 +1359,7 @@ export default function CloudTastingScreen() {
                     color: colors.textPrimary,
                     fontSize: 16,
                     fontFamily: type.body.fontFamily,
-                    opacity: canEdit ? 1 : 0.75,
+                    opacity: !locked ? 1 : 0.75,
                   }}
                 />
 
@@ -1371,7 +1377,21 @@ export default function CloudTastingScreen() {
           {isExisting && !locked ? (
             <View style={{ flexDirection: "row", gap: spacing.md }}>
               <Pressable
-                onPress={onCancel}
+                onPress={() => {
+                  if (snapshot) {
+                    setName(snapshot.name);
+                    setWhiskeyId(snapshot.whiskeyId);
+                    setRating(snapshot.rating);
+                    setNose(snapshot.nose);
+                    setTaste(snapshot.taste);
+                    setFlavorTags(snapshot.flavorTags);
+                    setDislikeTags(snapshot.dislikeTags);
+                    setSourceType(snapshot.sourceType);
+                    setBarName(snapshot.barName);
+                    setPersonalNotes(snapshot.personalNotes);
+                  }
+                  setLocked(true);
+                }}
                 disabled={saving}
                 style={({ pressed }) => ({
                   flex: 1,

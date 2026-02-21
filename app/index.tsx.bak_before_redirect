@@ -1,0 +1,68 @@
+// app/index.tsx
+import { View, Text, Pressable } from "react-native";
+import { Stack, router } from "expo-router";
+import { COLORS, SPACING, TEXT } from "../constants/theme";
+
+export default function WelcomeScreen() {
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <Stack.Screen options={{ title: "Welcome", headerShown: false }} />
+
+      <View
+        style={{
+          flex: 1,
+          padding: SPACING.lg,
+          justifyContent: "center",
+          gap: SPACING.lg,
+        }}
+      >
+        <View style={{ gap: SPACING.sm }}>
+          <Text style={{ fontSize: TEXT.h1, fontWeight: "900", color: COLORS.ink }}>
+            WhiskeyAppBeta 🥃
+          </Text>
+          <Text style={{ color: COLORS.ink, opacity: 0.8, fontSize: TEXT.body }}>
+            Welcome in. We’ll get you logging in seconds.
+          </Text>
+        </View>
+
+        <View style={{ gap: SPACING.sm }}>
+          <Pressable
+            onPress={() => router.replace("/(tabs)/home")}
+            style={({ pressed }) => ({
+              borderRadius: 18,
+              paddingVertical: 16,
+              alignItems: "center",
+              backgroundColor: COLORS.primary,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: COLORS.bg, fontWeight: "900", fontSize: 16 }}>
+              Enter App
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.replace("/(tabs)/log")}
+            style={({ pressed }) => ({
+              borderRadius: 18,
+              paddingVertical: 16,
+              alignItems: "center",
+              backgroundColor: COLORS.card,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: COLORS.ink, fontWeight: "900", fontSize: 16 }}>
+              Log a Tasting
+            </Text>
+          </Pressable>
+        </View>
+
+        <Text style={{ color: COLORS.ink, opacity: 0.6, fontSize: 12 }}>
+          Tip: Discover shows trending bottles from the community + our BHH reviews.
+        </Text>
+      </View>
+    </View>
+  );
+}

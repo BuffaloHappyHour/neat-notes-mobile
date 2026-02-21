@@ -1,0 +1,223 @@
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import { Text, Pressable, ScrollView, Linking, View } from "react-native";
+import {
+  getRecentTastings,
+  DbTastingRow,
+  importBhhVideos,
+  isBhhVideosImported,
+  getRecentBhhReviews,
+  DbBhhReviewRow,
+  applyBhhScoreUpdates,
+  isBhhScoresApplied,
+  resetBhhScoresAppliedFlag,
+} from "../../lib/db";
+import { COLORS, SPACING, TEXT as TEXTS } from "../../constants/theme";
+import { Card } from "../../components/ui/Card";
+import { SectionTitle } from "../../components/ui/SectionTitle";
+import { PrimaryButton } from "../../components/ui/PrimaryButton";
+import { Divider } from "../../components/ui/Divider";
+import { BHH_VIDEOS } from "../../data/bhhVideos";
+import { BHH_SCORE_UPDATES } from "../../data/bhhScoreUpdates";
+
+function scoreLabel(score: number) {
+  return score === 0 ? "Coming Soon" : String(score);
+}
+
+export default function ProfileTab() {
+  const [tastings, setTastings] = useState<DbTastingRow[]>([]);
+  const [bhhRecent, setBhhRecent] = useState<DbBhhReviewRow[]>([]);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const [imported, setImported] = useState(false);
+  const [scoresApplied, setScoresApplied] = useState(false);
+
+  const load = useCallback(() => {
+    setError("");
+    Promise.all([
+      getRecentTastings(25),
+      getRecentBhhReviews(5),
+      isBhhVideosImported(),
+      isBhhScoresApplied(),
+    ])
+      .then(([t, bhh, flag, scoresFlag]) => {
+        setTastings(t);
+        setBhhRecent(bhh);
+        setImported(flag);
+        setScoresApplied(scoresFlag);
+      })
+      .catch((e: any) => setError(e?.message ?? String(e)));
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  async function doImportVideos() {
+    setError("");
+    setStatus("Importing BHH videos…");
+    try {
+      const result = await importBhhVideos(BHH_VIDEOS);
+      setStatus(
+        result.skippedBecauseAlreadyImported
+          ? "Already imported ✅"
+          : `Imported ${result.imported} videos ✅`
+      );
+      load();
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+      setStatus("");
+    }
+  }
+
+  async function doApplyScores() {
+    setError("");
+    setStatus("Applying transcript scores…");
+    try {
+      const result = await applyBhhScoreUpdates(BHH_SCORE_UPDATES);
+      setStatus(
+        result.skippedBecauseAlreadyApplied
+          ? "Scores already applied ✅ (use reset below to re-apply)"
+          : `Updated ~${result.updated} scores ✅`
+      );
+      load();
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+      setStatus("");
+    }
+  }
+
+  async function doResetApplyFlag() {
+    setError("");
+    setStatus("Resetting apply flag…");
+    try {
+      await resetBhhScoresAppliedFlag();
+      setStatus("Reset complete ✅ Now tap Apply Transcript Scores again.");
+      load();
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+      setStatus("");
+    }
+  }
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: COLORS.bg }}
+      contentContainerStyle={{ padding: SPACING.md, gap: SPACING.md }}
+    >
+      <Text style={{ fontSize: TEXTS.title, fontWeight: "900", color: COLORS.ink }}>
+        Profile
+      </Text>
+
+      <Card>
+        <SectionTitle>BHH Content</SectionTitle>
+        <View style={{ height: SPACING.sm }} />
+
+        <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+          Videos imported: <Text style={{ fontWeight: "900" }}>{imported ? "Yes" : "No"}</Text>
+        </Text>
+        <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+          Scores applied: <Text style={{ fontWeight: "900" }}>{scoresApplied ? "Yes" : "No"}</Text>
+        </Text>
+
+        <View style={{ height: SPACING.sm }} />
+
+        <PrimaryButton
+          label={imported ? "BHH Videos Imported" : "Import BHH Videos (220+)"}
+          onPress={doImportVideos}
+          disabled={imported}
+        />
+
+        <View style={{ height: SPACING.sm }} />
+
+        <PrimaryButton
+          label={scoresApplied ? "Transcript Scores Applied" : "Apply Transcript Scores"}
+          onPress={doApplyScores}
+          disabled={!imported}
+        />
+
+        <View style={{ height: SPACING.sm }} />
+
+        {/* Dev utility: lets you apply again after improving extraction */}
+        <PrimaryButton
+          label="(Dev) Reset Transcript Apply Flag"
+          onPress={doResetApplyFlag}
+          disabled={!imported}
+        />
+
+        {status ? (
+          <Text style={{ marginTop: SPACING.sm, color: COLORS.ink, opacity: 0.85 }}>
+            {status}
+          </Text>
+        ) : null}
+
+        {error ? (
+          <Text style={{ marginTop: SPACING.sm, color: COLORS.ink, opacity: 0.85 }}>
+            Error: {error}
+          </Text>
+        ) : null}
+
+        <View style={{ height: SPACING.md }} />
+        <Divider />
+        <View style={{ height: SPACING.md }} />
+
+        <Text style={{ fontWeight: "900", color: COLORS.ink, marginBottom: 6 }}>
+          Recent BHH Reviews
+        </Text>
+
+        {bhhRecent.length === 0 ? (
+          <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+            None yet — import the playlist.
+          </Text>
+        ) : (
+          <View style={{ gap: 10 }}>
+            {bhhRecent.map((r) => (
+              <Pressable
+                key={r.id}
+                onPress={() => Linking.openURL(r.youtubeUrl)}
+                style={{ gap: 2 }}
+              >
+                <Text style={{ fontWeight: "900", color: COLORS.ink }}>
+                  {r.whiskeyName} — {scoreLabel(r.score)}
+                </Text>
+                <Text style={{ color: COLORS.ink, opacity: 0.7 }}>
+                  {new Date(r.reviewedAt).toLocaleDateString()}
+                </Text>
+                <Text style={{ color: COLORS.lightBlue, fontWeight: "800" }}>
+                  Open on YouTube
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </Card>
+
+      <Card>
+        <SectionTitle>Your Tastings</SectionTitle>
+        <View style={{ height: SPACING.sm }} />
+
+        {tastings.length === 0 ? (
+          <Text style={{ opacity: 0.8, color: COLORS.ink }}>No tastings yet. Log one!</Text>
+        ) : (
+          <View style={{ gap: 10 }}>
+            {tastings.map((t) => (
+              <View key={t.id} style={{ gap: 2 }}>
+                <Text style={{ fontWeight: "900", color: COLORS.ink }}>{t.whiskeyName}</Text>
+                <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+                  {new Date(t.createdAt).toLocaleString()}
+                </Text>
+                <Text style={{ color: COLORS.ink, opacity: 0.85 }}>
+                  Rating: {t.rating ?? "—"} • Would buy again: {t.wouldBuyAgain ? "Yes" : "No"}
+                </Text>
+                <Divider />
+              </View>
+            ))}
+          </View>
+        )}
+      </Card>
+    </ScrollView>
+  );
+}
+

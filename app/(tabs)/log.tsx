@@ -31,6 +31,32 @@ function toQueryParam(v: string) {
   return encodeURIComponent(String(v ?? "").trim());
 }
 
+function normalizeName(s: string) {
+  return String(s ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function slugify(s: string) {
+  return normalizeName(s)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-");
+}
+
+function parseNumericOrNull(v: string) {
+  const t = String(v ?? "").trim();
+  if (!t) return null;
+
+  const cleaned = t.replace(/[^0-9.]+/g, "");
+  if (!cleaned) return null;
+
+  const n = Number(cleaned);
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
 /* ------------------- Types ------------------- */
 
 type Suggestion = {
@@ -97,24 +123,32 @@ export default function LogTab() {
   // On-brand modal for custom prompt
   const [customModalOpen, setCustomModalOpen] = useState(false);
 
+  // Submit state
+  const [submittingCandidate, setSubmittingCandidate] = useState(false);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput | null>(null);
 
   const qTrim = query.trim();
   const hasEnoughQuery = qTrim.length >= 2;
 
+  const isHelpImproveMode = customApproved && showContribForm && contribute;
+
   const canProceed = useMemo(() => {
     if (!hasEnoughQuery) return false;
+    if (isHelpImproveMode) return true;
     return !!selected || customApproved || suggestions.length > 0;
-  }, [hasEnoughQuery, selected, customApproved, suggestions.length]);
+  }, [hasEnoughQuery, selected, customApproved, suggestions.length, isHelpImproveMode]);
 
   const helperLine = useMemo(() => {
     if (!hasEnoughQuery) return "Start typing a bottle name to search.";
     if (selected) return "Tap Continue to review and confirm.";
+    if (isHelpImproveMode)
+      return "Add any optional details, then tap Submit & review to start your tasting.";
     if (customApproved) return "Custom selected — tap Continue to start your tasting.";
     if (suggestions.length > 0) return "Tap a result, or press Continue to open the top match.";
     return "No matches. Use a custom entry to keep logging.";
-  }, [hasEnoughQuery, selected, customApproved, suggestions.length]);
+  }, [hasEnoughQuery, selected, customApproved, suggestions.length, isHelpImproveMode]);
 
   function resetContributionFields() {
     setContribute(false);
@@ -125,6 +159,7 @@ export default function LogTab() {
     setProof("");
     setCountry("");
     setRegion("");
+    setSubmittingCandidate(false);
   }
 
   function clearQuery() {
@@ -182,11 +217,8 @@ export default function LogTab() {
     if (country.trim()) params.push(`country=${toQueryParam(country)}`);
     if (region.trim()) params.push(`region=${toQueryParam(region)}`);
 
-    const finalPath =
-  params.length > 0 ? `${base}&${params.join("&")}` : base;
-
-router.push(finalPath as any);
-
+    const finalPath = params.length > 0 ? `${base}&${params.join("&")}` : base;
+    router.push(finalPath as any);
   }
 
   function onUseCustom() {
@@ -221,7 +253,57 @@ router.push(finalPath as any);
     setCustomApproved(true);
     setContribute(true);
     setShowContribForm(true);
-    // Stay on screen; user will hit Continue after entering optional fields.
+  }
+
+  async function submitWhiskeyCandidate(name: string) {
+    // Best-effort insert; even if it fails, we still proceed to tasting.
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth?.user?.id;
+
+      if (!userId) {
+        console.log("[LogTab] No authenticated user; skipping candidate submit.");
+        return;
+      }
+
+      const payload = {
+        created_by: userId, // ✅ correct column name
+        name_raw: name,
+        name_normalized: normalizeName(name),
+        canonical_slug: slugify(name),
+
+        whiskey_type: category.trim() || null,
+        distillery: distillery.trim() || null,
+        proof: parseNumericOrNull(proof),
+        age: parseNumericOrNull(age),
+
+        status: "pending",
+      };
+
+      console.log("[LogTab] Candidate payload:", payload);
+
+      const { error } = await supabase.from("whiskey_candidates").insert(payload);
+
+      if (error) {
+        console.log("[LogTab] whiskey_candidates insert failed:", error.message);
+      } else {
+        console.log("[LogTab] whiskey_candidates insert OK.");
+      }
+    } catch (e: any) {
+      console.log("[LogTab] submitWhiskeyCandidate threw:", e?.message ?? e);
+    }
+  }
+
+  async function onSubmitAndReview() {
+    const name = query.trim();
+    if (name.length < 2) return;
+    if (submittingCandidate) return;
+
+    setSubmittingCandidate(true);
+
+    await submitWhiskeyCandidate(name);
+
+    goToCustomTasting(name, true);
   }
 
   /**
@@ -381,7 +463,9 @@ router.push(finalPath as any);
                 We didn’t find that bottle yet. If you’d like, you can add a couple details to help
                 keep the catalog clean — totally optional.
               </Text>
-              <Text style={[type.microcopyItalic, { opacity: 0.78 }]}>Even 1–2 fields helps a ton.</Text>
+              <Text style={[type.microcopyItalic, { opacity: 0.78 }]}>
+                Even 1–2 fields helps a ton.
+              </Text>
             </View>
 
             <View style={{ gap: spacing.sm }}>
@@ -428,7 +512,13 @@ router.push(finalPath as any);
         </Pressable>
       </Modal>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}
+        // ✅ key fixes for nested scroll + keyboard interaction
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        nestedScrollEnabled
+      >
         <View style={{ gap: spacing.xs }}>
           <Text style={type.screenTitle}>What are you drinking?</Text>
           <Text style={[type.microcopyItalic, { opacity: 0.88 }]}>
@@ -495,6 +585,7 @@ router.push(finalPath as any);
             {helperLine}
           </Text>
 
+          {/* ✅ RESTORED: Loading indicator */}
           {loading ? (
             <View
               style={{
@@ -509,6 +600,7 @@ router.push(finalPath as any);
             </View>
           ) : null}
 
+          {/* ✅ Suggestions list — now scrollable inside outer ScrollView */}
           {suggestions.length > 0 ? (
             <ScrollView
               style={{
@@ -520,31 +612,40 @@ router.push(finalPath as any);
                 overflow: "hidden",
                 backgroundColor: colors.background,
               }}
+              contentContainerStyle={{ paddingVertical: 2 }}
+              // ✅ key fixes
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="always"
+              showsVerticalScrollIndicator
             >
-              {suggestions.map((s, idx) => (
-                <Pressable
-                  key={`${s.whiskeyId}:${s.whiskeyName}`}
-                  onPress={() => onPickSuggestion(s)}
-                  style={({ pressed }) => ({
-                    paddingVertical: 12,
-                    paddingHorizontal: 12,
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.divider,
-                    opacity: pressed ? 0.75 : 1,
-                    backgroundColor: "transparent",
-                    gap: 6,
-                  })}
-                >
-                  <Text style={[type.body, { fontWeight: "800" }]} numberOfLines={2}>
-                    {s.whiskeyName}
-                  </Text>
+              {suggestions.map((s, idx) => {
+                const isLast = idx === suggestions.length - 1;
+                return (
+                  <Pressable
+                    key={`${s.whiskeyId}:${s.whiskeyName}`}
+                    onPress={() => onPickSuggestion(s)}
+                    style={({ pressed }) => ({
+                      paddingVertical: 12,
+                      paddingHorizontal: 12,
+                      borderBottomWidth: isLast ? 0 : 1,
+                      borderBottomColor: colors.divider,
+                      opacity: pressed ? 0.75 : 1,
+                      backgroundColor: "transparent",
+                      gap: 6,
+                    })}
+                  >
+                    <Text style={[type.body, { fontWeight: "800" }]} numberOfLines={2}>
+                      {s.whiskeyName}
+                    </Text>
 
-                  <Text style={[type.microcopyItalic, { opacity: 0.75, fontSize: 12 }]}>
-                    Tap to view profile{typeof s.bhhScore === "number" ? ` • BHH ${Math.round(s.bhhScore)}` : ""}
-                    {idx === 0 ? " • Top match" : ""}
-                  </Text>
-                </Pressable>
-              ))}
+                    <Text style={[type.microcopyItalic, { opacity: 0.75, fontSize: 12 }]}>
+                      Tap to view profile
+                      {typeof s.bhhScore === "number" ? ` • BHH ${Math.round(s.bhhScore)}` : ""}
+                      {idx === 0 ? " • Top match" : ""}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </ScrollView>
           ) : hasEnoughQuery && !loading ? (
             <Text style={[type.body, { opacity: 0.65, fontSize: 12, marginTop: spacing.sm }]}>
@@ -552,7 +653,7 @@ router.push(finalPath as any);
             </Text>
           ) : null}
 
-          {/* Contribution form (only for custom flow) */}
+          {/* Contribution form */}
           {customApproved && showContribForm ? (
             <View
               style={{
@@ -710,57 +811,80 @@ router.push(finalPath as any);
             </View>
           ) : null}
 
-          <View style={{ flexDirection: "row", gap: spacing.md, marginTop: spacing.md }}>
-            <Pressable
-              onPress={onUseCustom}
-              disabled={!!selected || !hasEnoughQuery}
-              style={({ pressed }) => ({
-                flex: 0.44,
-                borderRadius: radii.md,
-                paddingVertical: spacing.lg,
-                alignItems: "center",
-                borderWidth: 1,
-                borderColor: colors.divider,
-                backgroundColor: customApproved ? colors.highlight : colors.surface,
-                opacity: !!selected || !hasEnoughQuery ? 0.45 : pressed ? 0.9 : 1,
-              })}
-            >
-              <Text style={[type.button, { color: colors.textPrimary }]}>Custom</Text>
-            </Pressable>
+          {/* Button swap */}
+          {isHelpImproveMode ? (
+            <View style={{ marginTop: spacing.md }}>
+              <Pressable
+                onPress={onSubmitAndReview}
+                disabled={!hasEnoughQuery || submittingCandidate}
+                style={({ pressed }) => ({
+                  width: "100%",
+                  borderRadius: radii.md,
+                  paddingVertical: spacing.lg,
+                  alignItems: "center",
+                  backgroundColor: colors.accent,
+                  opacity: !hasEnoughQuery || submittingCandidate ? 0.55 : pressed ? 0.9 : 1,
+                })}
+              >
+                {submittingCandidate ? (
+                  <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+                    <ActivityIndicator />
+                    <Text style={[type.button, { color: colors.background }]}>Submitting…</Text>
+                  </View>
+                ) : (
+                  <Text style={[type.button, { color: colors.background }]}>Submit & review</Text>
+                )}
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ flexDirection: "row", gap: spacing.md, marginTop: spacing.md }}>
+              <Pressable
+                onPress={onUseCustom}
+                disabled={!!selected || !hasEnoughQuery}
+                style={({ pressed }) => ({
+                  flex: 0.44,
+                  borderRadius: radii.md,
+                  paddingVertical: spacing.lg,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: colors.divider,
+                  backgroundColor: customApproved ? colors.highlight : colors.surface,
+                  opacity: !!selected || !hasEnoughQuery ? 0.45 : pressed ? 0.9 : 1,
+                })}
+              >
+                <Text style={[type.button, { color: colors.textPrimary }]}>Custom</Text>
+              </Pressable>
 
-            <Pressable
-              onPress={() => {
-                if (!hasEnoughQuery) return;
+              <Pressable
+                onPress={() => {
+                  if (!hasEnoughQuery) return;
 
-                // ✅ If they selected explicitly, open that whiskey profile.
-                if (selected) {
-                  goToWhiskeyProfile(selected.whiskeyId);
-                  return;
-                }
+                  if (selected) {
+                    goToWhiskeyProfile(selected.whiskeyId);
+                    return;
+                  }
 
-                // ✅ If they did not tap a result but we have suggestions,
-                // open the top match’s whiskey profile.
-                if (suggestions.length > 0) {
-                  goToWhiskeyProfile(suggestions[0].whiskeyId);
-                  return;
-                }
+                  if (suggestions.length > 0) {
+                    goToWhiskeyProfile(suggestions[0].whiskeyId);
+                    return;
+                  }
 
-                // ✅ No library matches: move to custom modal (never "does nothing").
-                setCustomModalOpen(true);
-              }}
-              disabled={!hasEnoughQuery}
-              style={({ pressed }) => ({
-                flex: 0.56,
-                borderRadius: radii.md,
-                paddingVertical: spacing.lg,
-                alignItems: "center",
-                backgroundColor: canProceed ? colors.accent : colors.divider,
-                opacity: pressed ? 0.9 : 1,
-              })}
-            >
-              <Text style={[type.button, { color: colors.background }]}>Continue</Text>
-            </Pressable>
-          </View>
+                  setCustomModalOpen(true);
+                }}
+                disabled={!hasEnoughQuery}
+                style={({ pressed }) => ({
+                  flex: 0.56,
+                  borderRadius: radii.md,
+                  paddingVertical: spacing.lg,
+                  alignItems: "center",
+                  backgroundColor: canProceed ? colors.accent : colors.divider,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text style={[type.button, { color: colors.background }]}>Continue</Text>
+              </Pressable>
+            </View>
+          )}
         </Card>
       </ScrollView>
     </View>

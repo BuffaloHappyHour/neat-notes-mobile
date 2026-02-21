@@ -1,0 +1,40 @@
+import { View, Text, Pressable } from "react-native";
+import { router } from "expo-router";
+import { WHISKEYS } from "../../lib/whiskeys";
+import { COLORS, SPACING, TEXT as TEXTS } from "../../constants/theme";
+import { Card } from "../../components/ui/Card";
+import { SectionTitle } from "../../components/ui/SectionTitle";
+
+export default function DiscoverScreen() {
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: COLORS.bg,
+        padding: SPACING.md,
+        gap: SPACING.md,
+      }}
+    >
+      <Text style={{ fontSize: TEXTS.title, fontWeight: "900", color: COLORS.ink }}>
+        Discover
+      </Text>
+
+      <SectionTitle>Trending This Week</SectionTitle>
+
+      <View style={{ gap: SPACING.sm }}>
+        {WHISKEYS.map((w) => (
+          <Pressable key={w.id} onPress={() => router.push(`/whiskey/${w.id}`)}>
+            <Card>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: COLORS.ink }}>
+                {w.name}
+              </Text>
+              <Text style={{ opacity: 0.75, color: COLORS.ink }}>
+                {w.distillery} • {w.region}
+              </Text>
+            </Card>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}

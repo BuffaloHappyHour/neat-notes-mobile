@@ -7,11 +7,13 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView, Platform, Pressable,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
   ScrollView,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
 
 import { fetchMyProfile, upsertMyProfile } from "../lib/cloudProfile";
@@ -29,6 +31,10 @@ import {
   hapticTick,
   invalidateHapticsCache,
 } from "../lib/haptics";
+
+/* ---------- Store compliance URLs ---------- */
+
+const PRIVACY_URL = "https://buffalohappyhour.org/neat-notes-privacy/";
 
 /* ---------- UI helpers ---------- */
 
@@ -256,6 +262,14 @@ export default function AccountSettingsScreen() {
 
   const passwordValid =
     newPassword.trim().length >= 8 && newPassword.trim() === confirmPassword.trim();
+
+  const openPrivacy = async () => {
+    try {
+      await Linking.openURL(PRIVACY_URL);
+    } catch {
+      Alert.alert("Unable to open link", "Please try again in a moment.");
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -690,23 +704,47 @@ export default function AccountSettingsScreen() {
             </Text>
           ) : null}
         </Card>
-<Card
-  title="Beta Feedback"
-  subtitle="Help shape Neat Notes. Report bugs or share ideas."
->
-  <ThemedButton
-    label="Submit Feedback (Beta)"
-    onPress={async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        const userId = data.session?.user?.id ?? "not-signed-in";
 
-        const appVersion = Constants.expoConfig?.version ?? "unknown";
-        const platform = Platform.OS;
-        const timestamp = new Date().toISOString();
+        <Card title="Privacy & Data" subtitle="Review our privacy policy and request account deletion.">
+          <View style={{ gap: spacing.md }}>
+            <ThemedButton
+              label="Privacy Policy"
+              onPress={openPrivacy}
+              disabled={busy}
+              tone="secondary"
+              icon={<Ionicons name="shield-checkmark-outline" size={18} color={colors.textPrimary} />}
+            />
+            <ThemedButton
+              label="Request Account Deletion"
+              onPress={openPrivacy}
+              disabled={busy}
+              tone="secondary"
+              icon={<Ionicons name="trash-outline" size={18} color={colors.textPrimary} />}
+            />
+          </View>
 
-        const subject = encodeURIComponent("Neat Notes Beta Feedback");
-        const body = encodeURIComponent(
+          <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
+            Account deletion requests are processed via the steps in the privacy policy.
+          </Text>
+        </Card>
+
+        <Card
+          title="Beta Feedback"
+          subtitle="Help shape Neat Notes. Report bugs or share ideas."
+        >
+          <ThemedButton
+            label="Submit Feedback (Beta)"
+            onPress={async () => {
+              try {
+                const { data } = await supabase.auth.getSession();
+                const userId = data.session?.user?.id ?? "not-signed-in";
+
+                const appVersion = Constants.expoConfig?.version ?? "unknown";
+                const platform = Platform.OS;
+                const timestamp = new Date().toISOString();
+
+                const subject = encodeURIComponent("Neat Notes Beta Feedback");
+                const body = encodeURIComponent(
 `Please describe the issue or feedback below:
 
 ---
@@ -718,19 +756,19 @@ Timestamp: ${timestamp}
 
 Additional Notes:
 `
-        );
+                );
 
-        const mailtoUrl = `mailto:contact@buffalohappyhour.com?subject=${subject}&body=${body}`;
+                const mailtoUrl = `mailto:contact@buffalohappyhour.com?subject=${subject}&body=${body}`;
 
-        await Linking.openURL(mailtoUrl);
-      } catch (err) {
-        Alert.alert("Error", "Unable to open email client.");
-      }
-    }}
-    tone="primary"
-    icon={<Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.textPrimary} />}
-  />
-</Card>
+                await Linking.openURL(mailtoUrl);
+              } catch (err) {
+                Alert.alert("Error", "Unable to open email client.");
+              }
+            }}
+            tone="primary"
+            icon={<Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.textPrimary} />}
+          />
+        </Card>
 
         <Card title="Danger Zone" subtitle="Irreversible actions. Pour carefully.">
           <ThemedButton

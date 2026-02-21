@@ -1,31 +1,26 @@
 {
   "expo": {
-    "name": "Neat Notes",
-    "slug": "neat-notes",
-    "version": "1.0.1",
+    "name": "WhiskeyAppBeta",
+    "slug": "WhiskeyAppBeta",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "neatnotes",
+    "scheme": "whiskeyappbeta",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.neatnotesapp.neatnotes",
-      "buildNumber": "2",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+      "supportsTablet": true
     },
     "android": {
-      "package": "com.neatnotesapp.neatnotes",
-      "versionCode": 4,
       "adaptiveIcon": {
-        "backgroundColor": "#000000",
+        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png"
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.derek1521.WhiskeyAppBeta"
     },
     "web": {
       "output": "static",
@@ -45,14 +40,7 @@
           }
         }
       ],
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "newArchEnabled": true
-          }
-        }
-      ]
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -61,8 +49,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "85720fd6-e8f6-405c-b247-40af3fea9563"
+        "projectId": "b7633459-914b-4cef-bede-ecfb5513c4c3"
       }
-    }
+    },
+    "owner": "derek1521"
   }
 }

@@ -1,0 +1,26 @@
+// app/_layout.tsx
+import { Stack } from "expo-router";
+import { useEffect } from "react";
+import { initDb } from "../lib/db";
+
+export default function RootLayout() {
+  useEffect(() => {
+    initDb().catch((e) => {
+      console.log("DB init failed:", e);
+    });
+  }, []);
+
+  return (
+    <Stack>
+      {/* Welcome / Landing screen */}
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+
+      {/* Tabs */}
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
+      {/* Other screens */}
+      <Stack.Screen name="log/tasting" options={{ title: "Log Tasting" }} />
+      <Stack.Screen name="debug/db" options={{ title: "DB Inspector" }} />
+    </Stack>
+  );
+}

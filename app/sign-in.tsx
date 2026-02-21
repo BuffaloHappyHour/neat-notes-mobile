@@ -25,6 +25,10 @@ import { spacing } from "../lib/spacing";
 import { colors } from "../lib/theme";
 import { type } from "../lib/typography";
 
+/* ---------- URLs (store compliance) ---------- */
+
+const PRIVACY_URL = "https://buffalohappyhour.org/neat-notes-privacy/";
+
 /* ---------- Stable UI helpers ---------- */
 
 type InputProps = React.ComponentProps<typeof TextInput>;
@@ -222,6 +226,14 @@ export default function SignInScreen() {
     return "Sign In";
   }, [mode]);
 
+  const openPrivacy = async () => {
+    try {
+      await Linking.openURL(PRIVACY_URL);
+    } catch {
+      Alert.alert("Unable to open link", "Please try again in a moment.");
+    }
+  };
+
   async function loadSessionOnce() {
     setLoading(true);
 
@@ -343,9 +355,17 @@ export default function SignInScreen() {
 
     setBusy(true);
 
+    // ✅ IMPORTANT: Force Supabase email confirmation links to return to the APP
+    // (instead of falling back to Site URL / Vercel)
+    const emailRedirectTo = buildAuthCallbackUrl();
+    console.log("SIGNUP emailRedirectTo =", emailRedirectTo);
+
     const { data, error } = await supabase.auth.signUp({
       email: em,
       password: pw,
+      options: {
+        emailRedirectTo,
+      },
     });
 
     setBusy(false);
@@ -604,6 +624,30 @@ export default function SignInScreen() {
             />
           </Card>
         )}
+
+        {/* --- Compliance footer (visible to reviewers + users) --- */}
+        <View
+          style={{
+            alignItems: "center",
+            gap: 8,
+            paddingTop: spacing.md,
+            opacity: 0.9,
+          }}
+        >
+          <Pressable
+            onPress={openPrivacy}
+            hitSlop={10}
+            style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+          >
+            <Text style={[type.microcopyItalic, { color: colors.textSecondary }]}>
+              Privacy Policy & Account Deletion
+            </Text>
+          </Pressable>
+
+          <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.7 }]}>
+            Drink responsibly.
+          </Text>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );

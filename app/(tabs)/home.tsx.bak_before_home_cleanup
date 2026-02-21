@@ -1,0 +1,139 @@
+// app/(tabs)/home.tsx
+import { View, Text, Pressable } from "react-native";
+import { router } from "expo-router";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+
+function Card({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: COLORS.card,
+        borderRadius: 18,
+        padding: SPACING.md,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        gap: 10,
+      }}
+    >
+      <View style={{ gap: 6 }}>
+        <Text style={{ color: COLORS.ink, fontSize: 18, fontWeight: "900" }}>
+          {title}
+        </Text>
+        <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+          {subtitle}
+        </Text>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+export default function HomeTab() {
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <View style={{ padding: SPACING.md, gap: SPACING.md }}>
+        <Text style={{ fontSize: TEXT.h1, fontWeight: "900", color: COLORS.ink }}>
+          Home 🥃
+        </Text>
+
+        {/* LOGGING SECTION (FIRST + MOST ENTICING) */}
+        <Card
+          title="Already have a pour in front of you?"
+          subtitle="Let’s log it in seconds — quick rating, quick impressions, done."
+        >
+          <Pressable
+            onPress={() => router.push("/(tabs)/log")}
+            style={({ pressed }) => ({
+              borderRadius: 18,
+              paddingVertical: 16,
+              alignItems: "center",
+              backgroundColor: COLORS.primary,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: COLORS.bg, fontWeight: "900", fontSize: 16 }}>
+              Log a Tasting
+            </Text>
+          </Pressable>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable
+              onPress={() => router.push("/(tabs)/log")}
+              style={({ pressed }) => ({
+                flex: 1,
+                borderRadius: 16,
+                paddingVertical: 12,
+                alignItems: "center",
+                backgroundColor: COLORS.bg,
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={{ color: COLORS.ink, fontWeight: "900" }}>
+                Find a Bottle
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push("/(tabs)/log")}
+              style={({ pressed }) => ({
+                flex: 1,
+                borderRadius: 16,
+                paddingVertical: 12,
+                alignItems: "center",
+                backgroundColor: COLORS.bg,
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={{ color: COLORS.ink, fontWeight: "900" }}>
+                Use Custom
+              </Text>
+            </Pressable>
+          </View>
+
+          <Text style={{ color: COLORS.ink, opacity: 0.6, fontSize: 12 }}>
+            Tip: Picking a suggested bottle improves data quality & helps community rankings.
+          </Text>
+        </Card>
+
+        {/* DISCOVER SECTION (SECOND) */}
+        <Card
+          title="Discover"
+          subtitle="See what’s trending, what’s new, and what the community is rating."
+        >
+          <Pressable
+            onPress={() => router.push("/(tabs)/discover")}
+            style={({ pressed }) => ({
+              borderRadius: 18,
+              paddingVertical: 14,
+              alignItems: "center",
+              backgroundColor: COLORS.bg,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: COLORS.ink, fontWeight: "900", fontSize: 16 }}>
+              Jump to Discover
+            </Text>
+          </Pressable>
+        </Card>
+
+        <Text style={{ color: COLORS.ink, opacity: 0.6, fontSize: 12 }}>
+          Buffalo Happy Hour reviews + community tastings power the experience.
+        </Text>
+      </View>
+    </View>
+  );
+}

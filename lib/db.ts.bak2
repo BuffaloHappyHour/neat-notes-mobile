@@ -1,0 +1,153 @@
+// lib/db.ts
+import * as SQLite from "expo-sqlite";
+
+/**
+ * NOTE:
+ * - This file provides a single async "db" instance + helpers.
+ * - It creates/updates tables safely on startup via initDb().
+ * - It also supports meta flags (your existing pattern) and transactions.
+ *
+ * Tables:
+ * - tastings
+ * - bhh_reviews
+ * - meta
+ * - whiskeys (NEW: local catalog for autocomplete)
+ *
+ * New tastings columns:
+ * - catalogWhiskeyId (nullable)
+ * - customWhiskeyName (nullable)
+ */
+
+const DB_NAME = "whiskeyappbeta.db";
+
+export type Db = SQLite.SQLiteDatabase;
+
+let _db: Db | null = null;
+
+export async function getDb() {
+  if (_db) return _db;
+  _db = await SQLite.openDatabaseAsync(DB_NAME);
+  // Recommended for performance on mobile
+  await _db.execAsync(`PRAGMA journal_mode = WAL;`);
+  await _db.execAsync(`PRAGMA foreign_keys = ON;`);
+  return _db;
+}
+
+/**
+ * Convenience object so other modules can import { db } and call db.runAsync/getAllAsync/etc.
+ * Usage: await db.getAllAsync("SELECT ...", [params])
+ */
+export const db = {
+  async execAsync(sql: string) {
+    const d = await getDb();
+    return d.execAsync(sql);
+  },
+  async runAsync(sql: string, params: any[] = []) {
+    const d = await getDb();
+    return d.runAsync(sql, params);
+  },
+  async getAllAsync<T = any>(sql: string, params: any[] = []) {
+    const d = await getDb();
+    return d.getAllAsync<T>(sql, params);
+  },
+  async getFirstAsync<T = any>(sql: string, params: any[] = []) {
+    const d = await getDb();
+    return d.getFirstAsync<T>(sql, params);
+  },
+  async withTransactionAsync(fn: () => Promise<void>) {
+    const d = await getDb();
+    return d.withTransactionAsync(fn);
+  },
+};
+
+/** Meta flags stored in SQLite (simple key/value) */
+export async function getMetaFlag(key: string): Promise<boolean> {
+  await ensureMetaTable();
+  const row = await db.getFirstAsync<{ value: string }>(
+    `SELECT value FROM meta WHERE key = ? LIMIT 1`,
+    [key]
+  );
+  return row?.value === "1";
+}
+
+export async function setMetaFlag(key: string, value: boolean): Promise<void> {
+  await ensureMetaTable();
+  await db.runAsync(
+    `INSERT INTO meta (key, value)
+     VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [key, value ? "1" : "0"]
+  );
+}
+
+async function ensureMetaTable() {
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
+  `);
+}
+
+/**
+ * Call this once near app startup (recommended in your root layout or initial screen).
+ * Safe to run multiple times.
+ */
+export async function initDb(): Promise<void> {
+  // Base tables (create if missing)
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS tastings (
+      id TEXT PRIMARY KEY NOT NULL,
+      whiskeyId TEXT,
+      whiskeyName TEXT,
+      rating REAL,
+      notes TEXT,
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS bhh_reviews (
+      id TEXT PRIMARY KEY NOT NULL,
+      whiskeyId TEXT,
+      whiskeyName TEXT NOT NULL,
+      reviewer TEXT NOT NULL,
+      score REAL NOT NULL,
+      reviewedAt TEXT,
+      youtubeUrl TEXT,
+      title TEXT,
+      meta TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
+  `);
+
+  // NEW: whiskey catalog table for autocomplete
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS whiskeys (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      normalizedName TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_whiskeys_normalizedName
+      ON whiskeys(normalizedName);
+  `);
+
+  // Add new tastings columns defensively (won't crash if already added)
+  await addColumnIfMissing("tastings", "catalogWhiskeyId", "TEXT");
+  await addColumnIfMissing("tastings", "customWhiskeyName", "TEXT");
+}
+
+/**
+ * SQLite doesn't support "ADD COLUMN IF NOT EXISTS", so we check first.
+ */
+async function addColumnIfMissing(tableName: string, columnName: string, columnType: string) {
+  const cols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${tableName});`);
+  const exists = cols.some(c => c.name === columnName);
+  if (exists) return;
+
+  await db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType};`);
+}
+

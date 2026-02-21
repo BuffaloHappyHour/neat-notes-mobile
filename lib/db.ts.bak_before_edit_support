@@ -1,0 +1,344 @@
+import * as SQLite from "expo-sqlite";
+
+let _db: SQLite.SQLiteDatabase | null = null;
+
+async function getDb() {
+  if (_db) return _db;
+  _db = await SQLite.openDatabaseAsync("whiskeyappbeta.db");
+  return _db;
+}
+
+export type DbTastingRow = {
+  id: string;
+  createdAt: number;
+
+  whiskeyId: string;
+  whiskeyName: string;
+  distillery: string;
+  region: string;
+  type: string;
+  age: number | null;
+  abv: number | null;
+
+  appearance: string;
+  nose: string;
+  palate: string;
+  finish: string;
+
+  rating: number | null;
+  wouldBuyAgain: number;
+};
+
+export type WhiskeySnapshot = {
+  whiskeyId: string;
+  totalTastings: number;
+  avgRating: number | null;
+  ratedCount: number;
+};
+
+export type DbBhhReviewRow = {
+  id: string;
+  whiskeyId: string;
+  whiskeyName: string;
+  reviewer: "BHH";
+  score: number; // 0 = Coming Soon
+  reviewedAt: number;
+  youtubeUrl: string;
+  title: string;
+  createdAt: number;
+};
+
+export function uuidLike() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+async function metaGet(key: string): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ value: string }>(
+    `SELECT value FROM meta WHERE key = ?`,
+    [key]
+  );
+  return row?.value ?? null;
+}
+
+async function metaSet(key: string, value: string) {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO meta (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [key, value]
+  );
+}
+
+async function ensureBhhSchema() {
+  const db = await getDb();
+  const cols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(bhh_reviews)`);
+  const names = new Set(cols.map((c) => c.name));
+
+  if (cols.length > 0 && !names.has("title")) {
+    await db.execAsync(`ALTER TABLE bhh_reviews ADD COLUMN title TEXT NOT NULL DEFAULT '';`);
+  }
+}
+
+export async function initDb() {
+  const db = await getDb();
+
+  await db.execAsync(`
+    PRAGMA journal_mode = WAL;
+
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS whiskeys (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      distillery TEXT NOT NULL DEFAULT '',
+      region TEXT NOT NULL DEFAULT '',
+      type TEXT NOT NULL DEFAULT '',
+      age INTEGER,
+      abv REAL
+    );
+
+    CREATE TABLE IF NOT EXISTS tastings (
+      id TEXT PRIMARY KEY NOT NULL,
+      createdAt INTEGER NOT NULL,
+
+      whiskeyId TEXT NOT NULL,
+      whiskeyName TEXT NOT NULL,
+      distillery TEXT NOT NULL DEFAULT '',
+      region TEXT NOT NULL DEFAULT '',
+      type TEXT NOT NULL DEFAULT '',
+      age INTEGER,
+      abv REAL,
+
+      appearance TEXT NOT NULL DEFAULT '',
+      nose TEXT NOT NULL DEFAULT '',
+      palate TEXT NOT NULL DEFAULT '',
+      finish TEXT NOT NULL DEFAULT '',
+
+      rating INTEGER,
+      wouldBuyAgain INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS bhh_reviews (
+      id TEXT PRIMARY KEY NOT NULL,
+      whiskeyId TEXT NOT NULL,
+      whiskeyName TEXT NOT NULL,
+      reviewer TEXT NOT NULL,
+      score INTEGER NOT NULL DEFAULT 0,     -- 0 = Coming Soon
+      reviewedAt INTEGER NOT NULL,
+      youtubeUrl TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      createdAt INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tastings_createdAt ON tastings(createdAt DESC);
+    CREATE INDEX IF NOT EXISTS idx_tastings_whiskeyId ON tastings(whiskeyId);
+
+    CREATE INDEX IF NOT EXISTS idx_bhh_whiskeyId ON bhh_reviews(whiskeyId);
+    CREATE INDEX IF NOT EXISTS idx_bhh_reviewedAt ON bhh_reviews(reviewedAt DESC);
+    CREATE INDEX IF NOT EXISTS idx_bhh_youtubeUrl ON bhh_reviews(youtubeUrl);
+  `);
+
+  await ensureBhhSchema();
+}
+
+/** Tastings */
+
+export async function insertTasting(t: Omit<DbTastingRow, "id" | "createdAt">) {
+  const db = await getDb();
+  const id = uuidLike();
+  const createdAt = Date.now();
+
+  await db.runAsync(
+    `INSERT INTO tastings (
+      id, createdAt,
+      whiskeyId, whiskeyName, distillery, region, type, age, abv,
+      appearance, nose, palate, finish,
+      rating, wouldBuyAgain
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      createdAt,
+      t.whiskeyId,
+      t.whiskeyName,
+      t.distillery,
+      t.region,
+      t.type,
+      t.age,
+      t.abv,
+      t.appearance,
+      t.nose,
+      t.palate,
+      t.finish,
+      t.rating,
+      t.wouldBuyAgain,
+    ]
+  );
+
+  return { id, createdAt };
+}
+
+export async function getRecentTastings(limit = 25) {
+  const db = await getDb();
+  return db.getAllAsync<DbTastingRow>(
+    `SELECT * FROM tastings ORDER BY createdAt DESC LIMIT ?`,
+    [limit]
+  );
+}
+
+export async function getTastingsForWhiskey(whiskeyId: string, limit = 10) {
+  const db = await getDb();
+  return db.getAllAsync<DbTastingRow>(
+    `SELECT * FROM tastings WHERE whiskeyId = ? ORDER BY createdAt DESC LIMIT ?`,
+    [whiskeyId, limit]
+  );
+}
+
+export async function getWhiskeySnapshot(whiskeyId: string): Promise<WhiskeySnapshot> {
+  const db = await getDb();
+
+  const totalRow = await db.getFirstAsync<{ c: number }>(
+    `SELECT COUNT(*) as c FROM tastings WHERE whiskeyId = ?`,
+    [whiskeyId]
+  );
+
+  const ratedRow = await db.getFirstAsync<{ c: number; avg: number | null }>(
+    `SELECT COUNT(rating) as c, AVG(rating) as avg
+     FROM tastings
+     WHERE whiskeyId = ? AND rating IS NOT NULL`,
+    [whiskeyId]
+  );
+
+  return {
+    whiskeyId,
+    totalTastings: totalRow?.c ?? 0,
+    ratedCount: ratedRow?.c ?? 0,
+    avgRating:
+      ratedRow?.avg === null || ratedRow?.avg === undefined ? null : Number(ratedRow.avg),
+  };
+}
+
+/** BHH import + queries */
+
+export async function isBhhVideosImported() {
+  const v = await metaGet("bhhVideosImported");
+  return v === "1";
+}
+
+export async function importBhhVideos(videos: Array<{
+  whiskeyId: string;
+  whiskeyName: string;
+  reviewer: "BHH";
+  score: number | null;
+  reviewedAt: string;
+  youtubeUrl: string;
+  title: string;
+}>) {
+  const db = await getDb();
+  await ensureBhhSchema();
+
+  const already = await isBhhVideosImported();
+  if (already) return { imported: 0, skippedBecauseAlreadyImported: true };
+
+  let imported = 0;
+  const now = Date.now();
+
+  await db.execAsync("BEGIN TRANSACTION;");
+  try {
+    for (const v of videos) {
+      const id = uuidLike();
+      const reviewedAtMs = new Date(v.reviewedAt).getTime();
+      const scoreValue = v.score === null ? 0 : Math.round(v.score);
+
+      await db.runAsync(
+        `INSERT INTO bhh_reviews
+          (id, whiskeyId, whiskeyName, reviewer, score, reviewedAt, youtubeUrl, title, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          v.whiskeyId,
+          v.whiskeyName,
+          "BHH",
+          scoreValue,
+          reviewedAtMs,
+          v.youtubeUrl,
+          v.title ?? "",
+          now,
+        ]
+      );
+      imported++;
+    }
+
+    await metaSet("bhhVideosImported", "1");
+    await db.execAsync("COMMIT;");
+    return { imported, skippedBecauseAlreadyImported: false };
+  } catch (e) {
+    await db.execAsync("ROLLBACK;");
+    throw e;
+  }
+}
+
+export async function getRecentBhhReviews(limit = 10) {
+  const db = await getDb();
+  return db.getAllAsync<DbBhhReviewRow>(
+    `SELECT * FROM bhh_reviews ORDER BY reviewedAt DESC LIMIT ?`,
+    [limit]
+  );
+}
+
+export async function getBhhReviewsForWhiskey(whiskeyId: string) {
+  const db = await getDb();
+  return db.getAllAsync<DbBhhReviewRow>(
+    `SELECT * FROM bhh_reviews WHERE whiskeyId = ? ORDER BY reviewedAt DESC`,
+    [whiskeyId]
+  );
+}
+
+/** Transcript score backfill */
+
+export async function isBhhScoresApplied() {
+  const v = await metaGet("bhhScoresApplied");
+  return v === "1";
+}
+
+export async function applyBhhScoreUpdates(updates: Array<{ youtubeUrl: string; score: number }>) {
+  const db = await getDb();
+
+  const already = await isBhhScoresApplied();
+  if (already) return { updated: 0, skippedBecauseAlreadyApplied: true };
+
+  let updated = 0;
+
+  await db.execAsync("BEGIN TRANSACTION;");
+  try {
+    for (const u of updates) {
+      const score = Math.round(u.score);
+      if (!(score > 0 && score <= 120)) continue;
+
+      const res = await db.runAsync(
+        `UPDATE bhh_reviews SET score = ?
+         WHERE youtubeUrl = ?`,
+        [score, u.youtubeUrl]
+      );
+
+      // expo-sqlite runAsync returns changes in some versions; if not, we still count conservatively
+      // @ts-ignore
+      if (typeof res?.changes === "number") updated += res.changes;
+      else updated += 1;
+    }
+
+    await metaSet("bhhScoresApplied", "1");
+    await db.execAsync("COMMIT;");
+    return { updated, skippedBecauseAlreadyApplied: false };
+  } catch (e) {
+    await db.execAsync("ROLLBACK;");
+    throw e;
+  }
+}
+export async function resetBhhScoresAppliedFlag() {
+  const db = await (await import("expo-sqlite")).openDatabaseAsync("whiskeyappbeta.db");
+  await db.runAsync(`DELETE FROM meta WHERE key = 'bhhScoresApplied'`);
+}

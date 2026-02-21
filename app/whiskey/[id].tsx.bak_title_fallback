@@ -1,0 +1,388 @@
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, Pressable, ScrollView, Linking, ActivityIndicator } from "react-native";
+import { Stack, useLocalSearchParams, router } from "expo-router";
+import * as SQLite from "expo-sqlite";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+import { WHISKEYS } from "../../lib/whiskeys";
+
+type BhhReviewRow = {
+  id: string;
+  whiskeyId: string | null;
+  whiskeyName: string;
+  reviewer: string;
+  score: number;
+  reviewedAt: string | null;
+  youtubeUrl: string | null;
+  title: string | null;
+  meta: string | null;
+};
+
+type TastingRow = {
+  id: string;
+  whiskeyId: string | null;
+  whiskeyName: string;
+  rating: number | null;
+  createdAt: string | null;
+  distillery: string | null;
+  region: string | null;
+};
+
+function asString(v: string | string[] | undefined) {
+  if (Array.isArray(v)) return v[0];
+  return v;
+}
+
+function normalizeText(s: string) {
+  return (s ?? "").toLowerCase().trim();
+}
+
+function slugifyLocal(input: string) {
+  return (input ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * We don't want to depend on whatever lib/db.ts currently exports.
+ * Instead we open SQLite directly and *auto-detect* the correct DB by checking for known tables.
+ */
+async function openDbWithRequiredTables() {
+  const candidates = [
+    "whiskeyappbeta.db",
+    "WhiskeyAppBeta.db",
+    "whiskey.db",
+    "app.db",
+    "database.db",
+    "db.db",
+    "SQLite.db",
+  ];
+
+  for (const name of candidates) {
+    try {
+      const db = SQLite.openDatabaseSync(name);
+      const hit = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='bhh_reviews' LIMIT 1;"
+      );
+      const hit2 = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='tastings' LIMIT 1;"
+      );
+      if (hit?.name === "bhh_reviews" && hit2?.name === "tastings") {
+        return db;
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+
+  // As a final fallback, try whatever expo default is (often works in dev)
+  const fallback = SQLite.openDatabaseSync("default.db");
+  return fallback;
+}
+
+export default function WhiskeyDetailScreen() {
+  const params = useLocalSearchParams<{ id?: string | string[]; name?: string | string[] }>();
+  const id = asString(params.id) ?? "";
+  const typedName = (asString(params.name) ?? "").trim();
+
+  const seed = useMemo(() => {
+    // if id matches Discover seeded list, use it for extra display fields
+    return WHISKEYS.find((w) => w.id === id) ?? null;
+  }, [id]);
+
+  const displayName = useMemo(() => {
+    if (seed?.name) return seed.name;
+    if (typedName) return typedName;
+    // last resort: unslug
+    return id.replace(/-/g, " ").trim() || "Whiskey";
+  }, [seed?.name, typedName, id]);
+
+  const [loading, setLoading] = useState(true);
+  const [bhh, setBhh] = useState<BhhReviewRow[]>([]);
+  const [recent, setRecent] = useState<TastingRow[]>([]);
+  const [snapshot, setSnapshot] = useState<{ total: number; rated: number; avg: number | null }>({
+    total: 0,
+    rated: 0,
+    avg: null,
+  });
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      setLoading(true);
+      try {
+        const db = await openDbWithRequiredTables();
+
+        // ---- BHH LOOKUP ----
+        // 1) Try by whiskeyId exact match
+        let reviews: BhhReviewRow[] = [];
+        try {
+          reviews = await db.getAllAsync<BhhReviewRow[]>(
+            `SELECT id, whiskeyId, whiskeyName, reviewer, score, reviewedAt, youtubeUrl, title, meta
+             FROM bhh_reviews
+             WHERE whiskeyId = ?
+             ORDER BY reviewedAt DESC`,
+            [id]
+          );
+        } catch (e) {
+          console.log("BHH query by whiskeyId failed:", e);
+        }
+
+        // 2) Fallback by whiskeyName match / LIKE if none found
+        if ((!reviews || reviews.length === 0) && typedName) {
+          const like = `%${typedName}%`;
+          try {
+            reviews = await db.getAllAsync<BhhReviewRow[]>(
+              `SELECT id, whiskeyId, whiskeyName, reviewer, score, reviewedAt, youtubeUrl, title, meta
+               FROM bhh_reviews
+               WHERE LOWER(whiskeyName) = LOWER(?)
+                  OR LOWER(whiskeyName) LIKE LOWER(?)
+               ORDER BY reviewedAt DESC`,
+              [typedName, like]
+            );
+          } catch (e) {
+            console.log("BHH query by whiskeyName failed:", e);
+          }
+        }
+
+        // 3) Fallback by slug-name match if user typed something slightly different
+        if ((!reviews || reviews.length === 0) && typedName) {
+          const slug = slugifyLocal(typedName);
+          try {
+            reviews = await db.getAllAsync<BhhReviewRow[]>(
+              `SELECT id, whiskeyId, whiskeyName, reviewer, score, reviewedAt, youtubeUrl, title, meta
+               FROM bhh_reviews
+               WHERE whiskeyId = ?
+               ORDER BY reviewedAt DESC`,
+              [slug]
+            );
+          } catch {}
+        }
+
+        // ---- COMMUNITY LOOKUP ----
+        // tastings are keyed by whiskeyId
+        let tastings: TastingRow[] = [];
+        try {
+          tastings = await db.getAllAsync<TastingRow[]>(
+            `SELECT id, whiskeyId, whiskeyName, rating, createdAt, distillery, region
+             FROM tastings
+             WHERE whiskeyId = ?
+             ORDER BY createdAt DESC
+             LIMIT 10`,
+            [id]
+          );
+        } catch (e) {
+          console.log("Tastings query failed:", e);
+        }
+
+        // Snapshot stats
+        let total = 0;
+        let rated = 0;
+        let avg: number | null = null;
+        try {
+          const row = await db.getFirstAsync<{ total: number; rated: number; avg: number | null }>(
+            `SELECT
+               COUNT(*) as total,
+               SUM(CASE WHEN rating IS NOT NULL THEN 1 ELSE 0 END) as rated,
+               AVG(rating) as avg
+             FROM tastings
+             WHERE whiskeyId = ?`,
+            [id]
+          );
+          total = row?.total ?? 0;
+          rated = row?.rated ?? 0;
+          avg = row?.avg ?? null;
+        } catch (e) {
+          console.log("Snapshot query failed:", e);
+        }
+
+        if (!mounted) return;
+        setBhh((reviews as any) ?? []);
+        setRecent((tastings as any) ?? []);
+        setSnapshot({
+          total,
+          rated,
+          avg: typeof avg === "number" && Number.isFinite(avg) ? Math.round(avg * 10) / 10 : null,
+        });
+      } catch (e) {
+        console.log("Whiskey page load failed:", e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [id, typedName]);
+
+  const bhhBest = useMemo(() => {
+    if (!bhh || bhh.length === 0) return null;
+    // Prefer first non-zero score if available
+    const nonZero = bhh.find((r) => (r.score ?? 0) > 0);
+    return nonZero ?? bhh[0];
+  }, [bhh]);
+
+  const bhhScoreText = useMemo(() => {
+    if (!bhhBest) return "Coming Soon";
+    if ((bhhBest.score ?? 0) <= 0) return "Coming Soon";
+    return String(bhhBest.score);
+  }, [bhhBest]);
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <Stack.Screen options={{ title: "Whiskey" }} />
+
+      <View style={{ padding: SPACING.md, gap: SPACING.md }}>
+        <Text style={{ fontSize: TEXT.h1, fontWeight: "900", color: COLORS.ink }}>
+          {displayName}
+        </Text>
+
+        {loading ? (
+          <View style={{ paddingVertical: 20 }}>
+            <ActivityIndicator />
+            <Text style={{ marginTop: 10, color: COLORS.ink, opacity: 0.7 }}>
+              Loading whiskey…
+            </Text>
+          </View>
+        ) : null}
+
+        {/* BHH CARD */}
+        <View
+          style={{
+            backgroundColor: COLORS.card,
+            borderRadius: 16,
+            padding: SPACING.md,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            gap: 10,
+          }}
+        >
+          <Text style={{ fontSize: 18, fontWeight: "900", color: COLORS.ink }}>
+            Buffalo Happy Hour
+          </Text>
+
+          <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+            Score:{" "}
+            <Text style={{ fontWeight: "900", opacity: 1 }}>
+              {bhhScoreText}
+            </Text>
+          </Text>
+
+          {bhhBest?.youtubeUrl ? (
+            <Pressable
+              onPress={() => Linking.openURL(bhhBest.youtubeUrl!)}
+              style={({ pressed }) => ({
+                paddingVertical: 12,
+                borderRadius: 14,
+                alignItems: "center",
+                backgroundColor: COLORS.primary,
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={{ color: COLORS.bg, fontWeight: "900" }}>
+                Watch on YouTube
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={{ color: COLORS.ink, opacity: 0.65, fontSize: 12 }}>
+              No linked BHH video found for this whiskey yet.
+            </Text>
+          )}
+        </View>
+
+        {/* COMMUNITY SNAPSHOT */}
+        <View
+          style={{
+            backgroundColor: COLORS.card,
+            borderRadius: 16,
+            padding: SPACING.md,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            gap: 10,
+          }}
+        >
+          <Text style={{ fontSize: 18, fontWeight: "900", color: COLORS.ink }}>
+            Your Snapshot
+          </Text>
+
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Text style={{ color: COLORS.ink, opacity: 0.8 }}>Total Tastings</Text>
+            <Text style={{ color: COLORS.ink, fontWeight: "900" }}>{snapshot.total}</Text>
+          </View>
+
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Text style={{ color: COLORS.ink, opacity: 0.8 }}>Average Rating</Text>
+            <Text style={{ color: COLORS.ink, fontWeight: "900" }}>
+              {snapshot.avg === null ? "—" : snapshot.avg}
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/log/tasting",
+                params: { id, whiskeyName: displayName },
+              })
+            }
+            style={({ pressed }) => ({
+              marginTop: 6,
+              paddingVertical: 12,
+              borderRadius: 14,
+              alignItems: "center",
+              backgroundColor: COLORS.primary,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: COLORS.bg, fontWeight: "900" }}>
+              Log Your Tasting
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* RECENT TASTINGS */}
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontSize: 18, fontWeight: "900", color: COLORS.ink }}>
+            Recent Tastings
+          </Text>
+
+          {recent.length === 0 ? (
+            <Text style={{ color: COLORS.ink, opacity: 0.7 }}>
+              None yet — log your first tasting.
+            </Text>
+          ) : (
+            recent.map((t) => (
+              <View
+                key={t.id}
+                style={{
+                  backgroundColor: COLORS.card,
+                  borderRadius: 14,
+                  padding: SPACING.md,
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                }}
+              >
+                <Text style={{ color: COLORS.ink, fontWeight: "900" }}>
+                  Rating: {t.rating ?? "—"}
+                </Text>
+                <Text style={{ color: COLORS.ink, opacity: 0.7, marginTop: 4 }}>
+                  {t.region ? t.region : ""}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* DEBUG NOTE (optional) */}
+        {bhh.length === 0 && (
+          <Text style={{ color: COLORS.ink, opacity: 0.5, fontSize: 12 }}>
+            Tip: If BHH doesn’t show for a typed whiskey, it means the DB record’s whiskeyId/name doesn’t match yet. We can normalize IDs in a quick one-time migration later.
+          </Text>
+        )}
+      </View>
+    </ScrollView>
+  );
+}

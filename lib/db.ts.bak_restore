@@ -1,0 +1,159 @@
+// lib/db.ts
+import * as SQLite from "expo-sqlite";
+
+const DB_NAME = "whiskeyappbeta.db";
+
+export type Db = SQLite.SQLiteDatabase;
+
+let _db: Db | null = null;
+
+export async function getDb() {
+  if (_db) return _db;
+  _db = await SQLite.openDatabaseAsync(DB_NAME);
+  await _db.execAsync(`PRAGMA journal_mode = WAL;`);
+  await _db.execAsync(`PRAGMA foreign_keys = ON;`);
+  return _db;
+}
+
+export const db = {
+  async execAsync(sql: string) {
+    const d = await getDb();
+    return d.execAsync(sql);
+  },
+  async runAsync(sql: string, params: any[] = []) {
+    const d = await getDb();
+    return d.runAsync(sql, params);
+  },
+  async getAllAsync<T = any>(sql: string, params: any[] = []) {
+    const d = await getDb();
+    return d.getAllAsync<T>(sql, params);
+  },
+  async getFirstAsync<T = any>(sql: string, params: any[] = []) {
+    const d = await getDb();
+    return d.getFirstAsync<T>(sql, params);
+  },
+  async withTransactionAsync(fn: () => Promise<void>) {
+    const d = await getDb();
+    return d.withTransactionAsync(fn);
+  },
+};
+
+/** Meta flags stored in SQLite (simple key/value) */
+export async function getMetaFlag(key: string): Promise<boolean> {
+  await ensureMetaTable();
+  const row = await db.getFirstAsync<{ value: string }>(
+    `SELECT value FROM meta WHERE key = ? LIMIT 1`,
+    [key]
+  );
+  return row?.value === "1";
+}
+
+export async function setMetaFlag(key: string, value: boolean): Promise<void> {
+  await ensureMetaTable();
+  await db.runAsync(
+    `INSERT INTO meta (key, value)
+     VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [key, value ? "1" : "0"]
+  );
+}
+
+async function ensureMetaTable() {
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
+  `);
+}
+
+/**
+ * Call this once near app startup. Safe to run multiple times.
+ * IMPORTANT: Repairs the whiskeys table if it exists with an old/bad schema.
+ */
+export async function initDb(): Promise<void> {
+  // Base tables
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS tastings (
+      id TEXT PRIMARY KEY NOT NULL,
+      whiskeyId TEXT,
+      whiskeyName TEXT,
+      rating REAL,
+      notes TEXT,
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS bhh_reviews (
+      id TEXT PRIMARY KEY NOT NULL,
+      whiskeyId TEXT,
+      whiskeyName TEXT NOT NULL,
+      reviewer TEXT NOT NULL,
+      score REAL NOT NULL,
+      reviewedAt TEXT,
+      youtubeUrl TEXT,
+      title TEXT,
+      meta TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
+  `);
+
+  // New tasting columns (safe)
+  await addColumnIfMissing("tastings", "catalogWhiskeyId", "TEXT");
+  await addColumnIfMissing("tastings", "customWhiskeyName", "TEXT");
+
+  // ✅ Whiskey catalog repair + ensure index
+  await ensureWhiskeysCatalogSchema();
+}
+
+/**
+ * SQLite doesn't support "ADD COLUMN IF NOT EXISTS", so we check first.
+ */
+async function addColumnIfMissing(tableName: string, columnName: string, columnType: string) {
+  const cols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${tableName});`);
+  const exists = cols.some(c => c.name === columnName);
+  if (exists) return;
+
+  await db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType};`);
+}
+
+/**
+ * Ensures the local whiskeys catalog table has the correct columns.
+ * If an older table exists without normalizedName, we drop/recreate ONLY that table.
+ */
+async function ensureWhiskeysCatalogSchema() {
+  // Create table if missing (minimal)
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS whiskeys (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      normalizedName TEXT NOT NULL
+    );
+  `);
+
+  // Check actual columns
+  const cols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(whiskeys);`);
+  const hasNormalizedName = cols.some(c => c.name === "normalizedName");
+
+  if (!hasNormalizedName) {
+    // Old/bad schema: drop and recreate ONLY this catalog table
+    await db.execAsync(`DROP TABLE IF EXISTS whiskeys;`);
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS whiskeys (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        normalizedName TEXT NOT NULL
+      );
+    `);
+  }
+
+  // Now it is safe to create index
+  await db.execAsync(`
+    CREATE INDEX IF NOT EXISTS idx_whiskeys_normalizedName
+      ON whiskeys(normalizedName);
+  `);
+}
+

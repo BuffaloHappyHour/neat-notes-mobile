@@ -1,0 +1,114 @@
+// app/(tabs)/log.tsx
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+
+import { initDb } from "../../lib/db";
+import { ensureWhiskeyCatalogReady } from "../../lib/catalog/whiskeyCatalog";
+import { WhiskeyAutocompleteField, WhiskeySelection } from "../../lib/catalog/WhiskeyAutocompleteField";
+
+const FULL_LOG_ROUTE = "/log/tasting";
+
+export default function LogTab() {
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
+
+  const [whiskey, setWhiskey] = useState<WhiskeySelection>({ kind: "none" });
+
+  const whiskeyName = useMemo(() => {
+    if (whiskey.kind === "catalog") return whiskey.name;
+    if (whiskey.kind === "custom") return whiskey.name.trim();
+    return "";
+  }, [whiskey]);
+
+  const catalogWhiskeyId = useMemo(() => {
+    if (whiskey.kind === "catalog") return whiskey.id;
+    return "";
+  }, [whiskey]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        await initDb();
+        await ensureWhiskeyCatalogReady([]); // seeded from BHH names
+        setReady(true);
+      } catch (e: any) {
+        console.error(e);
+        Alert.alert("DB Error", e?.message ?? "Failed to initialize database.");
+      }
+    })();
+  }, []);
+
+  function onLogTasting() {
+    if (!ready) return;
+
+    if (!whiskeyName) {
+      Alert.alert("Pick a whiskey", "Type a whiskey name (or select one), then tap “Log your tasting”.");
+      return;
+    }
+
+    // Navigate to the existing full log screen
+    // We pass params so we can prefill the whiskey field on that screen.
+    router.push({
+      pathname: FULL_LOG_ROUTE as any,
+      params: {
+        whiskeyName,
+        catalogWhiskeyId,
+        source: "logTab",
+      },
+    });
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <ScrollView
+        contentContainerStyle={{
+          padding: SPACING.md,
+          gap: SPACING.md,
+        }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={{ fontSize: TEXT.h1, fontWeight: "800", color: COLORS.ink }}>
+          Log
+        </Text>
+
+        <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+          Type your whiskey, then tap “Log your tasting”.
+        </Text>
+
+        <WhiskeyAutocompleteField
+          label="Whiskey"
+          value={whiskey}
+          onChange={setWhiskey}
+          placeholder="Type a whiskey name…"
+          borderColor={COLORS.border}
+          textColor={COLORS.ink}
+        />
+
+        <Pressable
+          disabled={!ready}
+          onPress={onLogTasting}
+          style={({ pressed }) => ({
+            marginTop: SPACING.sm,
+            paddingVertical: 14,
+            borderRadius: 14,
+            alignItems: "center",
+            backgroundColor: !ready ? COLORS.border : COLORS.brand,
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <Text style={{ color: COLORS.bg, fontWeight: "800", fontSize: 16 }}>
+            Log your tasting
+          </Text>
+        </Pressable>
+
+        {!ready ? (
+          <Text style={{ color: COLORS.ink, opacity: 0.7 }}>
+            Initializing…
+          </Text>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}

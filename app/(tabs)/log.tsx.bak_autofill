@@ -1,0 +1,106 @@
+import { useMemo, useState } from "react";
+import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import { router } from "expo-router";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+
+function slugifyLocal(input: string) {
+  return (input ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export default function LogTab() {
+  const [query, setQuery] = useState("");
+
+  const trimmed = useMemo(() => query.trim(), [query]);
+  const canGo = trimmed.length >= 2;
+
+  function onFind() {
+    if (!canGo) {
+      Alert.alert("Type a whiskey", "Please enter at least 2 characters.");
+      return;
+    }
+
+    const id = slugifyLocal(trimmed);
+    // Route to the whiskey profile screen, even if it wasn't in Discover.
+    // We also pass the typed name as a param so the page can display it if needed.
+    router.push({
+      pathname: `/whiskey/${id}`,
+      params: { name: trimmed },
+    });
+  }
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: COLORS.bg,
+        padding: SPACING.md,
+        gap: SPACING.md,
+      }}
+    >
+      <Text style={{ fontSize: TEXT.h1, fontWeight: "800", color: COLORS.ink }}>
+        Log
+      </Text>
+
+      <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+        Type a whiskey to view the Buffalo Happy Hour review (if we have one) and log your tasting.
+      </Text>
+
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          backgroundColor: COLORS.card,
+          borderRadius: 16,
+          padding: SPACING.md,
+          gap: SPACING.sm,
+        }}
+      >
+        <Text style={{ fontWeight: "800", color: COLORS.ink }}>
+          Whiskey name
+        </Text>
+
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="e.g., Balvenie 14 Caribbean Cask"
+          placeholderTextColor={COLORS.muted}
+          autoCorrect={false}
+          autoCapitalize="words"
+          style={{
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            borderRadius: 14,
+            padding: 12,
+            color: COLORS.ink,
+            backgroundColor: COLORS.bg,
+          }}
+        />
+
+        <Pressable
+          onPress={onFind}
+          style={({ pressed }) => ({
+            marginTop: SPACING.xs,
+            borderRadius: 16,
+            paddingVertical: 14,
+            alignItems: "center",
+            backgroundColor: COLORS.primary,
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <Text style={{ color: COLORS.bg, fontWeight: "900", fontSize: 16 }}>
+            Find Whiskey
+          </Text>
+        </Pressable>
+      </View>
+
+      <Text style={{ color: COLORS.ink, opacity: 0.6, fontSize: 12 }}>
+        Tip: if we don’t have a BHH review yet, you can still log your tasting and it will show in your snapshot.
+      </Text>
+    </View>
+  );
+}

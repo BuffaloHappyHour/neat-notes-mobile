@@ -1,0 +1,363 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, TextInput, Pressable, Alert, ScrollView } from "react-native";
+import { router } from "expo-router";
+import * as SQLite from "expo-sqlite";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+import { WHISKEYS } from "../../lib/whiskeys";
+
+function slugifyLocal(input: string) {
+  return (input ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Open the SQLite DB without relying on lib/db.ts.
+ * We try common names until we find one that has bhh_reviews + tastings.
+ */
+async function openDbWithRequiredTables() {
+  const candidates = [
+    "whiskeyappbeta.db",
+    "WhiskeyAppBeta.db",
+    "whiskey.db",
+    "app.db",
+    "database.db",
+    "db.db",
+    "default.db",
+  ];
+
+  for (const name of candidates) {
+    try {
+      const db = SQLite.openDatabaseSync(name);
+      const hit = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='bhh_reviews' LIMIT 1;"
+      );
+      const hit2 = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='tastings' LIMIT 1;"
+      );
+      if (hit?.name === "bhh_reviews" && hit2?.name === "tastings") return db;
+    } catch {
+      // keep trying
+    }
+  }
+
+  return SQLite.openDatabaseSync("default.db");
+}
+
+type Suggestion = {
+  label: string;         // what we show
+  source: "db" | "seed"; // where it came from
+};
+
+export default function LogTab() {
+  const [query, setQuery] = useState("");
+
+  // gating: must either select a suggestion OR click Use Custom
+  const [selectedName, setSelectedName] = useState<string | null>(null);
+  const [customApproved, setCustomApproved] = useState(false);
+
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const canProceed = useMemo(() => {
+    const q = query.trim();
+    if (q.length < 2) return false;
+    return !!selectedName || customApproved;
+  }, [query, selectedName, customApproved]);
+
+  // seed list fallback (Discover list) – used only if DB has no matches
+  const seedNames = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const w of WHISKEYS) {
+      const n = (w?.name ?? "").trim();
+      const key = n.toLowerCase();
+      if (!n) continue;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(n);
+    }
+    return out;
+  }, []);
+
+  function onType(text: string) {
+    setQuery(text);
+
+    // typing resets gate
+    setSelectedName(null);
+    setCustomApproved(false);
+  }
+
+  function onPickSuggestion(name: string) {
+    setQuery(name);
+    setSelectedName(name);
+    setCustomApproved(false);
+  }
+
+  function onUseCustom() {
+    const q = query.trim();
+    if (q.length < 2) {
+      Alert.alert("Type a whiskey", "Please enter at least 2 characters first.");
+      return;
+    }
+    setSelectedName(null);
+    setCustomApproved(true);
+  }
+
+  function onFindWhiskey() {
+    const name = query.trim();
+    if (!name || name.length < 2) {
+      Alert.alert("Type a whiskey", "Please enter at least 2 characters.");
+      return;
+    }
+    if (!selectedName && !customApproved) {
+      Alert.alert(
+        "Select or use custom",
+        "Please tap a suggestion, or tap “Use Custom” to confirm free-typing."
+      );
+      return;
+    }
+
+    const finalName = selectedName ?? name;
+    const id = slugifyLocal(finalName);
+
+    router.push({
+      pathname: `/whiskey/${id}`,
+      params: { name: finalName },
+    });
+  }
+
+  async function fetchDbSuggestions(term: string) {
+    const t = term.trim();
+    if (t.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const db = await openDbWithRequiredTables();
+      const like = `%${t}%`;
+
+      // Pull distinct whiskeyName from bhh_reviews (and also allow matching title)
+      const rows = await db.getAllAsync<{ whiskeyName: string | null }[]>(
+        `SELECT DISTINCT whiskeyName
+         FROM bhh_reviews
+         WHERE (whiskeyName IS NOT NULL AND LOWER(whiskeyName) LIKE LOWER(?))
+            OR (title IS NOT NULL AND LOWER(title) LIKE LOWER(?))
+         ORDER BY whiskeyName ASC
+         LIMIT 25`,
+        [like, like]
+      );
+
+      const found: string[] = [];
+      const seen = new Set<string>();
+      for (const r of (rows as any) ?? []) {
+        const n = (r?.whiskeyName ?? "").trim();
+        if (!n) continue;
+        const key = n.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        found.push(n);
+      }
+
+      // If DB has matches, use those.
+      // If not, fall back to the seeded Discover list so user still gets something.
+      const final: Suggestion[] =
+        found.length > 0
+          ? found.slice(0, 10).map((label) => ({ label, source: "db" as const }))
+          : seedNames
+              .filter((n) => n.toLowerCase().includes(t.toLowerCase()))
+              .slice(0, 10)
+              .map((label) => ({ label, source: "seed" as const }));
+
+      setSuggestions(final);
+    } catch (e: any) {
+      console.log("DB suggestion search failed:", e);
+      // If DB fails, still provide seed fallback
+      const tLower = t.toLowerCase();
+      const fallback = seedNames
+        .filter((n) => n.toLowerCase().includes(tLower))
+        .slice(0, 10)
+        .map((label) => ({ label, source: "seed" as const }));
+      setSuggestions(fallback);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Debounced suggestion fetch on query changes
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(() => {
+      fetchDbSuggestions(query);
+    }, 200);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: COLORS.bg,
+        padding: SPACING.md,
+        gap: SPACING.md,
+      }}
+    >
+      <Text style={{ fontSize: TEXT.h1, fontWeight: "800", color: COLORS.ink }}>
+        Log
+      </Text>
+
+      <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+        Start typing a whiskey. Suggestions come from our YouTube review database. Pick one (recommended) or explicitly use a custom entry.
+      </Text>
+
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          backgroundColor: COLORS.card,
+          borderRadius: 16,
+          padding: SPACING.md,
+          gap: SPACING.sm,
+        }}
+      >
+        <Text style={{ fontWeight: "800", color: COLORS.ink }}>Whiskey name</Text>
+
+        <TextInput
+          value={query}
+          onChangeText={onType}
+          placeholder="e.g., Hartman's / Balvenie / Laphroaig"
+          placeholderTextColor={COLORS.muted}
+          autoCorrect={false}
+          autoCapitalize="words"
+          style={{
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            borderRadius: 14,
+            padding: 12,
+            color: COLORS.ink,
+            backgroundColor: COLORS.bg,
+          }}
+        />
+
+        {loading ? (
+          <Text style={{ color: COLORS.ink, opacity: 0.6, fontSize: 12 }}>
+            Searching…
+          </Text>
+        ) : null}
+
+        {suggestions.length > 0 ? (
+          <ScrollView
+            style={{
+              maxHeight: 220,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              borderRadius: 14,
+              overflow: "hidden",
+              backgroundColor: COLORS.bg,
+            }}
+          >
+            {suggestions.map((s) => {
+              const active = selectedName?.toLowerCase() === s.label.toLowerCase();
+              return (
+                <Pressable
+                  key={`${s.source}:${s.label}`}
+                  onPress={() => onPickSuggestion(s.label)}
+                  style={({ pressed }) => ({
+                    paddingVertical: 12,
+                    paddingHorizontal: 12,
+                    borderBottomWidth: 1,
+                    borderBottomColor: COLORS.border,
+                    opacity: pressed ? 0.7 : 1,
+                    backgroundColor: active ? COLORS.card : "transparent",
+                  })}
+                >
+                  <Text style={{ color: COLORS.ink, fontWeight: active ? "800" : "500" }}>
+                    {s.label}
+                  </Text>
+                  <Text style={{ color: COLORS.ink, opacity: 0.55, fontSize: 11 }}>
+                    {s.source === "db" ? "From BHH database" : "From seeded list"}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : query.trim().length >= 2 ? (
+          <Text style={{ color: COLORS.ink, opacity: 0.6, fontSize: 12 }}>
+            No suggestions found. You can use a custom entry.
+          </Text>
+        ) : null}
+
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <Pressable
+            onPress={onUseCustom}
+            style={({ pressed }) => ({
+              flex: 1,
+              borderRadius: 16,
+              paddingVertical: 14,
+              alignItems: "center",
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              backgroundColor: customApproved ? COLORS.card : COLORS.bg,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: COLORS.ink, fontWeight: "900" }}>
+              {customApproved ? "Custom Selected" : "Use Custom"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={onFindWhiskey}
+            disabled={!canProceed}
+            style={({ pressed }) => ({
+              flex: 1,
+              borderRadius: 16,
+              paddingVertical: 14,
+              alignItems: "center",
+              backgroundColor: canProceed ? COLORS.primary : COLORS.border,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: COLORS.bg, fontWeight: "900" }}>Find Whiskey</Text>
+          </Pressable>
+        </View>
+
+        <Text style={{ color: COLORS.ink, opacity: 0.65, fontSize: 12 }}>
+          {selectedName
+            ? "Using a suggested whiskey (best for clean data)."
+            : customApproved
+            ? "Using a custom whiskey (you confirmed free-typing)."
+            : "Tap a suggestion, or tap “Use Custom” to continue."}
+        </Text>
+      </View>
+
+      <Pressable
+        onPress={() => router.push("/debug/db")}
+        style={({ pressed }) => ({
+          marginTop: "auto",
+          borderRadius: 14,
+          paddingVertical: 12,
+          alignItems: "center",
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          backgroundColor: COLORS.card,
+          opacity: pressed ? 0.85 : 1,
+        })}
+      >
+        <Text style={{ color: COLORS.ink, fontWeight: "900" }}>DB Inspector (Dev)</Text>
+      </Pressable>
+    </View>
+  );
+}

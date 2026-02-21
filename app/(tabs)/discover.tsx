@@ -1,14 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Keyboard, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { supabase } from "../../lib/supabase";
 
@@ -73,7 +66,17 @@ function Card({
         </View>
 
         {subtitle ? (
-          <Text style={[type.body, { opacity: 0.7 }]}>{subtitle}</Text>
+          <Text
+            style={[
+              type.microcopyItalic,
+              {
+                opacity: 0.72,
+                lineHeight: 18,
+              },
+            ]}
+          >
+            {subtitle}
+          </Text>
         ) : null}
       </View>
 
@@ -98,7 +101,6 @@ function IconButton({
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
-        gap: 8,
         borderWidth: 1,
         borderColor: colors.divider,
         borderRadius: 999,
@@ -108,17 +110,12 @@ function IconButton({
         opacity: pressed ? 0.92 : 1,
       })}
     >
-      <Ionicons
-        name={icon}
-        size={16}
-        color={colors.textPrimary}
-        style={{ opacity: 0.9 }}
-      />
-      {badgeText ? (
-        <Text style={[type.body, { fontWeight: "900", fontSize: 12 }]}>
-          {badgeText}
-        </Text>
-      ) : null}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Ionicons name={icon} size={16} color={colors.textPrimary} style={{ opacity: 0.9 }} />
+        {badgeText ? (
+          <Text style={[type.body, { fontWeight: "900", fontSize: 12 }]}>{badgeText}</Text>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -126,13 +123,7 @@ function IconButton({
 /** Accent divider: small tan nub + long grey line */
 function SectionDivider() {
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        marginVertical: spacing.md,
-      }}
-    >
+    <View style={{ flexDirection: "row", alignItems: "center", marginVertical: spacing.md }}>
       <View
         style={{
           width: 26,
@@ -156,19 +147,11 @@ function SectionDivider() {
 }
 
 /** Compact 3-line whiskey tile */
-function WhiskeyTile({
-  row,
-  onPress,
-}: {
-  row: WhiskeyCardRow;
-  onPress: () => void;
-}) {
+function WhiskeyTile({ row, onPress }: { row: WhiskeyCardRow; onPress: () => void }) {
   const hasCommunity = row.communityCount > 0 && row.communityAvg != null;
 
   const proofText =
-    row.proof != null && Number.isFinite(Number(row.proof))
-      ? `${Math.round(Number(row.proof))} proof`
-      : null;
+    row.proof != null && Number.isFinite(Number(row.proof)) ? `${Math.round(Number(row.proof))} proof` : null;
 
   return (
     <Pressable
@@ -183,38 +166,26 @@ function WhiskeyTile({
         paddingHorizontal: spacing.md,
         opacity: pressed ? 0.9 : 1,
         ...shadows.card,
-        gap: 6,
       })}
     >
-      <Text
-        style={[type.body, { fontWeight: "900", fontSize: 15 }]}
-        numberOfLines={1}
-      >
-        {row.whiskeyName}
-      </Text>
-
-      <Text
-        style={[type.body, { opacity: 0.75, fontSize: 12 }]}
-        numberOfLines={1}
-      >
-        {row.whiskeyType ?? "—"}
-        {proofText ? ` • ${proofText}` : ""}
-      </Text>
-
-      <Text
-        style={[type.body, { opacity: 0.8, fontSize: 12 }]}
-        numberOfLines={1}
-      >
-        Community:{" "}
-        <Text style={{ fontWeight: "900" }}>
-          {hasCommunity ? row.communityAvg?.toFixed(1) : "—"}
+      <View style={{ gap: 6 }}>
+        <Text style={[type.body, { fontWeight: "900", fontSize: 15 }]} numberOfLines={1}>
+          {row.whiskeyName}
         </Text>
-        {"  •  "}
-        BHH:{" "}
-        <Text style={{ fontWeight: "900" }}>
-          {row.bhhScore != null ? Math.round(row.bhhScore) : "—"}
+
+        <Text style={[type.body, { opacity: 0.75, fontSize: 12 }]} numberOfLines={1}>
+          {row.whiskeyType ?? "—"}
+          {proofText ? ` • ${proofText}` : ""}
         </Text>
-      </Text>
+
+        <Text style={[type.body, { opacity: 0.8, fontSize: 12 }]} numberOfLines={1}>
+          Community:{" "}
+          <Text style={{ fontWeight: "900" }}>{hasCommunity ? row.communityAvg?.toFixed(1) : "—"}</Text>
+          {"  •  "}
+          BHH:{" "}
+          <Text style={{ fontWeight: "900" }}>{row.bhhScore != null ? Math.round(row.bhhScore) : "—"}</Text>
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -259,42 +230,24 @@ function SectionRow({
           </View>
 
           {subtitle ? (
-            <Text style={[type.body, { opacity: 0.65, fontSize: 12 }]}>
-              {subtitle}
-            </Text>
+            <Text style={[type.body, { opacity: 0.65, fontSize: 12 }]}>{subtitle}</Text>
           ) : null}
         </View>
 
-        <Pressable
-          onPress={onSeeAll}
-          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-        >
-          <Text
-            style={[
-              type.body,
-              { fontWeight: "900", fontSize: 12, color: colors.accent },
-            ]}
-          >
+        <Pressable onPress={onSeeAll} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+          <Text style={[type.body, { fontWeight: "900", fontSize: 12, color: colors.accent }]}>
             View All
           </Text>
         </Pressable>
       </View>
 
       {rows.length === 0 ? (
-        <Text style={[type.body, { opacity: 0.65 }]}>
-          {emptyMessage ?? "Nothing here yet."}
-        </Text>
+        <Text style={[type.body, { opacity: 0.65 }]}>{emptyMessage ?? "Nothing here yet."}</Text>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View
-            style={{ flexDirection: "row", gap: spacing.md, paddingVertical: 2 }}
-          >
+          <View style={{ flexDirection: "row", gap: spacing.md, paddingVertical: 2 }}>
             {rows.map((r) => (
-              <WhiskeyTile
-                key={r.whiskeyId}
-                row={r}
-                onPress={() => onPressRow(r)}
-              />
+              <WhiskeyTile key={r.whiskeyId} row={r} onPress={() => onPressRow(r)} />
             ))}
           </View>
         </ScrollView>
@@ -317,9 +270,7 @@ function parseMaybeNumber(v: string) {
   return n;
 }
 
-async function fetchWhiskeyCardsByIds(
-  idsInOrder: string[]
-): Promise<WhiskeyCardRow[]> {
+async function fetchWhiskeyCardsByIds(idsInOrder: string[]): Promise<WhiskeyCardRow[]> {
   const ids = idsInOrder.filter(isUuidLike);
   if (ids.length === 0) return [];
 
@@ -330,23 +281,18 @@ async function fetchWhiskeyCardsByIds(
 
   if (wErr) throw new Error(wErr.message);
 
-  const whiskeyMap = new Map<
-    string,
-    { name: string; wType: string | null; proof: number | null }
-  >();
+  const whiskeyMap = new Map<string, { name: string; wType: string | null; proof: number | null }>();
 
   (wData as any[]).forEach((w) => {
     const id = String(w.id);
     whiskeyMap.set(id, {
       name: String(w.display_name ?? "Whiskey"),
       wType: w.whiskey_type ? String(w.whiskey_type) : null,
-      proof:
-        w.proof == null || !Number.isFinite(Number(w.proof))
-          ? null
-          : Number(w.proof),
+      proof: w.proof == null || !Number.isFinite(Number(w.proof)) ? null : Number(w.proof),
     });
   });
 
+  // ✅ Community stats source of truth: whiskey_community_stats
   const { data: cData, error: cErr } = await supabase
     .from("whiskey_community_stats")
     .select("whiskey_id, community_avg, community_count")
@@ -358,13 +304,9 @@ async function fetchWhiskeyCardsByIds(
   (cData as any[]).forEach((c) => {
     const id = String(c.whiskey_id);
     const avg =
-      c.community_avg == null || !Number.isFinite(Number(c.community_avg))
-        ? null
-        : Number(c.community_avg);
+      c.community_avg == null || !Number.isFinite(Number(c.community_avg)) ? null : Number(c.community_avg);
     const count =
-      c.community_count == null || !Number.isFinite(Number(c.community_count))
-        ? 0
-        : Number(c.community_count);
+      c.community_count == null || !Number.isFinite(Number(c.community_count)) ? 0 : Number(c.community_count);
     communityMap.set(id, { avg, count });
   });
 
@@ -382,9 +324,7 @@ async function fetchWhiskeyCardsByIds(
     if (!id) return;
 
     const score =
-      b.rating_100 == null || !Number.isFinite(Number(b.rating_100))
-        ? null
-        : Number(b.rating_100);
+      b.rating_100 == null || !Number.isFinite(Number(b.rating_100)) ? null : Number(b.rating_100);
 
     const pub = b.published_at ? Date.parse(String(b.published_at)) : 0;
 
@@ -429,22 +369,76 @@ async function fetchWhiskeyCardsByIds(
   return out;
 }
 
-function pickUniqueIds(ids: string[], take: number, used: Set<string>): string[] {
-  const out: string[] = [];
-  for (const id of ids) {
-    if (!isUuidLike(id)) continue;
-    if (used.has(id)) continue;
-    used.add(id);
-    out.push(id);
-    if (out.length >= take) break;
+async function fetchSectionIds(section: SectionKey, limit: number): Promise<string[]> {
+  if (section === "NEWEST") {
+    const { data, error } = await supabase
+      .from("whiskeys")
+      .select("id")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(error.message);
+    return (data as any[]).map((w) => String(w.id)).filter(isUuidLike);
   }
-  return out;
+
+  if (section === "HIGHEST") {
+    const MIN_COUNT = 3;
+    const { data, error } = await supabase
+      .from("whiskey_community_stats")
+      .select("whiskey_id, community_avg, community_count")
+      .gte("community_count", MIN_COUNT)
+      .order("community_avg", { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(error.message);
+    return (data as any[]).map((r) => String(r.whiskey_id)).filter(isUuidLike);
+  }
+
+  if (section === "RECENT") {
+    const { data, error } = await supabase
+      .from("tastings")
+      .select("whiskey_id, created_at")
+      .order("created_at", { ascending: false })
+      .limit(Math.max(300, limit * 20));
+    if (error) throw new Error(error.message);
+
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    (data as any[]).forEach((t) => {
+      const id = t.whiskey_id ? String(t.whiskey_id) : "";
+      if (!isUuidLike(id)) return;
+      if (seen.has(id)) return;
+      seen.add(id);
+      ids.push(id);
+    });
+
+    return ids.slice(0, limit);
+  }
+
+  // TRENDING
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("tastings")
+    .select("whiskey_id, created_at")
+    .gte("created_at", since)
+    .limit(5000);
+
+  if (error) throw new Error(error.message);
+
+  const counts = new Map<string, number>();
+  (data as any[]).forEach((t) => {
+    const id = t.whiskey_id ? String(t.whiskey_id) : "";
+    if (!isUuidLike(id)) return;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  });
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id]) => id);
 }
 
 /** ---------- Screen ---------- */
 
 export default function DiscoverTab() {
-  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [statusError, setStatusError] = useState<string>("");
 
@@ -461,7 +455,13 @@ export default function DiscoverTab() {
 
   const [allTypes, setAllTypes] = useState<string[]>([]);
 
-  // Section data
+  // RAW section pools (bigger than 5)
+  const [trendingPool, setTrendingPool] = useState<WhiskeyCardRow[]>([]);
+  const [recentPool, setRecentPool] = useState<WhiskeyCardRow[]>([]);
+  const [highestPool, setHighestPool] = useState<WhiskeyCardRow[]>([]);
+  const [newestPool, setNewestPool] = useState<WhiskeyCardRow[]>([]);
+
+  // Display (filtered + sliced to 5)
   const [trending, setTrending] = useState<WhiskeyCardRow[]>([]);
   const [recent, setRecent] = useState<WhiskeyCardRow[]>([]);
   const [highest, setHighest] = useState<WhiskeyCardRow[]>([]);
@@ -491,13 +491,28 @@ export default function DiscoverTab() {
     return parts.join(" • ");
   }, [selectedType, minProof, maxProof]);
 
+  function applyFilters(rows: WhiskeyCardRow[]) {
+    let out = [...rows];
+
+    if (selectedType) out = out.filter((r) => r.whiskeyType === selectedType);
+
+    if (minProof != null || maxProof != null) {
+      out = out.filter((r) => {
+        const p = r.proof;
+        if (p == null || !Number.isFinite(Number(p))) return false;
+        const pv = Number(p);
+        if (minProof != null && pv < minProof) return false;
+        if (maxProof != null && pv > maxProof) return false;
+        return true;
+      });
+    }
+
+    return out;
+  }
+
   async function loadTypes() {
     try {
-      const { data, error } = await supabase
-        .from("whiskeys")
-        .select("whiskey_type")
-        .limit(3000);
-
+      const { data, error } = await supabase.from("whiskeys").select("whiskey_type").limit(3000);
       if (error) throw new Error(error.message);
 
       const set = new Set<string>();
@@ -516,163 +531,73 @@ export default function DiscoverTab() {
     loadTypes();
   }, []);
 
-  async function fetchSectionIds(section: SectionKey, limit: number): Promise<string[]> {
-    if (section === "NEWEST") {
-      const { data, error } = await supabase
-        .from("whiskeys")
-        .select("id")
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      if (error) throw new Error(error.message);
-      return (data as any[]).map((w) => String(w.id)).filter(isUuidLike);
-    }
-
-    if (section === "HIGHEST") {
-      const MIN_COUNT = 3;
-      const { data, error } = await supabase
-        .from("whiskey_community_stats")
-        .select("whiskey_id, community_avg, community_count")
-        .gte("community_count", MIN_COUNT)
-        .order("community_avg", { ascending: false })
-        .limit(limit);
-      if (error) throw new Error(error.message);
-      return (data as any[]).map((r) => String(r.whiskey_id)).filter(isUuidLike);
-    }
-
-    if (section === "RECENT") {
-      const { data, error } = await supabase
-        .from("tastings")
-        .select("whiskey_id, created_at")
-        .order("created_at", { ascending: false })
-        .limit(Math.max(200, limit * 20));
-      if (error) throw new Error(error.message);
-
-      const ids: string[] = [];
-      const seen = new Set<string>();
-      (data as any[]).forEach((t) => {
-        const id = t.whiskey_id ? String(t.whiskey_id) : "";
-        if (!isUuidLike(id)) return;
-        if (seen.has(id)) return;
-        seen.add(id);
-        ids.push(id);
-      });
-
-      return ids.slice(0, limit);
-    }
-
-    // TRENDING
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const { data, error } = await supabase
-      .from("tastings")
-      .select("whiskey_id, created_at")
-      .gte("created_at", since)
-      .limit(5000);
-
-    if (error) throw new Error(error.message);
-
-    const counts = new Map<string, number>();
-    (data as any[]).forEach((t) => {
-      const id = t.whiskey_id ? String(t.whiskey_id) : "";
-      if (!isUuidLike(id)) return;
-      counts.set(id, (counts.get(id) ?? 0) + 1);
-    });
-
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
-      .map(([id]) => id);
-  }
-
-  function applyFilters(rows: WhiskeyCardRow[]) {
-    let out = [...rows];
-
-    if (selectedType) out = out.filter((r) => r.whiskeyType === selectedType);
-
-    if (minProof != null || maxProof != null) {
-      out = out.filter((r) => {
-        const p = r.proof;
-        if (p == null || !Number.isFinite(Number(p))) return false;
-        const pv = Number(p);
-        if (minProof != null && pv < minProof) return false;
-        if (maxProof != null && pv > maxProof) return false;
-        return true;
-      });
-    }
-
-    const term = q.trim().toLowerCase();
-    if (term.length >= 2) {
-      out = out.filter((r) => r.whiskeyName.toLowerCase().includes(term));
-    }
-
-    return out;
-  }
-
-  async function loadSections() {
+  async function loadSectionPools() {
     setLoading(true);
     setStatusError("");
 
     try {
+      const POOL = 30;
+
       const [trendIdsRaw, recentIdsRaw, highIdsRaw, newestIdsRaw] = await Promise.all([
-        fetchSectionIds("TRENDING", 50),
-        fetchSectionIds("RECENT", 50),
-        fetchSectionIds("HIGHEST", 50),
-        fetchSectionIds("NEWEST", 50),
+        fetchSectionIds("TRENDING", POOL),
+        fetchSectionIds("RECENT", POOL),
+        fetchSectionIds("HIGHEST", POOL),
+        fetchSectionIds("NEWEST", POOL),
       ]);
 
-      const fallbackNewest = newestIdsRaw.slice(0, 50);
+      const fallbackNewest = newestIdsRaw.slice(0, POOL);
 
       const trendIds = trendIdsRaw.length ? trendIdsRaw : fallbackNewest;
       const recentIds = recentIdsRaw.length ? recentIdsRaw : fallbackNewest;
       const highIds = highIdsRaw.length ? highIdsRaw : fallbackNewest;
       const newestIds = fallbackNewest;
 
-      const used = new Set<string>();
-      const trendPick = pickUniqueIds(trendIds, 5, used);
-      const recentPick = pickUniqueIds(recentIds, 5, used);
-      const highPick = pickUniqueIds(highIds, 5, used);
-      const newestPick = pickUniqueIds(newestIds, 5, used);
-
       const [trendCards, recentCards, highCards, newestCards] = await Promise.all([
-        fetchWhiskeyCardsByIds(trendPick),
-        fetchWhiskeyCardsByIds(recentPick),
-        fetchWhiskeyCardsByIds(highPick),
-        fetchWhiskeyCardsByIds(newestPick),
+        fetchWhiskeyCardsByIds(trendIds),
+        fetchWhiskeyCardsByIds(recentIds),
+        fetchWhiskeyCardsByIds(highIds),
+        fetchWhiskeyCardsByIds(newestIds),
       ]);
 
-      setTrending(applyFilters(trendCards));
-      setRecent(applyFilters(recentCards));
-      setHighest(applyFilters(highCards));
-      setNewest(applyFilters(newestCards));
+      setTrendingPool(trendCards);
+      setRecentPool(recentCards);
+      setHighestPool(highCards);
+      setNewestPool(newestCards);
     } catch (e: any) {
-      setTrending([]);
-      setRecent([]);
-      setHighest([]);
-      setNewest([]);
+      setTrendingPool([]);
+      setRecentPool([]);
+      setHighestPool([]);
+      setNewestPool([]);
       setStatusError(String(e?.message ?? e));
     } finally {
       setLoading(false);
     }
   }
 
+  // reload pools when filter dimensions change
   useEffect(() => {
-    loadSections();
+    loadSectionPools();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedType, minProofText, maxProofText]);
 
+  // debounced application of filters to the pools
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => loadSections(), 250);
+    debounceRef.current = setTimeout(() => {
+      setTrending(applyFilters(trendingPool).slice(0, 5));
+      setRecent(applyFilters(recentPool).slice(0, 5));
+      setHighest(applyFilters(highestPool).slice(0, 5));
+      setNewest(applyFilters(newestPool).slice(0, 5));
+    }, 120);
+
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+  }, [trendingPool, recentPool, highestPool, newestPool, selectedType, minProofText, maxProofText]);
 
   const libraryEmpty =
-    trending.length === 0 &&
-    recent.length === 0 &&
-    highest.length === 0 &&
-    newest.length === 0;
+    trendingPool.length === 0 && recentPool.length === 0 && highestPool.length === 0 && newestPool.length === 0;
 
   async function openSeeAll(section: SectionKey) {
     setSeeAllOpen(true);
@@ -691,8 +616,8 @@ export default function DiscoverTab() {
     setSeeAllTitle(title);
 
     try {
-      const ids = await fetchSectionIds(section, 50);
-      const finalIds = ids.length > 0 ? ids : await fetchSectionIds("NEWEST", 50);
+      const ids = await fetchSectionIds(section, 60);
+      const finalIds = ids.length > 0 ? ids : await fetchSectionIds("NEWEST", 60);
 
       const cards = await fetchWhiskeyCardsByIds(finalIds);
       const filtered = applyFilters(cards);
@@ -706,19 +631,26 @@ export default function DiscoverTab() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={{ padding: spacing.xl, gap: spacing.lg }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: spacing.xl,
+          paddingBottom: spacing.xl * 2,
+          gap: spacing.lg,
+        }}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+      >
         <View style={{ gap: spacing.sm }}>
           <Text style={type.screenTitle}>Discover</Text>
-          <Text style={[type.body, { opacity: 0.7 }]}>
-            See what the community is tasting
-          </Text>
+          <Text style={[type.body, { opacity: 0.7 }]}>See what the community is tasting</Text>
         </View>
 
-        {/* Search (primary) + Filter icon in header (secondary) */}
         <Card
-          title="Search"
-          subtitle="Find a bottle from the library."
+          title="Discover"
+          subtitle="Curated lists, refreshed as the community logs."
           rightHeader={
             <IconButton
               icon="options-outline"
@@ -727,22 +659,10 @@ export default function DiscoverTab() {
             />
           }
         >
-          <TextInput
-            value={q}
-            onChangeText={setQ}
-            placeholder="Search bottles…"
-            placeholderTextColor={colors.textSecondary}
-            autoCorrect={false}
-            style={{
-              borderWidth: 1,
-              borderColor: colors.divider,
-              borderRadius: radii.md,
-              padding: 12,
-              backgroundColor: "transparent",
-              color: colors.textPrimary,
-              fontFamily: type.body.fontFamily,
-            }}
-          />
+          {/* Softer, italic callout to avoid competing with the title/subtitle */}
+          <Text style={[type.microcopyItalic, { opacity: 0.78, lineHeight: 20 }]}>
+            See what’s new — maybe you’ll find your next favorite dram.
+          </Text>
 
           {filterBadge ? (
             <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.75, fontSize: 12 }]}>
@@ -751,19 +671,14 @@ export default function DiscoverTab() {
           ) : null}
 
           {loading ? (
-            <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.65 }]}>
-              Loading…
-            </Text>
+            <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.65 }]}>Loading…</Text>
           ) : null}
 
           {statusError ? (
-            <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.75 }]}>
-              Error: {statusError}
-            </Text>
+            <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.75 }]}>Error: {statusError}</Text>
           ) : null}
         </Card>
 
-        {/* Sections */}
         <SectionRow
           title="Trending"
           subtitle="Most tasted in the last 7 days."
@@ -806,33 +721,18 @@ export default function DiscoverTab() {
           emptyMessage={libraryEmpty ? "No results." : "No matches for your filters."}
         />
 
-        {/* Footer */}
         <View style={{ marginTop: spacing.lg, paddingTop: spacing.lg }}>
-          <Text
-            style={[
-              type.body,
-              { opacity: 0.6, fontSize: 12, textAlign: "center" },
-            ]}
-          >
+          <Text style={[type.body, { opacity: 0.6, fontSize: 12, textAlign: "center" }]}>
             Powered by community tastings and Buffalo Happy Hour reviews
           </Text>
         </View>
-      </View>
+      </ScrollView>
 
       {/* View All Modal */}
-      <Modal
-        visible={seeAllOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSeeAllOpen(false)}
-      >
+      <Modal visible={seeAllOpen} transparent animationType="fade" onRequestClose={() => setSeeAllOpen(false)}>
         <Pressable
           onPress={() => setSeeAllOpen(false)}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.55)",
-            justifyContent: "flex-end",
-          }}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}
         >
           <Pressable
             onPress={() => {}}
@@ -850,35 +750,18 @@ export default function DiscoverTab() {
               maxHeight: "82%",
             }}
           >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <Text style={type.sectionHeader}>{seeAllTitle}</Text>
-              <Pressable
-                onPress={() => setSeeAllOpen(false)}
-                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-              >
-                <Text style={[type.body, { fontWeight: "900", color: colors.accent }]}>
-                  Close
-                </Text>
+              <Pressable onPress={() => setSeeAllOpen(false)} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+                <Text style={[type.body, { fontWeight: "900", color: colors.accent }]}>Close</Text>
               </Pressable>
             </View>
 
-            {seeAllLoading ? (
-              <Text style={[type.body, { opacity: 0.7 }]}>Loading…</Text>
-            ) : null}
+            {seeAllLoading ? <Text style={[type.body, { opacity: 0.7 }]}>Loading…</Text> : null}
 
-            {seeAllError ? (
-              <Text style={[type.body, { opacity: 0.75 }]}>
-                Error: {seeAllError}
-              </Text>
-            ) : null}
+            {seeAllError ? <Text style={[type.body, { opacity: 0.75 }]}>Error: {seeAllError}</Text> : null}
 
-            <ScrollView>
+            <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
               <View style={{ gap: spacing.md }}>
                 {seeAllRows.map((r) => (
                   <WhiskeyTile
@@ -891,9 +774,7 @@ export default function DiscoverTab() {
                   />
                 ))}
                 {!seeAllLoading && seeAllRows.length === 0 && !seeAllError ? (
-                  <Text style={[type.body, { opacity: 0.7 }]}>
-                    No results yet.
-                  </Text>
+                  <Text style={[type.body, { opacity: 0.7 }]}>No results yet.</Text>
                 ) : null}
               </View>
             </ScrollView>
@@ -901,20 +782,11 @@ export default function DiscoverTab() {
         </Pressable>
       </Modal>
 
-      {/* Filters Modal (NO SORT) */}
-      <Modal
-        visible={filterOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setFilterOpen(false)}
-      >
+      {/* Filters Modal */}
+      <Modal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
         <Pressable
           onPress={() => setFilterOpen(false)}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.55)",
-            justifyContent: "flex-end",
-          }}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}
         >
           <Pressable
             onPress={() => {}}
@@ -952,9 +824,7 @@ export default function DiscoverTab() {
                   gap: 12,
                 })}
               >
-                <Text style={[type.body, { opacity: 0.9 }]}>
-                  {selectedType ?? "All Types"}
-                </Text>
+                <Text style={[type.body, { opacity: 0.9 }]}>{selectedType ?? "All Types"}</Text>
                 <Ionicons name="chevron-down" size={16} color={colors.textPrimary} />
               </Pressable>
             </View>
@@ -1005,9 +875,7 @@ export default function DiscoverTab() {
                 </View>
               </View>
 
-              <Text style={[type.body, { opacity: 0.6, fontSize: 12 }]}>
-                Tip: Leave blank for no min/max.
-              </Text>
+              <Text style={[type.body, { opacity: 0.6, fontSize: 12 }]}>Tip: Leave blank for no min/max.</Text>
             </View>
 
             {/* Reset / Done */}
@@ -1040,6 +908,7 @@ export default function DiscoverTab() {
                     setMinProofText(String(mx));
                     setMaxProofText(String(mn));
                   }
+                  Keyboard.dismiss();
                   setFilterOpen(false);
                 }}
                 style={({ pressed }) => ({
@@ -1067,11 +936,7 @@ export default function DiscoverTab() {
       >
         <Pressable
           onPress={() => setTypePickerOpen(false)}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.55)",
-            justifyContent: "flex-end",
-          }}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}
         >
           <Pressable
             onPress={() => {}}
@@ -1091,7 +956,7 @@ export default function DiscoverTab() {
           >
             <Text style={type.sectionHeader}>Select Type</Text>
 
-            <ScrollView>
+            <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
               <View style={{ gap: 10 }}>
                 <Pressable
                   onPress={() => {
@@ -1103,24 +968,11 @@ export default function DiscoverTab() {
                     borderRadius: radii.md,
                     borderWidth: 1,
                     borderColor: colors.divider,
-                    backgroundColor: !selectedType
-                      ? colors.accent
-                      : pressed
-                      ? colors.highlight
-                      : "transparent",
+                    backgroundColor: !selectedType ? colors.accent : pressed ? colors.highlight : "transparent",
                     paddingHorizontal: 12,
                   })}
                 >
-                  <Text
-                    style={[
-                      type.body,
-                      {
-                        color: !selectedType
-                          ? colors.background
-                          : colors.textPrimary,
-                      },
-                    ]}
-                  >
+                  <Text style={[type.body, { color: !selectedType ? colors.background : colors.textPrimary }]}>
                     All Types
                   </Text>
                 </Pressable>
@@ -1139,24 +991,11 @@ export default function DiscoverTab() {
                         borderRadius: radii.md,
                         borderWidth: 1,
                         borderColor: colors.divider,
-                        backgroundColor: active
-                          ? colors.accent
-                          : pressed
-                          ? colors.highlight
-                          : "transparent",
+                        backgroundColor: active ? colors.accent : pressed ? colors.highlight : "transparent",
                         paddingHorizontal: 12,
                       })}
                     >
-                      <Text
-                        style={[
-                          type.body,
-                          {
-                            color: active
-                              ? colors.background
-                              : colors.textPrimary,
-                          },
-                        ]}
-                      >
+                      <Text style={[type.body, { color: active ? colors.background : colors.textPrimary }]}>
                         {t}
                       </Text>
                     </Pressable>
@@ -1167,6 +1006,6 @@ export default function DiscoverTab() {
           </Pressable>
         </Pressable>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }

@@ -1,0 +1,266 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import { router } from "expo-router";
+import * as SQLite from "expo-sqlite";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+
+type DiscoverRow = {
+  whiskeyId: string;
+  whiskeyName: string;
+  bhhScore: number;
+  youtubeUrl: string | null;
+  totalTastings: number;
+  avgRating: number | null;
+  tastings7d: number;
+};
+
+async function openDbWithRequiredTables() {
+  const candidates = [
+    "whiskeyappbeta.db",
+    "WhiskeyAppBeta.db",
+    "whiskey.db",
+    "app.db",
+    "database.db",
+    "db.db",
+    "default.db",
+  ];
+
+  for (const name of candidates) {
+    try {
+      const db = SQLite.openDatabaseSync(name);
+      const hit = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='bhh_reviews' LIMIT 1;"
+      );
+      const hit2 = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='tastings' LIMIT 1;"
+      );
+      if (hit?.name === "bhh_reviews" && hit2?.name === "tastings") return db;
+    } catch {}
+  }
+
+  return SQLite.openDatabaseSync("default.db");
+}
+
+type SortMode = "BHH" | "TRENDING" | "MOST_LOGGED" | "AZ";
+
+export default function DiscoverTab() {
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState<SortMode>("BHH");
+  const [rows, setRows] = useState<DiscoverRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  async function load() {
+    const term = q.trim();
+    setLoading(true);
+    try {
+      const db = await openDbWithRequiredTables();
+
+      // last 7 days (SQLite: datetime('now','-7 days'))
+      // Build a unified list from bhh_reviews whiskeyId + whiskeyName
+      // Then join tastings for community stats.
+      //
+      // Note: We choose MAX(score) as the “best known” BHH score for that whiskey.
+      const where = term.length >= 2 ? `WHERE LOWER(whiskeyName) LIKE LOWER(?) OR (title IS NOT NULL AND LOWER(title) LIKE LOWER(?))` : "";
+      const params = term.length >= 2 ? [`%${term}%`, `%${term}%`] : [];
+
+      const base = await db.getAllAsync<any[]>(
+        `
+        WITH bhh AS (
+          SELECT
+            COALESCE(NULLIF(TRIM(whiskeyId), ''), NULL) AS wid,
+            TRIM(whiskeyName) AS wname,
+            MAX(COALESCE(score, 0)) AS maxScore,
+            MAX(youtubeUrl) AS anyUrl
+          FROM bhh_reviews
+          ${where}
+          GROUP BY wid, wname
+        ),
+        normalized AS (
+          SELECT
+            -- if whiskeyId is missing, synthesize a stable-ish id from name
+            COALESCE(wid, LOWER(REPLACE(REPLACE(REPLACE(wname, '''',''), '\"',''), ' ', '-'))) AS whiskeyId,
+            wname AS whiskeyName,
+            maxScore AS bhhScore,
+            anyUrl AS youtubeUrl
+          FROM bhh
+          WHERE wname IS NOT NULL AND TRIM(wname) != ''
+        ),
+        comm AS (
+          SELECT
+            whiskeyId,
+            COUNT(*) AS totalTastings,
+            AVG(rating) AS avgRating,
+            SUM(CASE WHEN createdAt >= datetime('now','-7 days') THEN 1 ELSE 0 END) AS tastings7d
+          FROM tastings
+          GROUP BY whiskeyId
+        )
+        SELECT
+          n.whiskeyId,
+          n.whiskeyName,
+          n.bhhScore,
+          n.youtubeUrl,
+          COALESCE(c.totalTastings, 0) AS totalTastings,
+          c.avgRating AS avgRating,
+          COALESCE(c.tastings7d, 0) AS tastings7d
+        FROM normalized n
+        LEFT JOIN comm c ON c.whiskeyId = n.whiskeyId
+        `,
+        params as any
+      );
+
+      const mapped: DiscoverRow[] = (base as any[]).map((r) => ({
+        whiskeyId: String(r.whiskeyId),
+        whiskeyName: String(r.whiskeyName),
+        bhhScore: Number(r.bhhScore ?? 0),
+        youtubeUrl: r.youtubeUrl ?? null,
+        totalTastings: Number(r.totalTastings ?? 0),
+        avgRating:
+          typeof r.avgRating === "number" && Number.isFinite(r.avgRating)
+            ? Math.round(r.avgRating * 10) / 10
+            : null,
+        tastings7d: Number(r.tastings7d ?? 0),
+      }));
+
+      setRows(mapped);
+    } catch (e) {
+      console.log("Discover load failed:", e);
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => load(), 200);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+
+  const sorted = useMemo(() => {
+    const arr = [...rows];
+    if (sort === "AZ") arr.sort((a, b) => a.whiskeyName.localeCompare(b.whiskeyName));
+    if (sort === "BHH") arr.sort((a, b) => (b.bhhScore ?? 0) - (a.bhhScore ?? 0));
+    if (sort === "MOST_LOGGED") arr.sort((a, b) => (b.totalTastings ?? 0) - (a.totalTastings ?? 0));
+    if (sort === "TRENDING") arr.sort((a, b) => (b.tastings7d ?? 0) - (a.tastings7d ?? 0));
+    return arr;
+  }, [rows, sort]);
+
+  function goWhiskey(r: DiscoverRow) {
+    router.push({
+      pathname: `/whiskey/${r.whiskeyId}`,
+      params: { name: r.whiskeyName },
+    });
+  }
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <View style={{ padding: SPACING.md, gap: SPACING.md }}>
+        <Text style={{ fontSize: TEXT.h1, fontWeight: "900", color: COLORS.ink }}>
+          Discover
+        </Text>
+
+        <TextInput
+          value={q}
+          onChangeText={setQ}
+          placeholder="Search bottles (BHH database)…"
+          placeholderTextColor={COLORS.muted}
+          autoCorrect={false}
+          style={{
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            borderRadius: 16,
+            padding: 12,
+            backgroundColor: COLORS.card,
+            color: COLORS.ink,
+          }}
+        />
+
+        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+          {(["BHH", "TRENDING", "MOST_LOGGED", "AZ"] as SortMode[]).map((m) => {
+            const active = sort === m;
+            const label =
+              m === "BHH" ? "Top BHH" :
+              m === "TRENDING" ? "Trending" :
+              m === "MOST_LOGGED" ? "Most Logged" : "A–Z";
+            return (
+              <Pressable
+                key={m}
+                onPress={() => setSort(m)}
+                style={({ pressed }) => ({
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                  backgroundColor: active ? COLORS.primary : COLORS.card,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Text style={{ color: active ? COLORS.bg : COLORS.ink, fontWeight: "900" }}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+          <Pressable
+            onPress={load}
+            style={({ pressed }) => ({
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              backgroundColor: COLORS.card,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: COLORS.ink, fontWeight: "900" }}>
+              {loading ? "Loading…" : "Refresh"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {sorted.map((r) => (
+          <Pressable
+            key={`${r.whiskeyId}:${r.whiskeyName}`}
+            onPress={() => goWhiskey(r)}
+            style={({ pressed }) => ({
+              backgroundColor: COLORS.card,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              borderRadius: 16,
+              padding: SPACING.md,
+              opacity: pressed ? 0.85 : 1,
+              gap: 6,
+            })}
+          >
+            <Text style={{ color: COLORS.ink, fontWeight: "900", fontSize: 16 }}>
+              {r.whiskeyName}
+            </Text>
+
+            <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+              BHH: <Text style={{ fontWeight: "900" }}>{r.bhhScore > 0 ? r.bhhScore : "Coming Soon"}</Text>
+              {"  •  "}
+              Community Avg: <Text style={{ fontWeight: "900" }}>{r.avgRating ?? "—"}</Text>
+              {"  •  "}
+              Total: <Text style={{ fontWeight: "900" }}>{r.totalTastings}</Text>
+              {"  •  "}
+              7d: <Text style={{ fontWeight: "900" }}>{r.tastings7d}</Text>
+            </Text>
+          </Pressable>
+        ))}
+
+        {sorted.length === 0 && !loading ? (
+          <Text style={{ color: COLORS.ink, opacity: 0.7 }}>
+            No results yet. Try a different search term.
+          </Text>
+        ) : null}
+      </View>
+    </ScrollView>
+  );
+}

@@ -1,0 +1,283 @@
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, TextInput, Pressable, ScrollView, Alert } from "react-native";
+import { Stack } from "expo-router";
+import * as SQLite from "expo-sqlite";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+
+type BhhReviewRow = {
+  id: string;
+  whiskeyId: string | null;
+  whiskeyName: string;
+  reviewer: string;
+  score: number;
+  reviewedAt: string | null;
+  youtubeUrl: string | null;
+  title: string | null;
+};
+
+function slugifyLocal(input: string) {
+  return (input ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function openDbWithRequiredTables() {
+  const candidates = [
+    "whiskeyappbeta.db",
+    "WhiskeyAppBeta.db",
+    "whiskey.db",
+    "app.db",
+    "database.db",
+    "db.db",
+    "default.db",
+  ];
+
+  for (const name of candidates) {
+    try {
+      const db = SQLite.openDatabaseSync(name);
+      const hit = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='bhh_reviews' LIMIT 1;"
+      );
+      const hit2 = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='tastings' LIMIT 1;"
+      );
+      if (hit?.name === "bhh_reviews" && hit2?.name === "tastings") {
+        return { db, name };
+      }
+    } catch {
+      // keep trying
+    }
+  }
+
+  // last resort
+  const db = SQLite.openDatabaseSync("default.db");
+  return { db, name: "default.db" };
+}
+
+export default function DbInspectorScreen() {
+  const [dbName, setDbName] = useState<string>("(opening...)");
+  const [term, setTerm] = useState("balvenie");
+  const [rows, setRows] = useState<BhhReviewRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const canSearch = useMemo(() => term.trim().length >= 2, [term]);
+
+  async function runSearch() {
+    if (!canSearch) {
+      Alert.alert("Search term too short", "Type at least 2 characters.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { db, name } = await openDbWithRequiredTables();
+      setDbName(name);
+
+      const like = `%${term.trim()}%`;
+      const r = await db.getAllAsync<BhhReviewRow[]>(
+        `SELECT id, whiskeyId, whiskeyName, reviewer, score, reviewedAt, youtubeUrl, title
+         FROM bhh_reviews
+         WHERE LOWER(whiskeyName) LIKE LOWER(?)
+         ORDER BY reviewedAt DESC
+         LIMIT 50`,
+        [like]
+      );
+
+      setRows((r as any) ?? []);
+    } catch (e: any) {
+      console.log("DB search failed:", e);
+      Alert.alert("DB search failed", e?.message ?? String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function normalizeBhhWhiskeyIds() {
+    Alert.alert(
+      "Normalize BHH IDs",
+      "This will set bhh_reviews.whiskeyId = slugify(whiskeyName) where whiskeyName is present. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Normalize",
+          style: "destructive",
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const { db, name } = await openDbWithRequiredTables();
+              setDbName(name);
+
+              // Update only rows with a name
+              await db.runAsync(
+                `UPDATE bhh_reviews
+                 SET whiskeyId = ?
+                 WHERE id = ?`,
+                ["__noop__", "__noop__"]
+              ).catch(() => {
+                // ignore: some sqlite adapters throw on this noop, so we won't rely on it
+              });
+
+              // Pull ids + names to update in JS (safer, avoids needing custom SQL funcs)
+              const all = await db.getAllAsync<{ id: string; whiskeyName: string }[]>(
+                `SELECT id, whiskeyName FROM bhh_reviews WHERE whiskeyName IS NOT NULL AND TRIM(whiskeyName) != ''`
+              );
+
+              let changed = 0;
+
+              // Batch updates
+              await db.execAsync("BEGIN;");
+              for (const item of (all as any) ?? []) {
+                const newId = slugifyLocal(item.whiskeyName);
+                if (!newId) continue;
+
+                await db.runAsync(
+                  `UPDATE bhh_reviews SET whiskeyId = ? WHERE id = ?`,
+                  [newId, item.id]
+                );
+                changed++;
+              }
+              await db.execAsync("COMMIT;");
+
+              Alert.alert("Done", `Normalized ${changed} BHH rows.`);
+            } catch (e: any) {
+              try {
+                const { db } = await openDbWithRequiredTables();
+                await db.execAsync("ROLLBACK;");
+              } catch {}
+              console.log("Normalize failed:", e);
+              Alert.alert("Normalize failed", e?.message ?? String(e));
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  useEffect(() => {
+    // Auto-run once so you instantly see if Balvenie exists
+    runSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <Stack.Screen options={{ title: "DB Inspector" }} />
+
+      <View style={{ padding: SPACING.md, gap: SPACING.md }}>
+        <Text style={{ fontSize: TEXT.h1, fontWeight: "900", color: COLORS.ink }}>
+          DB Inspector
+        </Text>
+
+        <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+          Active DB: <Text style={{ fontWeight: "900" }}>{dbName}</Text>
+        </Text>
+
+        <View
+          style={{
+            backgroundColor: COLORS.card,
+            borderRadius: 16,
+            padding: SPACING.md,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            gap: SPACING.sm,
+          }}
+        >
+          <Text style={{ color: COLORS.ink, fontWeight: "900" }}>Search bhh_reviews.whiskeyName</Text>
+
+          <TextInput
+            value={term}
+            onChangeText={setTerm}
+            placeholder="type a brand/bottle name"
+            placeholderTextColor={COLORS.muted}
+            autoCapitalize="none"
+            style={{
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              borderRadius: 14,
+              padding: 12,
+              color: COLORS.ink,
+              backgroundColor: COLORS.bg,
+            }}
+          />
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable
+              onPress={runSearch}
+              disabled={!canSearch || loading}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 14,
+                alignItems: "center",
+                backgroundColor: !canSearch || loading ? COLORS.border : COLORS.primary,
+              }}
+            >
+              <Text style={{ color: COLORS.bg, fontWeight: "900" }}>
+                {loading ? "Working..." : "Search"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={normalizeBhhWhiskeyIds}
+              disabled={loading}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 14,
+                alignItems: "center",
+                backgroundColor: loading ? COLORS.border : COLORS.card,
+                borderWidth: 1,
+                borderColor: COLORS.border,
+              }}
+            >
+              <Text style={{ color: COLORS.ink, fontWeight: "900" }}>
+                Normalize IDs
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+          Results: <Text style={{ fontWeight: "900" }}>{rows.length}</Text>
+        </Text>
+
+        {rows.map((r) => (
+          <View
+            key={r.id}
+            style={{
+              backgroundColor: COLORS.card,
+              borderRadius: 16,
+              padding: SPACING.md,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              gap: 6,
+            }}
+          >
+            <Text style={{ color: COLORS.ink, fontWeight: "900" }}>{r.whiskeyName}</Text>
+            <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+              whiskeyId: <Text style={{ fontWeight: "900" }}>{r.whiskeyId ?? "(null)"}</Text>
+            </Text>
+            <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+              score: <Text style={{ fontWeight: "900" }}>{r.score}</Text>
+            </Text>
+            {!!r.youtubeUrl && (
+              <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+                youtubeUrl: <Text style={{ fontWeight: "700" }}>{r.youtubeUrl}</Text>
+              </Text>
+            )}
+            {!!r.title && (
+              <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+                title: <Text style={{ fontWeight: "700" }}>{r.title}</Text>
+              </Text>
+            )}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}

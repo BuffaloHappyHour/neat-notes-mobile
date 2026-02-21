@@ -1,0 +1,155 @@
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, Pressable, Alert } from "react-native";
+import { router } from "expo-router";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+
+// Uses your existing catalog/autocomplete system
+import { ensureWhiskeyCatalogReady } from "../../lib/catalog/whiskeyCatalog";
+import {
+  WhiskeyAutocompleteField,
+  WhiskeySelection,
+} from "../../lib/catalog/WhiskeyAutocompleteField";
+
+function slugifyLocal(input: string) {
+  return (input ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function displayNameForSelection(sel: WhiskeySelection | null, typed: string) {
+  if (sel?.kind === "catalog") return sel.name;
+  return typed.trim();
+}
+
+export default function LogTab() {
+  const [ready, setReady] = useState(false);
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
+
+  // selection = either a catalog whiskey or custom typed
+  const [selection, setSelection] = useState<WhiskeySelection | null>(null);
+  const [typedName, setTypedName] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        // This creates/seeds the catalog (one-time) using your existing DB.
+        // Passing [] is fine because your catalog seeding can pull from BHH review names internally.
+        await ensureWhiskeyCatalogReady([]);
+        if (mounted) setReady(true);
+      } catch (e: any) {
+        console.log("Catalog init failed:", e);
+      } finally {
+        if (mounted) setLoadingCatalog(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const whiskeyName = useMemo(
+    () => displayNameForSelection(selection, typedName),
+    [selection, typedName]
+  );
+
+  const canGo = useMemo(() => whiskeyName.length >= 2, [whiskeyName]);
+
+  function onFindWhiskey() {
+    if (!canGo) {
+      Alert.alert("Type a whiskey", "Please enter at least 2 characters.");
+      return;
+    }
+
+    // If they picked from the catalog, use that stable id.
+    // If they typed custom, slugify it.
+    const id =
+      selection?.kind === "catalog"
+        ? selection.id
+        : slugifyLocal(whiskeyName);
+
+    router.push({
+      pathname: `/whiskey/${id}`,
+      // pass the name so the whiskey page can show it even if it isn't in Discover
+      params: { name: whiskeyName },
+    });
+  }
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: COLORS.bg,
+        padding: SPACING.md,
+        gap: SPACING.md,
+      }}
+    >
+      <Text style={{ fontSize: TEXT.h1, fontWeight: "800", color: COLORS.ink }}>
+        Log
+      </Text>
+
+      <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+        Start typing a whiskey — we’ll suggest bottles we’ve reviewed on YouTube. Pick one to view the whiskey page (BHH link + score), then log your tasting.
+      </Text>
+
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          backgroundColor: COLORS.card,
+          borderRadius: 16,
+          padding: SPACING.md,
+          gap: SPACING.sm,
+        }}
+      >
+        <Text style={{ fontWeight: "800", color: COLORS.ink }}>
+          Whiskey name
+        </Text>
+
+        <WhiskeyAutocompleteField
+          value={typedName}
+          onChangeText={(t) => {
+            setTypedName(t);
+            // If the user starts typing after selecting, we keep selection until autocomplete changes it.
+          }}
+          selection={selection}
+          onSelectionChange={(sel) => {
+            setSelection(sel);
+            if (sel?.kind === "catalog") setTypedName(sel.name);
+          }}
+          placeholder={
+            loadingCatalog
+              ? "Loading catalog..."
+              : "e.g., Balvenie 14 Caribbean Cask"
+          }
+          disabled={!ready && loadingCatalog}
+        />
+
+        <Pressable
+          onPress={onFindWhiskey}
+          style={({ pressed }) => ({
+            marginTop: SPACING.xs,
+            borderRadius: 16,
+            paddingVertical: 14,
+            alignItems: "center",
+            backgroundColor: COLORS.primary,
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <Text style={{ color: COLORS.bg, fontWeight: "900", fontSize: 16 }}>
+            Find Whiskey
+          </Text>
+        </Pressable>
+
+        <Text style={{ color: COLORS.ink, opacity: 0.65, fontSize: 12 }}>
+          {selection?.kind === "catalog"
+            ? "Matched a BHH catalog whiskey."
+            : "Tip: you can still proceed with a custom bottle."}
+        </Text>
+      </View>
+    </View>
+  );
+}

@@ -1,0 +1,472 @@
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, TextInput, Pressable, ScrollView, Alert } from "react-native";
+import { Stack } from "expo-router";
+import * as SQLite from "expo-sqlite";
+import { COLORS, SPACING, TEXT } from "../../constants/theme";
+
+type BhhReviewRow = {
+  id: string;
+  whiskeyId: string | null;
+  whiskeyName: string;
+  reviewer: string;
+  score: number;
+  reviewedAt: string | null;
+  youtubeUrl: string | null;
+  title: string | null;
+};
+
+function slugifyLocal(input: string) {
+  return (input ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function looksLikeContentTitle(s: string) {
+  const t = (s ?? "").trim();
+  if (!t) return true;
+
+  // clear signals of "not a bottle name"
+  const badSignals = [
+    /\?/,
+    /\b(top|best|worst|vs|versus|blind|flight|ranking|ranked|list|reaction|live|podcast|episode)\b/i,
+    /\b(whiskey|whisky)\s+(review|reviews)\b/i,
+    /\breview\s*:/i,
+    /^is\s+/i,
+  ];
+  if (t.length > 55) return true;
+  if (badSignals.some((re) => re.test(t))) return true;
+
+  // if it starts with an interrogative or hype
+  if (/^(is|are|can|should|why|how|what)\b/i.test(t)) return true;
+
+  // if it has too many words, likely a sentence
+  if (t.split(/\s+/).filter(Boolean).length > 10) return true;
+
+  return false;
+}
+
+function cleanCommonSuffixes(t: string) {
+  let s = (t ?? "").trim();
+
+  // drop channel suffixes
+  s = s.replace(/\s*[-–—]\s*Buffalo Happy Hour\s*$/i, "");
+  s = s.replace(/\s*[-–—]\s*BHH\s*$/i, "");
+
+  // remove bracketed fluff
+  s = s.replace(/\[[^\]]+\]\s*$/g, "").trim();
+  s = s.replace(/\([^)]+\)\s*$/g, "").trim();
+
+  // remove "Full Review", "Review", etc at end
+  s = s.replace(/\s*\b(full\s+review|review|tasting|first\s+impression|impressions)\b\s*$/i, "").trim();
+
+  // normalize separators
+  s = s.split("|")[0].trim();
+  s = s.split("•")[0].trim();
+  s = s.split("~")[0].trim();
+
+  // remove trailing punctuation
+  s = s.replace(/[!?]+$/g, "").trim();
+
+  return s;
+}
+
+/**
+ * Aggressive extraction:
+ * Tries several patterns and returns best candidate, or null if none.
+ */
+function extractWhiskeyNameFromTitleAggressive(titleRaw: string): string | null {
+  if (!titleRaw) return null;
+  let t = cleanCommonSuffixes(titleRaw);
+
+  // Remove common prefixes
+  t = t.replace(/^wednesday\s+whiskey\s+review\s*:\s*/i, "");
+  t = t.replace(/^whiskey\s+review\s*:\s*/i, "");
+  t = t.replace(/^review\s*:\s*/i, "");
+  t = t.replace(/^bottle\s+review\s*:\s*/i, "");
+
+  // Pattern: "Is X the ..." / "Is X ...?"
+  const q1 = t.match(/^is\s+(.+?)\s+the\s+/i);
+  if (q1?.[1]) {
+    const c = cleanCommonSuffixes(q1[1]);
+    if (c.length >= 4 && c.length <= 70) return c;
+  }
+  const q2 = t.match(/^is\s+(.+?)\?/i);
+  if (q2?.[1]) {
+    const c = cleanCommonSuffixes(q2[1]);
+    if (c.length >= 4 && c.length <= 70) return c;
+  }
+
+  // Pattern: "X Review" / "X Whiskey Review"
+  const r1 = t.match(/^(.+?)\s+(whiskey|whisky)?\s*review$/i);
+  if (r1?.[1]) {
+    const c = cleanCommonSuffixes(r1[1]);
+    if (c.length >= 4 && c.length <= 70) return c;
+  }
+
+  // Pattern: "X vs Y" => return left side (often bottle name focus)
+  const vs = t.match(/^(.+?)\s+(vs|versus)\s+(.+)$/i);
+  if (vs?.[1]) {
+    const c = cleanCommonSuffixes(vs[1]);
+    if (c.length >= 4 && c.length <= 70) return c;
+  }
+
+  // If there is a colon, often "Series: Bottle"
+  if (t.includes(":")) {
+    const after = cleanCommonSuffixes(t.split(":").slice(1).join(":"));
+    if (after.length >= 4 && after.length <= 70) return after;
+  }
+
+  // If there is " - " take left as likely bottle
+  if (t.includes(" - ")) {
+    const left = cleanCommonSuffixes(t.split(" - ")[0]);
+    if (left.length >= 4 && left.length <= 70) return left;
+  }
+
+  // Final fallback: if it’s not obviously a content title, accept it
+  const final = cleanCommonSuffixes(t);
+  if (!looksLikeContentTitle(final) && final.length >= 4 && final.length <= 70) return final;
+
+  return null;
+}
+
+async function openDbWithRequiredTables() {
+  const candidates = [
+    "whiskeyappbeta.db",
+    "WhiskeyAppBeta.db",
+    "whiskey.db",
+    "app.db",
+    "database.db",
+    "db.db",
+    "default.db",
+  ];
+
+  for (const name of candidates) {
+    try {
+      const db = SQLite.openDatabaseSync(name);
+      const hit = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='bhh_reviews' LIMIT 1;"
+      );
+      const hit2 = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='tastings' LIMIT 1;"
+      );
+      if (hit?.name === "bhh_reviews" && hit2?.name === "tastings") {
+        return { db, name };
+      }
+    } catch {}
+  }
+
+  const db = SQLite.openDatabaseSync("default.db");
+  return { db, name: "default.db" };
+}
+
+export default function DbInspectorScreen() {
+  const [dbName, setDbName] = useState<string>("(opening...)");
+  const [term, setTerm] = useState("balvenie");
+  const [rows, setRows] = useState<BhhReviewRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const canSearch = useMemo(() => term.trim().length >= 2, [term]);
+
+  async function runSearch() {
+    if (!canSearch) {
+      Alert.alert("Search term too short", "Type at least 2 characters.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { db, name } = await openDbWithRequiredTables();
+      setDbName(name);
+
+      const like = `%${term.trim()}%`;
+      const r = await db.getAllAsync<BhhReviewRow[]>(
+        `SELECT id, whiskeyId, whiskeyName, reviewer, score, reviewedAt, youtubeUrl, title
+         FROM bhh_reviews
+         WHERE LOWER(whiskeyName) LIKE LOWER(?)
+            OR (title IS NOT NULL AND LOWER(title) LIKE LOWER(?))
+         ORDER BY reviewedAt DESC
+         LIMIT 50`,
+        [like, like]
+      );
+
+      setRows((r as any) ?? []);
+    } catch (e: any) {
+      console.log("DB search failed:", e);
+      Alert.alert("DB search failed", e?.message ?? String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function normalizeBhhWhiskeyIds() {
+    Alert.alert(
+      "Normalize BHH IDs",
+      "Sets bhh_reviews.whiskeyId = slugify(whiskeyName). Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Normalize",
+          style: "destructive",
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const { db, name } = await openDbWithRequiredTables();
+              setDbName(name);
+
+              const all = await db.getAllAsync<{ id: string; whiskeyName: string }[]>(
+                `SELECT id, whiskeyName
+                 FROM bhh_reviews
+                 WHERE whiskeyName IS NOT NULL AND TRIM(whiskeyName) != ''`
+              );
+
+              let changed = 0;
+              await db.execAsync("BEGIN;");
+              for (const item of (all as any) ?? []) {
+                const newId = slugifyLocal(item.whiskeyName);
+                if (!newId) continue;
+                await db.runAsync(`UPDATE bhh_reviews SET whiskeyId = ? WHERE id = ?`, [
+                  newId,
+                  item.id,
+                ]);
+                changed++;
+              }
+              await db.execAsync("COMMIT;");
+              Alert.alert("Done", `Normalized ${changed} rows.`);
+            } catch (e: any) {
+              try {
+                const { db } = await openDbWithRequiredTables();
+                await db.execAsync("ROLLBACK;");
+              } catch {}
+              console.log("Normalize failed:", e);
+              Alert.alert("Normalize failed", e?.message ?? String(e));
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  async function extractNamesFromTitlesAggressive() {
+    Alert.alert(
+      "Extract whiskey names from titles (aggressive)",
+      "This will overwrite whiskeyName when it looks like a content title, using a cleaned bottle name derived from title. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Extract",
+          style: "destructive",
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const { db, name } = await openDbWithRequiredTables();
+              setDbName(name);
+
+              const all = await db.getAllAsync<{ id: string; whiskeyName: string; title: string | null }[]>(
+                `SELECT id, whiskeyName, title FROM bhh_reviews`
+              );
+
+              let updated = 0;
+              let skipped = 0;
+
+              await db.execAsync("BEGIN;");
+
+              for (const item of (all as any) ?? []) {
+                const title = item.title ?? "";
+                const extracted = extractWhiskeyNameFromTitleAggressive(title);
+                if (!extracted) {
+                  skipped++;
+                  continue;
+                }
+
+                const wn = (item.whiskeyName ?? "").trim();
+
+                // Overwrite if current whiskeyName looks like content-title,
+                // OR if it equals the title,
+                // OR if it's empty
+                const shouldOverwrite =
+                  !wn ||
+                  wn === title.trim() ||
+                  looksLikeContentTitle(wn);
+
+                if (!shouldOverwrite) {
+                  skipped++;
+                  continue;
+                }
+
+                const newId = slugifyLocal(extracted);
+
+                await db.runAsync(
+                  `UPDATE bhh_reviews
+                   SET whiskeyName = ?, whiskeyId = ?
+                   WHERE id = ?`,
+                  [extracted, newId, item.id]
+                );
+                updated++;
+              }
+
+              await db.execAsync("COMMIT;");
+
+              Alert.alert("Done", `Updated ${updated} rows. Skipped ${skipped}.`);
+            } catch (e: any) {
+              try {
+                const { db } = await openDbWithRequiredTables();
+                await db.execAsync("ROLLBACK;");
+              } catch {}
+              console.log("Extract failed:", e);
+              Alert.alert("Extract failed", e?.message ?? String(e));
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  useEffect(() => {
+    runSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <Stack.Screen options={{ title: "DB Inspector" }} />
+
+      <View style={{ padding: SPACING.md, gap: SPACING.md }}>
+        <Text style={{ fontSize: TEXT.h1, fontWeight: "900", color: COLORS.ink }}>
+          DB Inspector
+        </Text>
+
+        <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+          Active DB: <Text style={{ fontWeight: "900" }}>{dbName}</Text>
+        </Text>
+
+        <View
+          style={{
+            backgroundColor: COLORS.card,
+            borderRadius: 16,
+            padding: SPACING.md,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            gap: SPACING.sm,
+          }}
+        >
+          <Text style={{ color: COLORS.ink, fontWeight: "900" }}>
+            Search bhh_reviews (name or title)
+          </Text>
+
+          <TextInput
+            value={term}
+            onChangeText={setTerm}
+            placeholder="type a brand/bottle name"
+            placeholderTextColor={COLORS.muted}
+            autoCapitalize="none"
+            style={{
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              borderRadius: 14,
+              padding: 12,
+              color: COLORS.ink,
+              backgroundColor: COLORS.bg,
+            }}
+          />
+
+          <Pressable
+            onPress={runSearch}
+            disabled={!canSearch || loading}
+            style={{
+              paddingVertical: 12,
+              borderRadius: 14,
+              alignItems: "center",
+              backgroundColor: !canSearch || loading ? COLORS.border : COLORS.primary,
+            }}
+          >
+            <Text style={{ color: COLORS.bg, fontWeight: "900" }}>
+              {loading ? "Working..." : "Search"}
+            </Text>
+          </Pressable>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable
+              onPress={extractNamesFromTitlesAggressive}
+              disabled={loading}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 14,
+                alignItems: "center",
+                backgroundColor: loading ? COLORS.border : COLORS.card,
+                borderWidth: 1,
+                borderColor: COLORS.border,
+              }}
+            >
+              <Text style={{ color: COLORS.ink, fontWeight: "900" }}>
+                Extract Names (Aggressive)
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={normalizeBhhWhiskeyIds}
+              disabled={loading}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 14,
+                alignItems: "center",
+                backgroundColor: loading ? COLORS.border : COLORS.card,
+                borderWidth: 1,
+                borderColor: COLORS.border,
+              }}
+            >
+              <Text style={{ color: COLORS.ink, fontWeight: "900" }}>
+                Normalize IDs
+              </Text>
+            </Pressable>
+          </View>
+
+          <Text style={{ color: COLORS.ink, opacity: 0.65, fontSize: 12 }}>
+            Recommended: Extract Names (Aggressive) → Normalize IDs → test Balvenie.
+          </Text>
+        </View>
+
+        <Text style={{ color: COLORS.ink, opacity: 0.8 }}>
+          Results: <Text style={{ fontWeight: "900" }}>{rows.length}</Text>
+        </Text>
+
+        {rows.map((r) => (
+          <View
+            key={r.id}
+            style={{
+              backgroundColor: COLORS.card,
+              borderRadius: 16,
+              padding: SPACING.md,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              gap: 6,
+            }}
+          >
+            <Text style={{ color: COLORS.ink, fontWeight: "900" }}>
+              whiskeyName: {r.whiskeyName}
+            </Text>
+            <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+              whiskeyId: <Text style={{ fontWeight: "900" }}>{r.whiskeyId ?? "(null)"}</Text>
+            </Text>
+            <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+              score: <Text style={{ fontWeight: "900" }}>{r.score}</Text>
+            </Text>
+            {!!r.title && (
+              <Text style={{ color: COLORS.ink, opacity: 0.75 }}>
+                title: <Text style={{ fontWeight: "700" }}>{r.title}</Text>
+              </Text>
+            )}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
