@@ -25,12 +25,8 @@ import { spacing } from "../lib/spacing";
 import { colors } from "../lib/theme";
 import { type } from "../lib/typography";
 
-import {
-  hapticError,
-  hapticSuccess,
-  hapticTick,
-  invalidateHapticsCache,
-} from "../lib/haptics";
+import { hapticError, hapticSuccess, invalidateHapticsCache } from "../lib/haptics";
+import { withDanger, withTick, withTickError } from "../lib/hapticsPress";
 
 /* ---------- Store compliance URLs ---------- */
 
@@ -260,16 +256,24 @@ export default function AccountSettingsScreen() {
   const [hapticsEnabled, setHapticsEnabledState] = useState(true);
   const [hapticsLoaded, setHapticsLoaded] = useState(false);
 
+  // ✅ Privacy: anonymous sharing + notice seen
+  const [shareAnonymously, setShareAnonymously] = useState(true);
+  const [shareNoticeSeen, setShareNoticeSeen] = useState(false);
+  const [shareLoaded, setShareLoaded] = useState(false);
+
   const passwordValid =
     newPassword.trim().length >= 8 && newPassword.trim() === confirmPassword.trim();
 
-  const openPrivacy = async () => {
-    try {
-      await Linking.openURL(PRIVACY_URL);
-    } catch {
-      Alert.alert("Unable to open link", "Please try again in a moment.");
-    }
-  };
+  const openPrivacy = useCallback(
+    withTick(async () => {
+      try {
+        await Linking.openURL(PRIVACY_URL);
+      } catch {
+        Alert.alert("Unable to open link", "Please try again in a moment.");
+      }
+    }),
+    []
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -285,6 +289,12 @@ export default function AccountSettingsScreen() {
       setPrivateName("");
       setHapticsEnabledState(true);
       setHapticsLoaded(true);
+
+      // defaults (opt-in by default)
+      setShareAnonymously(true);
+      setShareNoticeSeen(false);
+      setShareLoaded(true);
+
       setLoading(false);
       router.replace("/(tabs)/profile");
       return;
@@ -313,10 +323,23 @@ export default function AccountSettingsScreen() {
 
       const enabled = typeof p?.haptics_enabled === "boolean" ? p.haptics_enabled : true;
       setHapticsEnabledState(enabled);
+
+      // ✅ anonymous sharing (opt-in default)
+      const share = typeof p?.share_anonymously === "boolean" ? p.share_anonymously : true;
+      const seen = typeof p?.share_notice_seen === "boolean" ? p.share_notice_seen : false;
+
+      setShareAnonymously(share);
+      setShareNoticeSeen(seen);
+      setShareLoaded(true);
     } catch {
       setNameUnified(baseNameFallback);
       setNameUnifiedInput(baseNameFallback);
       setHapticsEnabledState(true);
+
+      // defaults
+      setShareAnonymously(true);
+      setShareNoticeSeen(false);
+      setShareLoaded(true);
     } finally {
       setHapticsLoaded(true);
       setLoading(false);
@@ -327,206 +350,300 @@ export default function AccountSettingsScreen() {
     load();
   }, [load]);
 
-  function startEditAccount() {
-    if (busy) return;
-    setEditingAccount(true);
-    setStatusLine("");
-  }
+  const startEditAccount = useCallback(
+    withTick(() => {
+      if (busy) return;
+      setEditingAccount(true);
+      setStatusLine("");
+    }),
+    [busy]
+  );
 
-  function cancelEditAccount() {
-    if (busy) return;
-    setEditingAccount(false);
-    setStatusLine("");
-    setNameUnifiedInput(nameUnified);
-    setPrivateNameInput(privateName);
-  }
+  const cancelEditAccount = useCallback(
+    withTick(() => {
+      if (busy) return;
+      setEditingAccount(false);
+      setStatusLine("");
+      setNameUnifiedInput(nameUnified);
+      setPrivateNameInput(privateName);
+    }),
+    [busy, nameUnified, privateName]
+  );
 
-  async function saveAccountInfo() {
-    if (busy) return;
-    setBusy(true);
-    setStatusLine("Saving…");
+  const saveAccountInfo = useCallback(
+    withTickError(async () => {
+      if (busy) return;
+      setBusy(true);
+      setStatusLine("Saving…");
 
-    try {
-      const unified = nameUnifiedInput.trim();
-      const pn = privateNameInput.trim();
+      try {
+        const unified = nameUnifiedInput.trim();
+        const pn = privateNameInput.trim();
 
-      if (unified.length < 2) {
-        Alert.alert("Name", "Please enter at least 2 characters.");
-        setBusy(false);
+        if (unified.length < 2) {
+          Alert.alert("Name", "Please enter at least 2 characters.");
+          setBusy(false);
+          setStatusLine("");
+          return;
+        }
+
+        await upsertMyProfile({
+          display_name: unified,
+          first_name: pn,
+        });
+
+        // mirror into auth metadata so any metadata reads stay consistent
+        try {
+          await supabase.auth.updateUser({ data: { username: unified, name: unified } });
+        } catch {
+          // non-blocking
+        }
+
+        setNameUnified(unified);
+        setPrivateName(pn);
+
+        setEditingAccount(false);
+        setStatusLine("Saved.");
+        setTimeout(() => setStatusLine(""), 900);
+
+        await hapticSuccess();
+      } catch (e: any) {
         setStatusLine("");
+        Alert.alert("Save failed", String(e?.message ?? e));
+        await hapticError();
+      } finally {
+        setBusy(false);
+      }
+    }),
+    [busy, nameUnifiedInput, privateNameInput]
+  );
+
+  const startChangePassword = useCallback(
+    withTick(() => {
+      if (busy) return;
+      setEditingPassword(true);
+      setNewPassword("");
+      setConfirmPassword("");
+      setStatusLine("");
+    }),
+    [busy]
+  );
+
+  const cancelChangePassword = useCallback(
+    withTick(() => {
+      if (busy) return;
+      setEditingPassword(false);
+      setNewPassword("");
+      setConfirmPassword("");
+      setStatusLine("");
+    }),
+    [busy]
+  );
+
+  const submitPasswordChange = useCallback(
+    withTickError(async () => {
+      if (busy) return;
+
+      const pw = newPassword.trim();
+      const pw2 = confirmPassword.trim();
+
+      if (pw.length < 8) return Alert.alert("Password", "Please use at least 8 characters.");
+      if (pw !== pw2) return Alert.alert("Password", "Passwords do not match.");
+
+      setBusy(true);
+      setStatusLine("Updating password…");
+
+      const { error } = await supabase.auth.updateUser({ password: pw });
+
+      setBusy(false);
+
+      if (error) {
+        setStatusLine("");
+        Alert.alert("Password update failed", error.message);
+        await hapticError();
         return;
       }
 
-      // ✅ single source of truth
-      await upsertMyProfile({
-        display_name: unified,
-        first_name: pn,
-      });
+      setEditingPassword(false);
+      setNewPassword("");
+      setConfirmPassword("");
+      setStatusLine("Password updated.");
+      setTimeout(() => setStatusLine(""), 1200);
+      await hapticSuccess();
+    }),
+    [busy, newPassword, confirmPassword]
+  );
 
-      // ✅ mirror into auth metadata so any metadata reads stay consistent
-      try {
-        await supabase.auth.updateUser({ data: { username: unified, name: unified } });
-      } catch {
-        // non-blocking
+  const signOut = useCallback(
+    withTickError(async () => {
+      if (busy) return;
+      setBusy(true);
+      setStatusLine("Signing out…");
+
+      const { error } = await supabase.auth.signOut();
+
+      setBusy(false);
+
+      if (error) {
+        setStatusLine("");
+        Alert.alert("Sign out failed", error.message);
+        await hapticError();
+        return;
       }
 
-      setNameUnified(unified);
-      setPrivateName(pn);
-
-      setEditingAccount(false);
-      setStatusLine("Saved.");
-      setTimeout(() => setStatusLine(""), 900);
-      await hapticSuccess();
-    } catch (e: any) {
       setStatusLine("");
-      Alert.alert("Save failed", String(e?.message ?? e));
-      await hapticError();
-    } finally {
-      setBusy(false);
-    }
-  }
+      router.replace("/(tabs)/profile");
+    }),
+    [busy]
+  );
 
-  function startChangePassword() {
-    if (busy) return;
-    setEditingPassword(true);
-    setNewPassword("");
-    setConfirmPassword("");
-    setStatusLine("");
-  }
-
-  function cancelChangePassword() {
-    if (busy) return;
-    setEditingPassword(false);
-    setNewPassword("");
-    setConfirmPassword("");
-    setStatusLine("");
-  }
-
-  async function submitPasswordChange() {
+  const deleteAllTastings = useCallback(() => {
     if (busy) return;
 
-    const pw = newPassword.trim();
-    const pw2 = confirmPassword.trim();
+    supabase.auth.getSession().then(({ data }) => {
+      const session = data.session;
+      if (!session?.user) return;
 
-    if (pw.length < 8) return Alert.alert("Password", "Please use at least 8 characters.");
-    if (pw !== pw2) return Alert.alert("Password", "Passwords do not match.");
+      Alert.alert(
+        "Delete all pours?",
+        "This is permanent.\n\nAll of your tasting records for this account will be deleted and cannot be recovered.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete all",
+            style: "destructive",
+            onPress: () =>
+              withDanger(async () => {
+                try {
+                  setBusy(true);
+                  setStatusLine("Deleting…");
 
-    setBusy(true);
-    setStatusLine("Updating password…");
+                  const { error } = await supabase
+                    .from("tastings")
+                    .delete()
+                    .eq("user_id", session.user.id);
 
-    const { error } = await supabase.auth.updateUser({ password: pw });
+                  if (error) throw new Error(error.message);
 
-    setBusy(false);
-
-    if (error) {
-      setStatusLine("");
-      Alert.alert("Password update failed", error.message);
-      await hapticError();
-      return;
-    }
-
-    setEditingPassword(false);
-    setNewPassword("");
-    setConfirmPassword("");
-    setStatusLine("Password updated.");
-    setTimeout(() => setStatusLine(""), 1200);
-    await hapticSuccess();
-  }
-
-  async function signOut() {
-    if (busy) return;
-    setBusy(true);
-    setStatusLine("Signing out…");
-
-    const { error } = await supabase.auth.signOut();
-
-    setBusy(false);
-
-    if (error) {
-      setStatusLine("");
-      Alert.alert("Sign out failed", error.message);
-      await hapticError();
-      return;
-    }
-
-    setStatusLine("");
-    router.replace("/(tabs)/profile");
-  }
-
-  async function deleteAllTastings() {
-    const { data } = await supabase.auth.getSession();
-    const session = data.session;
-    if (!session?.user) return;
-
-    Alert.alert(
-      "Delete all pours?",
-      "This is permanent.\n\nAll of your tasting records for this account will be deleted and cannot be recovered.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete all",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setBusy(true);
-              setStatusLine("Deleting…");
-
-              const { error } = await supabase
-                .from("tastings")
-                .delete()
-                .eq("user_id", session.user.id);
-
-              if (error) throw new Error(error.message);
-
-              setStatusLine("Deleted.");
-              setTimeout(() => setStatusLine(""), 1200);
-              await hapticSuccess();
-            } catch {
-              setStatusLine("");
-              Alert.alert(
-                "Couldn’t delete yet",
-                "Your security rules may not allow deletes yet. We can enable this when you’re ready."
-              );
-              await hapticError();
-            } finally {
-              setBusy(false);
-            }
+                  setStatusLine("Deleted.");
+                  setTimeout(() => setStatusLine(""), 1200);
+                  await hapticSuccess();
+                } catch {
+                  setStatusLine("");
+                  Alert.alert(
+                    "Couldn’t delete yet",
+                    "Your security rules may not allow deletes yet. We can enable this when you’re ready."
+                  );
+                  await hapticError();
+                } finally {
+                  setBusy(false);
+                }
+              }, { success: false })(),
           },
-        },
-      ]
-    );
-  }
+        ]
+      );
+    });
+  }, [busy]);
 
-  async function toggleHaptics() {
-    if (!hapticsLoaded || busy) return;
+  const toggleHaptics = useCallback(
+    withTickError(async () => {
+      if (!hapticsLoaded || busy) return;
 
-    const { data } = await supabase.auth.getSession();
-    const session = data.session;
-    const user = session?.user;
-    if (!user?.id) return;
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+      const user = session?.user;
+      if (!user?.id) return;
 
-    const next = !hapticsEnabled;
+      const next = !hapticsEnabled;
 
-    setBusy(true);
-    try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ haptics_enabled: next })
-        .eq("id", user.id);
+      setBusy(true);
+      try {
+        const { error } = await supabase
+          .from("profiles")
+          .update({ haptics_enabled: next })
+          .eq("id", user.id);
 
-      if (error) throw new Error(error.message);
+        if (error) throw new Error(error.message);
 
-      setHapticsEnabledState(next);
-      invalidateHapticsCache();
+        setHapticsEnabledState(next);
+        invalidateHapticsCache();
 
-      if (next) await hapticTick();
-    } catch (e: any) {
-      Alert.alert("Haptics", String(e?.message ?? e));
-      await hapticError();
-    } finally {
-      setBusy(false);
-    }
-  }
+        // no extra tick here; withTick already handled the press feedback
+      } catch (e: any) {
+        Alert.alert("Haptics", String(e?.message ?? e));
+        await hapticError();
+      } finally {
+        setBusy(false);
+      }
+    }),
+    [hapticsLoaded, busy, hapticsEnabled]
+  );
+
+  // ✅ Privacy toggle: anonymous sharing
+  const toggleShareAnonymously = useCallback(
+    withTickError(async () => {
+      if (!shareLoaded || busy) return;
+
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+      const user = session?.user;
+      if (!user?.id) return;
+
+      const next = !shareAnonymously;
+
+      setBusy(true);
+      try {
+        const payload: any = {
+          share_anonymously: next,
+        };
+
+        // Any interaction counts as "notice seen"
+        if (!shareNoticeSeen) payload.share_notice_seen = true;
+
+        const { error } = await supabase.from("profiles").update(payload).eq("id", user.id);
+        if (error) throw new Error(error.message);
+
+        setShareAnonymously(next);
+        if (!shareNoticeSeen) setShareNoticeSeen(true);
+      } catch (e: any) {
+        Alert.alert("Privacy", String(e?.message ?? e));
+        await hapticError();
+      } finally {
+        setBusy(false);
+      }
+    }),
+    [shareLoaded, busy, shareAnonymously, shareNoticeSeen]
+  );
+
+  // ✅ Mark notice seen
+  const markShareNoticeSeen = useCallback(
+    withTickError(async () => {
+      if (busy) return;
+
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+      const user = session?.user;
+      if (!user?.id) return;
+
+      setBusy(true);
+      try {
+        const { error } = await supabase
+          .from("profiles")
+          .update({ share_notice_seen: true })
+          .eq("id", user.id);
+
+        if (error) throw new Error(error.message);
+
+        setShareNoticeSeen(true);
+      } catch (e: any) {
+        // non-blocking: still hide locally if they tapped
+        setShareNoticeSeen(true);
+      } finally {
+        setBusy(false);
+      }
+    }),
+    [busy]
+  );
 
   const signedInPill = useMemo(() => {
     return isSignedIn ? <Pill label="Signed in" tone="good" /> : <Pill label="Signed out" tone="muted" />;
@@ -554,7 +671,7 @@ export default function AccountSettingsScreen() {
           headerShadowVisible: false,
           headerLeft: () => (
             <Pressable
-              onPress={() => router.back()}
+              onPress={withTick(() => router.back())}
               style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}
             >
               <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
@@ -571,9 +688,7 @@ export default function AccountSettingsScreen() {
           paddingBottom: spacing.xl * 3,
         }}
       >
-        {statusLine ? (
-          <Text style={[type.microcopyItalic, { opacity: 0.9 }]}>{statusLine}</Text>
-        ) : null}
+        {statusLine ? <Text style={[type.microcopyItalic, { opacity: 0.9 }]}>{statusLine}</Text> : null}
 
         <Card
           title="Account Management"
@@ -616,6 +731,7 @@ export default function AccountSettingsScreen() {
                 value={nameUnifiedInput}
                 onChangeText={setNameUnifiedInput}
                 autoCapitalize="words"
+                disabled={busy}
               />
 
               <Text style={[type.body, { fontWeight: "900" }]}>Private name (optional)</Text>
@@ -624,24 +740,15 @@ export default function AccountSettingsScreen() {
                 value={privateNameInput}
                 onChangeText={setPrivateNameInput}
                 autoCapitalize="words"
+                disabled={busy}
               />
 
               <View style={{ flexDirection: "row", gap: spacing.md, marginTop: spacing.sm }}>
                 <View style={{ flex: 1 }}>
-                  <ThemedButton
-                    label="Cancel"
-                    onPress={cancelEditAccount}
-                    disabled={busy}
-                    tone="secondary"
-                  />
+                  <ThemedButton label="Cancel" onPress={cancelEditAccount} disabled={busy} tone="secondary" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <ThemedButton
-                    label={busy ? "Saving…" : "Save"}
-                    onPress={saveAccountInfo}
-                    disabled={busy}
-                    tone="primary"
-                  />
+                  <ThemedButton label={busy ? "Saving…" : "Save"} onPress={saveAccountInfo} disabled={busy} tone="primary" />
                 </View>
               </View>
             </View>
@@ -660,6 +767,7 @@ export default function AccountSettingsScreen() {
                 onChangeText={setNewPassword}
                 secureTextEntry
                 autoCapitalize="none"
+                disabled={busy}
               />
               <ThemedInput
                 placeholder="Confirm new password"
@@ -667,16 +775,12 @@ export default function AccountSettingsScreen() {
                 onChangeText={setConfirmPassword}
                 secureTextEntry
                 autoCapitalize="none"
+                disabled={busy}
               />
 
               <View style={{ flexDirection: "row", gap: spacing.md }}>
                 <View style={{ flex: 1 }}>
-                  <ThemedButton
-                    label="Cancel"
-                    onPress={cancelChangePassword}
-                    disabled={busy}
-                    tone="secondary"
-                  />
+                  <ThemedButton label="Cancel" onPress={cancelChangePassword} disabled={busy} tone="secondary" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <ThemedButton
@@ -699,13 +803,51 @@ export default function AccountSettingsScreen() {
             disabled={busy || !hapticsLoaded}
           />
           {!hapticsEnabled ? (
-            <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
-              Vibrations are off — saves won’t buzz.
-            </Text>
+            <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>Vibrations are off — saves won’t buzz.</Text>
           ) : null}
         </Card>
 
-        <Card title="Privacy & Data" subtitle="Review our privacy policy and request account deletion.">
+        <Card title="Privacy & Data" subtitle="Control whether your tastings contribute to community insights.">
+          {!shareNoticeSeen ? (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: colors.divider,
+                borderRadius: radii.md,
+                padding: spacing.md,
+                backgroundColor: colors.surface,
+                gap: spacing.sm,
+              }}
+            >
+              <Text style={[type.body, { fontWeight: "900" }]}>Anonymous community sharing</Text>
+              <Text style={[type.microcopyItalic, { opacity: 0.82, lineHeight: 20 }]}>
+                When enabled, your rating, tasting notes, dislikes, and the review date may be used to build community
+                averages and trending insights. Your identity is never shown.
+              </Text>
+
+              <ThemedButton
+                label="Got it"
+                onPress={markShareNoticeSeen}
+                disabled={busy}
+                tone="secondary"
+                icon={<Ionicons name="checkmark-circle-outline" size={18} color={colors.textPrimary} />}
+              />
+            </View>
+          ) : null}
+
+          <ToggleRow
+            label="Share tastings anonymously"
+            value={shareAnonymously}
+            onToggle={toggleShareAnonymously}
+            disabled={busy || !shareLoaded}
+          />
+
+          <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
+            If turned off, your future tastings won’t be included in community stats.
+          </Text>
+
+          <View style={{ height: 1, backgroundColor: colors.divider, opacity: 0.9 }} />
+
           <View style={{ gap: spacing.md }}>
             <ThemedButton
               label="Privacy Policy"
@@ -728,13 +870,10 @@ export default function AccountSettingsScreen() {
           </Text>
         </Card>
 
-        <Card
-          title="Beta Feedback"
-          subtitle="Help shape Neat Notes. Report bugs or share ideas."
-        >
+        <Card title="Beta Feedback" subtitle="Help shape Neat Notes. Report bugs or share ideas.">
           <ThemedButton
             label="Submit Feedback (Beta)"
-            onPress={async () => {
+            onPress={withTick(async () => {
               try {
                 const { data } = await supabase.auth.getSession();
                 const userId = data.session?.user?.id ?? "not-signed-in";
@@ -761,10 +900,10 @@ Additional Notes:
                 const mailtoUrl = `mailto:contact@buffalohappyhour.com?subject=${subject}&body=${body}`;
 
                 await Linking.openURL(mailtoUrl);
-              } catch (err) {
+              } catch {
                 Alert.alert("Error", "Unable to open email client.");
               }
-            }}
+            })}
             tone="primary"
             icon={<Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.textPrimary} />}
           />

@@ -1,3 +1,4 @@
+// app/(tabs)/home.tsx
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -10,6 +11,9 @@ import { shadows } from "../../lib/shadows";
 import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
+
+// ✅ Intentional haptics wrapper (respects user setting)
+import { withTick } from "../../lib/hapticsPress";
 
 function Card({
   title,
@@ -48,20 +52,23 @@ function Card({
 function PrimaryButton({
   label,
   onPress,
+  disabled,
 }: {
   label: string;
   onPress: () => void;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       style={({ pressed }) => ({
         borderRadius: radii.md,
         paddingVertical: spacing.lg,
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: pressed ? colors.accentPressed : colors.accent,
-        opacity: pressed ? 0.95 : 1,
+        opacity: disabled ? 0.5 : pressed ? 0.95 : 1,
       })}
     >
       <Text style={[type.button, { fontSize: 17, color: colors.background }]}>
@@ -76,15 +83,18 @@ function InlineNotice({
   subtitle,
   cta,
   onPress,
+  disabled,
 }: {
   title: string;
   subtitle: string;
   cta: string;
   onPress: () => void;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       style={({ pressed }) => ({
         borderRadius: radii.lg,
         padding: spacing.lg,
@@ -92,7 +102,7 @@ function InlineNotice({
         borderColor: colors.divider,
         backgroundColor: colors.surface,
         ...shadows.card,
-        opacity: pressed ? 0.92 : 1,
+        opacity: disabled ? 0.5 : pressed ? 0.92 : 1,
         gap: 8,
       })}
     >
@@ -244,6 +254,18 @@ export default function HomeTab() {
     };
   }, [isAuthed, tastingCount]);
 
+  // ✅ Haptic-wrapped actions (tick on intentional navigation)
+  const goSignIn = useMemo(() => withTick(() => router.push("/sign-in")), []);
+  const goAccountSettings = useMemo(
+    () => withTick(() => router.push("/account-settings")),
+    []
+  );
+  const goLog = useMemo(() => withTick(() => router.push("/(tabs)/log")), []);
+  const goDiscover = useMemo(
+    () => withTick(() => router.push("/(tabs)/discover")),
+    []
+  );
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -297,10 +319,7 @@ export default function HomeTab() {
           {/* Sign-in CTA lives right here when not authed */}
           {!isAuthed ? (
             <View style={{ marginTop: spacing.sm }}>
-              <PrimaryButton
-                label="Sign In / Create Account"
-                onPress={() => router.push("/sign-in")}
-              />
+              <PrimaryButton label="Sign In / Create Account" onPress={goSignIn} />
             </View>
           ) : null}
 
@@ -319,16 +338,13 @@ export default function HomeTab() {
             title="Founding Tester (Beta)"
             subtitle="Your tastings are private. If something feels off, send feedback — it helps us harden the app."
             cta="Submit feedback"
-            onPress={() => router.push("/account-settings")}
+            onPress={goAccountSettings}
           />
         ) : null}
 
         {/* Log */}
         <Card title={logCard.title} subtitle={logCard.subtitle}>
-          <PrimaryButton
-            label="Start Logging"
-            onPress={() => router.push("/(tabs)/log")}
-          />
+          <PrimaryButton label="Start Logging" onPress={goLog} />
         </Card>
 
         {/* Discover */}
@@ -336,10 +352,7 @@ export default function HomeTab() {
           title="Discover"
           subtitle="Explore whiskies and build your personal library. Community insights come later."
         >
-          <PrimaryButton
-            label="Open Discover"
-            onPress={() => router.push("/(tabs)/discover")}
-          />
+          <PrimaryButton label="Open Discover" onPress={goDiscover} />
         </Card>
       </View>
     </ScrollView>

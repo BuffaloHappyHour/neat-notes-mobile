@@ -1,3 +1,4 @@
+// app/(tabs)/profile.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -12,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { isAdmin as checkIsAdmin } from "../../lib/adminApi";
 import { fetchMyProfile } from "../../lib/cloudProfile";
 import { supabase } from "../../lib/supabase";
 
@@ -20,6 +22,16 @@ import { shadows } from "../../lib/shadows";
 import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
+
+// ✅ Haptics (centralized helper)
+import {
+  hapticError,
+  hapticSuccess,
+  hapticTick,
+  withDanger,
+  withSuccess,
+  withTick,
+} from "../../lib/hapticsPress";
 
 function Card({
   title,
@@ -53,7 +65,9 @@ function Card({
         }}
       >
         <View style={{ gap: spacing.xs, flex: 1 }}>
-          <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>{title}</Text>
+          <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>
+            {title}
+          </Text>
           {subtitle ? (
             <Text
               style={[
@@ -109,6 +123,30 @@ function StatPill({ label, value }: { label: string; value: string }) {
   );
 }
 
+function InlinePill({ label }: { label: string }) {
+  return (
+    <View
+      style={{
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: colors.divider,
+        backgroundColor: colors.surface,
+      }}
+    >
+      <Text
+        style={[
+          type.microcopyItalic,
+          { opacity: 0.85, color: colors.textPrimary },
+        ]}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 type RecentRow = {
   id: string;
   whiskey_name: string | null;
@@ -131,6 +169,7 @@ export default function ProfileTab() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [isAuthed, setIsAuthed] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
   const [privateName, setPrivateName] = useState("");
@@ -143,11 +182,15 @@ export default function ProfileTab() {
   const [recent, setRecent] = useState<RecentRow[]>([]);
   const [recentError, setRecentError] = useState<string>("");
 
+  // community sharing state (from profile)
+  const [shareAnon, setShareAnon] = useState<boolean>(true);
+
   // --- Premium long-press action sheet state ---
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [actionsRow, setActionsRow] = useState<{ id: string; whiskey_name: string | null } | null>(
-    null
-  );
+  const [actionsRow, setActionsRow] = useState<{
+    id: string;
+    whiskey_name: string | null;
+  } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
@@ -163,6 +206,7 @@ export default function ProfileTab() {
 
     if (!session?.user) {
       setIsAuthed(false);
+      setIsAdmin(false);
       setDisplayName("");
       setPrivateName("");
       setUsername("");
@@ -171,6 +215,7 @@ export default function ProfileTab() {
       setTop5([]);
       setRecent([]);
       setRecentError("");
+      setShareAnon(true);
       if (silent) setRefreshing(false);
       else setLoading(false);
       return;
@@ -179,12 +224,18 @@ export default function ProfileTab() {
     setIsAuthed(true);
 
     const meta: any = session.user.user_metadata ?? {};
-    const metaUsername = String(meta.username ?? meta.user_name ?? meta.name ?? "").trim();
-    const emailFallback = session.user.email ? String(session.user.email).split("@")[0] : "";
+    const metaUsername = String(
+      meta.username ?? meta.user_name ?? meta.name ?? ""
+    ).trim();
+    const emailFallback = session.user.email
+      ? String(session.user.email).split("@")[0]
+      : "";
     setUsername(metaUsername || emailFallback || "");
 
     const profilePromise = fetchMyProfile();
-    const countPromise = supabase.from("tastings").select("id", { count: "exact", head: true });
+    const countPromise = supabase
+      .from("tastings")
+      .select("id", { count: "exact", head: true });
     const ratingsPromise = supabase.from("tastings").select("rating");
 
     const top5Promise = supabase
@@ -199,18 +250,23 @@ export default function ProfileTab() {
       .order("created_at", { ascending: false })
       .limit(10);
 
-    const [profileRes, countRes, ratingsRes, top5Res, recentRes] = await Promise.allSettled([
-      profilePromise,
-      countPromise,
-      ratingsPromise,
-      top5Promise,
-      recentPromise,
-    ]);
+    const [profileRes, countRes, ratingsRes, top5Res, recentRes] =
+      await Promise.allSettled([
+        profilePromise,
+        countPromise,
+        ratingsPromise,
+        top5Promise,
+        recentPromise,
+      ]);
 
     if (profileRes.status === "fulfilled") {
       const p: any = profileRes.value;
       setDisplayName((p?.display_name ?? "").trim());
       setPrivateName((p?.first_name ?? "").trim());
+
+      const sAnon =
+        typeof p?.share_anonymously === "boolean" ? p.share_anonymously : true;
+      setShareAnon(sAnon);
     }
 
     if (countRes.status === "fulfilled") {
@@ -224,7 +280,8 @@ export default function ProfileTab() {
         const nums = rows
           .map((r: any) => Number(r.rating))
           .filter((n: number) => Number.isFinite(n));
-        if (nums.length) setAvgRating(nums.reduce((a: number, b: number) => a + b, 0) / nums.length);
+        if (nums.length)
+          setAvgRating(nums.reduce((a: number, b: number) => a + b, 0) / nums.length);
         else setAvgRating(null);
       }
     }
@@ -262,28 +319,67 @@ export default function ProfileTab() {
     loadAll();
   }, [loadAll]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      if (!isAuthed) {
+        setIsAdmin(false);
+        return;
+      }
+      try {
+        const ok = await checkIsAdmin();
+        if (!cancelled) setIsAdmin(ok);
+      } catch {
+        if (!cancelled) setIsAdmin(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthed]);
+
   const greetName = (privateName || username || displayName || "").trim();
   const welcomeTitle = greetName ? `Welcome, ${greetName}` : "Welcome";
 
   const tastingsText = tastingCount === null ? "—" : String(tastingCount);
   const avgText = avgRating === null ? "—" : `${avgRating.toFixed(1)}`;
 
-  const closeActions = () => {
+  const closeActions = useCallback(async () => {
     if (deleting) return;
     setActionsOpen(false);
     setTimeout(() => setActionsRow(null), 150);
-  };
+    await hapticTick();
+  }, [deleting]);
 
-  const editFromActions = () => {
+  const openActionsForRow = useCallback(
+    async (row: { id: string; whiskey_name: string | null }) => {
+      if (deleting) return;
+      setActionsRow(row);
+      setActionsOpen(true);
+      await hapticTick();
+    },
+    [deleting]
+  );
+
+  const editFromActions = useCallback(async () => {
     if (!actionsRow) return;
-    closeActions();
+    if (deleting) return;
+    setActionsOpen(false);
+    setTimeout(() => setActionsRow(null), 150);
+    await hapticTick();
     router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(actionsRow.id)}`);
-  };
+  }, [actionsRow, deleting]);
 
-  const deleteFromActions = async () => {
+  const deleteFromActions = useCallback(async () => {
     if (!actionsRow) return;
+    if (deleting) return;
 
     const nm = (actionsRow.whiskey_name ?? "Whiskey").trim() || "Whiskey";
+
+    // This tap is a "danger intent" (still just a prompt)
+    await hapticTick();
 
     Alert.alert("Delete tasting?", `This will permanently delete your tasting for “${nm}”.`, [
       { text: "Cancel", style: "cancel" },
@@ -300,15 +396,17 @@ export default function ProfileTab() {
             setActionsOpen(false);
             setActionsRow(null);
             await loadAll({ silent: true });
+            await hapticSuccess();
           } catch (e: any) {
             Alert.alert("Delete failed", String(e?.message ?? e));
+            await hapticError();
           } finally {
             setDeleting(false);
           }
         },
       },
     ]);
-  };
+  }, [actionsRow, deleting, loadAll]);
 
   const actionsTitle = useMemo(() => {
     const nm = (actionsRow?.whiskey_name ?? "").trim();
@@ -327,7 +425,12 @@ export default function ProfileTab() {
         }}
       >
         <ActivityIndicator />
-        <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.7, color: colors.textPrimary }]}>
+        <Text
+          style={[
+            type.body,
+            { marginTop: spacing.sm, opacity: 0.7, color: colors.textPrimary },
+          ]}
+        >
           Loading…
         </Text>
       </View>
@@ -337,22 +440,93 @@ export default function ProfileTab() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ padding: spacing.xl, gap: spacing.xl }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <View style={{ gap: 6 }}>
-            <Text style={[type.screenTitle, { color: colors.textPrimary }]}>{welcomeTitle}</Text>
-            <Text style={[type.microcopyItalic, { opacity: 0.85, color: colors.textPrimary }]}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <View style={{ gap: 6, flex: 1 }}>
+            <Text style={[type.screenTitle, { color: colors.textPrimary }]}>
+              {welcomeTitle}
+            </Text>
+            <Text
+              style={[
+                type.microcopyItalic,
+                { opacity: 0.85, color: colors.textPrimary },
+              ]}
+            >
               Your stats, your palate, your journal.
             </Text>
+
+            {isAuthed ? (
+              <Pressable
+                onPress={withTick(() => router.push("/account-settings"))}
+                style={({ pressed }) => ({
+                  marginTop: 8,
+                  alignSelf: "flex-start",
+                  borderRadius: 999,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderWidth: 1,
+                  borderColor: colors.divider,
+                  backgroundColor: pressed ? colors.highlight : colors.surface,
+                  opacity: pressed ? 0.92 : 1,
+                })}
+              >
+                <Text
+                  style={[
+                    type.microcopyItalic,
+                    { color: colors.textPrimary, opacity: 0.9 },
+                  ]}
+                >
+                  Community sharing:{" "}
+                  <Text style={{ fontWeight: "900" }}>
+                    {shareAnon ? "On" : "Off"}
+                  </Text>
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
 
           {isAuthed ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.xs,
+              }}
+            >
+              {isAdmin ? (
+                <Pressable
+                  onPress={withTick(() => router.push("/admin"))}
+                  style={({ pressed }) => ({
+                    width: 40,
+                    height: 40,
+                    borderRadius: 999,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: colors.divider,
+                    backgroundColor: colors.surface,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={18}
+                    color={colors.textPrimary}
+                  />
+                </Pressable>
+              ) : null}
+
               <Pressable
-                onPress={() => loadAll({ silent: true })}
+                onPress={withTick(() => loadAll({ silent: true }))}
                 disabled={refreshing}
                 style={({ pressed }) => ({
-                  width: 44,
-                  height: 44,
+                  width: 40,
+                  height: 40,
                   borderRadius: 999,
                   alignItems: "center",
                   justifyContent: "center",
@@ -365,15 +539,15 @@ export default function ProfileTab() {
                 {refreshing ? (
                   <ActivityIndicator size="small" />
                 ) : (
-                  <Ionicons name="refresh" size={20} color={colors.textPrimary} />
+                  <Ionicons name="refresh" size={18} color={colors.textPrimary} />
                 )}
               </Pressable>
 
               <Pressable
-                onPress={() => router.push("/account-settings")}
+                onPress={withTick(() => router.push("/account-settings"))}
                 style={({ pressed }) => ({
-                  width: 44,
-                  height: 44,
+                  width: 40,
+                  height: 40,
                   borderRadius: 999,
                   alignItems: "center",
                   justifyContent: "center",
@@ -383,16 +557,23 @@ export default function ProfileTab() {
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
-                <Ionicons name="settings-outline" size={20} color={colors.textPrimary} />
+                <Ionicons
+                  name="settings-outline"
+                  size={18}
+                  color={colors.textPrimary}
+                />
               </Pressable>
             </View>
           ) : null}
         </View>
 
         {!isAuthed ? (
-          <Card title="Sign in" subtitle="Create an account to keep tastings safe across devices.">
+          <Card
+            title="Sign in"
+            subtitle="Create an account to keep tastings safe across devices."
+          >
             <Pressable
-              onPress={() => router.push("/sign-in")}
+              onPress={withSuccess(() => router.push("/sign-in"))}
               style={({ pressed }) => ({
                 borderRadius: radii.md,
                 paddingVertical: spacing.lg,
@@ -402,7 +583,9 @@ export default function ProfileTab() {
                 opacity: pressed ? 0.92 : 1,
               })}
             >
-              <Text style={[type.button, { color: colors.background }]}>Sign In / Create Account</Text>
+              <Text style={[type.button, { color: colors.background }]}>
+                Sign In / Create Account
+              </Text>
             </Pressable>
           </Card>
         ) : (
@@ -413,12 +596,32 @@ export default function ProfileTab() {
                 <StatPill label="Avg. rating" value={avgText} />
               </View>
 
-              <View style={{ height: 1, backgroundColor: colors.divider, marginTop: spacing.md }} />
+              <View
+                style={{
+                  height: 1,
+                  backgroundColor: colors.divider,
+                  marginTop: spacing.md,
+                }}
+              />
 
-              <Text style={[type.microcopyItalic, { opacity: 0.9, color: colors.textPrimary }]}>Top 5</Text>
+              <Text
+                style={[
+                  type.microcopyItalic,
+                  { opacity: 0.9, color: colors.textPrimary },
+                ]}
+              >
+                Top 5
+              </Text>
 
               {top5.length === 0 ? (
-                <Text style={[type.microcopyItalic, { opacity: 0.75, color: colors.textPrimary }]}>—</Text>
+                <Text
+                  style={[
+                    type.microcopyItalic,
+                    { opacity: 0.75, color: colors.textPrimary },
+                  ]}
+                >
+                  —
+                </Text>
               ) : (
                 <View style={{ gap: 10 }}>
                   {top5.map((r, idx) => {
@@ -431,13 +634,17 @@ export default function ProfileTab() {
                     return (
                       <Pressable
                         key={r.id}
-                        onPress={() =>
-                          router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(r.id)}`)
+                        onPress={withTick(() =>
+                          router.push(
+                            `/log/cloud-tasting?tastingId=${encodeURIComponent(r.id)}`
+                          )
+                        )}
+                        onLongPress={() =>
+                          openActionsForRow({
+                            id: r.id,
+                            whiskey_name: r.whiskey_name ?? null,
+                          })
                         }
-                        onLongPress={() => {
-                          setActionsRow({ id: r.id, whiskey_name: r.whiskey_name ?? null });
-                          setActionsOpen(true);
-                        }}
                         delayLongPress={260}
                         hitSlop={8}
                         style={({ pressed }) => ({
@@ -452,13 +659,20 @@ export default function ProfileTab() {
                         <Text
                           style={[
                             type.microcopyItalic,
-                            { width: 22, opacity: 0.75, color: colors.textPrimary },
+                            {
+                              width: 22,
+                              opacity: 0.75,
+                              color: colors.textPrimary,
+                            },
                           ]}
                         >
                           {idx + 1}.
                         </Text>
                         <Text
-                          style={[type.body, { flex: 1, fontWeight: "800", color: colors.textPrimary }]}
+                          style={[
+                            type.body,
+                            { flex: 1, fontWeight: "800", color: colors.textPrimary },
+                          ]}
                           numberOfLines={1}
                         >
                           {nm}
@@ -466,7 +680,12 @@ export default function ProfileTab() {
                         <Text
                           style={[
                             type.body,
-                            { width: 52, textAlign: "right", fontWeight: "900", color: colors.textPrimary },
+                            {
+                              width: 52,
+                              textAlign: "right",
+                              fontWeight: "900",
+                              color: colors.textPrimary,
+                            },
                           ]}
                         >
                           {rt}
@@ -483,7 +702,7 @@ export default function ProfileTab() {
               subtitle="A quick look at your latest pours."
               right={
                 <Pressable
-                  onPress={() => router.push("/tasting/all")}
+                  onPress={withTick(() => router.push("/tasting/all"))}
                   style={({ pressed }) => ({
                     paddingVertical: 8,
                     paddingHorizontal: 12,
@@ -494,12 +713,19 @@ export default function ProfileTab() {
                     opacity: pressed ? 0.9 : 1,
                   })}
                 >
-                  <Text style={[type.button, { color: colors.textPrimary }]}>View all</Text>
+                  <Text style={[type.button, { color: colors.textPrimary }]}>
+                    View all
+                  </Text>
                 </Pressable>
               }
             >
               {recentError ? (
-                <Text style={[type.microcopyItalic, { opacity: 0.85, color: colors.accent }]}>
+                <Text
+                  style={[
+                    type.microcopyItalic,
+                    { opacity: 0.85, color: colors.accent },
+                  ]}
+                >
                   Recent error: {recentError}
                 </Text>
               ) : null}
@@ -523,13 +749,23 @@ export default function ProfileTab() {
                     alignItems: "center",
                   }}
                 >
-                  <Text style={[type.microcopyItalic, { flex: 1, opacity: 0.8, color: colors.textPrimary }]}>
+                  <Text
+                    style={[
+                      type.microcopyItalic,
+                      { flex: 1, opacity: 0.8, color: colors.textPrimary },
+                    ]}
+                  >
                     Whiskey
                   </Text>
                   <Text
                     style={[
                       type.microcopyItalic,
-                      { width: 56, textAlign: "right", opacity: 0.8, color: colors.textPrimary },
+                      {
+                        width: 56,
+                        textAlign: "right",
+                        opacity: 0.8,
+                        color: colors.textPrimary,
+                      },
                     ]}
                   >
                     Rating
@@ -537,8 +773,18 @@ export default function ProfileTab() {
                 </View>
 
                 {recent.length === 0 ? (
-                  <View style={{ paddingVertical: spacing.lg, paddingHorizontal: spacing.md }}>
-                    <Text style={[type.microcopyItalic, { opacity: 0.8, color: colors.textPrimary }]}>
+                  <View
+                    style={{
+                      paddingVertical: spacing.lg,
+                      paddingHorizontal: spacing.md,
+                    }}
+                  >
+                    <Text
+                      style={[
+                        type.microcopyItalic,
+                        { opacity: 0.8, color: colors.textPrimary },
+                      ]}
+                    >
                       No tastings yet.
                     </Text>
                   </View>
@@ -553,11 +799,17 @@ export default function ProfileTab() {
                     return (
                       <Pressable
                         key={r.id}
-                        onPress={() => router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(r.id)}`)}
-                        onLongPress={() => {
-                          setActionsRow({ id: r.id, whiskey_name: r.whiskey_name ?? null });
-                          setActionsOpen(true);
-                        }}
+                        onPress={withTick(() =>
+                          router.push(
+                            `/log/cloud-tasting?tastingId=${encodeURIComponent(r.id)}`
+                          )
+                        )}
+                        onLongPress={() =>
+                          openActionsForRow({
+                            id: r.id,
+                            whiskey_name: r.whiskey_name ?? null,
+                          })
+                        }
                         delayLongPress={260}
                         style={({ pressed }) => ({
                           flexDirection: "row",
@@ -570,7 +822,10 @@ export default function ProfileTab() {
                         })}
                       >
                         <Text
-                          style={[type.body, { flex: 1, fontWeight: "800", color: colors.textPrimary }]}
+                          style={[
+                            type.body,
+                            { flex: 1, fontWeight: "800", color: colors.textPrimary },
+                          ]}
                           numberOfLines={1}
                         >
                           {nm}
@@ -578,7 +833,12 @@ export default function ProfileTab() {
                         <Text
                           style={[
                             type.body,
-                            { width: 56, textAlign: "right", fontWeight: "900", color: colors.textPrimary },
+                            {
+                              width: 56,
+                              textAlign: "right",
+                              fontWeight: "900",
+                              color: colors.textPrimary,
+                            },
                           ]}
                         >
                           {rt}
@@ -590,7 +850,16 @@ export default function ProfileTab() {
               </View>
 
               {recent.length > 0 ? (
-                <Text style={[type.microcopyItalic, { marginTop: 10, opacity: 0.65, color: colors.textPrimary }]}>
+                <Text
+                  style={[
+                    type.microcopyItalic,
+                    {
+                      marginTop: 10,
+                      opacity: 0.65,
+                      color: colors.textPrimary,
+                    },
+                  ]}
+                >
                   Tip: press and hold a tasting to edit or delete.
                 </Text>
               ) : null}
@@ -600,7 +869,12 @@ export default function ProfileTab() {
       </View>
 
       {/* Premium Actions Bottom Sheet */}
-      <Modal visible={actionsOpen} transparent animationType="fade" onRequestClose={closeActions}>
+      <Modal
+        visible={actionsOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeActions}
+      >
         <Pressable
           onPress={closeActions}
           style={{
@@ -623,7 +897,9 @@ export default function ProfileTab() {
               paddingBottom: Math.max(spacing.lg, insets.bottom + spacing.lg),
             }}
           >
-            <View style={{ alignItems: "center", marginTop: 2, marginBottom: spacing.sm }}>
+            <View
+              style={{ alignItems: "center", marginTop: 2, marginBottom: spacing.sm }}
+            >
               <View
                 style={{
                   width: 44,
@@ -636,8 +912,16 @@ export default function ProfileTab() {
             </View>
 
             <View style={{ gap: 4 }}>
-              <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>Tasting</Text>
-              <Text style={[type.body, { opacity: 0.75, color: colors.textPrimary }]} numberOfLines={2}>
+              <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>
+                Tasting
+              </Text>
+              <Text
+                style={[
+                  type.body,
+                  { opacity: 0.75, color: colors.textPrimary },
+                ]}
+                numberOfLines={2}
+              >
                 {actionsTitle}
               </Text>
             </View>
@@ -645,7 +929,7 @@ export default function ProfileTab() {
             <View style={{ height: 1, backgroundColor: colors.divider, opacity: 0.9 }} />
 
             <Pressable
-              onPress={editFromActions}
+              onPress={withTick(editFromActions)}
               disabled={deleting}
               style={({ pressed }) => ({
                 borderRadius: radii.md,
@@ -660,7 +944,7 @@ export default function ProfileTab() {
             </Pressable>
 
             <Pressable
-              onPress={deleteFromActions}
+              onPress={withDanger(deleteFromActions)}
               disabled={deleting}
               style={({ pressed }) => ({
                 borderRadius: radii.md,
@@ -673,11 +957,13 @@ export default function ProfileTab() {
                 opacity: deleting ? 0.6 : 1,
               })}
             >
-              <Text style={[type.button, { color: colors.textPrimary }]}>{deleting ? "Deleting…" : "Delete"}</Text>
+              <Text style={[type.button, { color: colors.textPrimary }]}>
+                {deleting ? "Deleting…" : "Delete"}
+              </Text>
             </Pressable>
 
             <Pressable
-              onPress={closeActions}
+              onPress={withTick(closeActions)}
               disabled={deleting}
               style={({ pressed }) => ({
                 borderRadius: radii.md,

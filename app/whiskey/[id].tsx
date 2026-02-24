@@ -1,3 +1,4 @@
+// app/whiskey/[id].tsx
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -15,6 +16,9 @@ import { spacing } from "../../lib/spacing";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
+
+// ✅ Haptics (note: this is a .ts file)
+import { hapticError, hapticTick, withSuccess, withTick } from "../../lib/hapticsPress";
 
 /* ---------- HELPERS ---------- */
 
@@ -60,8 +64,7 @@ function toDisplayTitleCase(input: string) {
       return parts
         .map((p) => {
           if (!p) return p;
-          if (p === "-" || p === "/" || p === "'" || p === "(" || p === ")")
-            return p;
+          if (p === "-" || p === "/" || p === "'" || p === "(" || p === ")") return p;
 
           if (/^\d+([a-zA-Z]{0,3})$/.test(p)) return p;
           if (/^[A-Z0-9]+$/.test(p) && p.length <= 4) return p;
@@ -97,6 +100,18 @@ function formatProof(v: any): string | null {
   if (n > 0 && n < 50) return `${Math.round(n * 2)} proof`;
 
   return null;
+}
+
+function formatAge(v: any): string | null {
+  if (v == null) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return `${Math.round(n)} year`;
+}
+
+function cleanText(v: any): string | null {
+  const s = String(v ?? "").trim();
+  return s ? s : null;
 }
 
 /* ---------- UI ATOMS ---------- */
@@ -138,13 +153,7 @@ function SoftButton({ label, onPress }: { label: string; onPress: () => void }) 
   );
 }
 
-function PrimaryButton({
-  label,
-  onPress,
-}: {
-  label: string;
-  onPress: () => void;
-}) {
+function PrimaryButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
@@ -170,8 +179,17 @@ type WhiskeySupabaseRow = {
   id: string;
   display_name: string | null;
   distillery: string | null;
+
+  // Legacy/secondary (we show as "Style" if present)
   whiskey_type: string | null;
+
+  // New taxonomy
+  category: string | null;
+  region: string | null;
+  sub_region: string | null;
+
   proof: number | null;
+  age: number | null;
   whiskey_canonical: string | null;
 };
 
@@ -224,12 +242,20 @@ export default function WhiskeyDetailScreen() {
 
   const [details, setDetails] = useState<{
     distillery: string | null;
-    whiskeyType: string | null;
+    category: string | null;
+    region: string | null;
+    subRegion: string | null;
+    style: string | null; // legacy whiskey_type shown as "Style"
     proofLabel: string | null;
+    ageLabel: string | null;
   }>({
     distillery: null,
-    whiskeyType: null,
+    category: null,
+    region: null,
+    subRegion: null,
+    style: null,
     proofLabel: null,
+    ageLabel: null,
   });
 
   const [bhh, setBhh] = useState<{
@@ -237,27 +263,38 @@ export default function WhiskeyDetailScreen() {
     youtubeUrl: string | null;
   }>({ score: null, youtubeUrl: null });
 
-  const [community, setCommunity] = useState<{ total: number; avg: number | null }>(
-    {
-      total: 0,
-      avg: null,
-    }
-  );
+  const [community, setCommunity] = useState<{ total: number; avg: number | null }>({
+    total: 0,
+    avg: null,
+  });
 
   const [recent, setRecent] = useState<TastingSupabaseRow[]>([]);
 
-  function logThisWhiskey() {
-    // keep your existing log route + params
+  const logThisWhiskey = async () => {
+    await hapticTick();
+
     router.push(
       `/log/cloud-tasting?whiskeyName=${encodeURIComponent(
         headerName
       )}&whiskeyId=${encodeURIComponent(whiskeyId || routeId)}&lockName=1`
     );
-  }
+  };
 
-  function editTasting(tastingId: string) {
+  const editTasting = async (tastingId: string) => {
+    await hapticTick();
     router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(tastingId)}`);
-  }
+  };
+
+  const openYouTube = async () => {
+    if (!bhh.youtubeUrl) return;
+    await hapticTick();
+
+    try {
+      await Linking.openURL(bhh.youtubeUrl);
+    } catch {
+      await hapticError();
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -274,10 +311,13 @@ export default function WhiskeyDetailScreen() {
         // -----------------------------
         let w: WhiskeySupabaseRow | null = null;
 
+        const whiskeySelect =
+          "id, display_name, distillery, whiskey_type, category, region, sub_region, proof, age, whiskey_canonical";
+
         if (isUuidLike(routeId)) {
           const { data, error } = await supabase
             .from("whiskeys")
-            .select("id, display_name, distillery, whiskey_type, proof, whiskey_canonical")
+            .select(whiskeySelect)
             .eq("id", routeId)
             .maybeSingle();
 
@@ -287,7 +327,7 @@ export default function WhiskeyDetailScreen() {
           // legacy fallback: routeId might be whiskey_canonical
           const { data, error } = await supabase
             .from("whiskeys")
-            .select("id, display_name, distillery, whiskey_type, proof, whiskey_canonical")
+            .select(whiskeySelect)
             .eq("whiskey_canonical", routeId)
             .maybeSingle();
 
@@ -304,9 +344,13 @@ export default function WhiskeyDetailScreen() {
         setHeaderNameRaw(nameFromWhiskeys);
 
         setDetails({
-          distillery: w.distillery ? String(w.distillery).trim() || null : null,
-          whiskeyType: w.whiskey_type ? String(w.whiskey_type).trim() || null : null,
+          distillery: cleanText(w.distillery),
+          category: cleanText(w.category),
+          region: cleanText(w.region),
+          subRegion: cleanText(w.sub_region),
+          style: cleanText(w.whiskey_type),
           proofLabel: formatProof(w.proof),
+          ageLabel: formatAge(w.age),
         });
 
         // -----------------------------
@@ -340,8 +384,7 @@ export default function WhiskeyDetailScreen() {
         const chosen = bestByScore ?? bestByDate ?? null;
 
         // If whiskeys.display_name was empty (shouldn't be), allow BHH whiskey_name to fill it.
-        const nameFromBhh =
-          (chosen?.whiskey_name && String(chosen.whiskey_name).trim()) || "";
+        const nameFromBhh = (chosen?.whiskey_name && String(chosen.whiskey_name).trim()) || "";
         if (!nameFromWhiskeys && nameFromBhh) setHeaderNameRaw(nameFromBhh);
 
         setBhh({
@@ -399,6 +442,7 @@ export default function WhiskeyDetailScreen() {
       } catch (e: any) {
         console.log("Whiskey profile load failed:", e?.message ?? e);
         if (alive) setStatusError(String(e?.message ?? e));
+        await hapticError();
       } finally {
         if (alive) setLoading(false);
       }
@@ -447,18 +491,42 @@ export default function WhiskeyDetailScreen() {
             </Text>
 
             <Text style={[type.body, { opacity: 0.8 }]}>
-              Type:{" "}
-              <Text style={{ fontWeight: "900" }}>{details.whiskeyType ?? "—"}</Text>
+              Category:{" "}
+              <Text style={{ fontWeight: "900" }}>{details.category ?? "—"}</Text>
             </Text>
+
+            <Text style={[type.body, { opacity: 0.8 }]}>
+              Region:{" "}
+              <Text style={{ fontWeight: "900" }}>{details.region ?? "—"}</Text>
+            </Text>
+
+            {details.subRegion ? (
+              <Text style={[type.body, { opacity: 0.8 }]}>
+                Sub-Region:{" "}
+                <Text style={{ fontWeight: "900" }}>{details.subRegion}</Text>
+              </Text>
+            ) : null}
+
+            {details.style ? (
+              <Text style={[type.body, { opacity: 0.8 }]}>
+                Style: <Text style={{ fontWeight: "900" }}>{details.style}</Text>
+              </Text>
+            ) : null}
 
             <Text style={[type.body, { opacity: 0.8 }]}>
               Proof:{" "}
               <Text style={{ fontWeight: "900" }}>{details.proofLabel ?? "—"}</Text>
             </Text>
+
+            {details.ageLabel ? (
+              <Text style={[type.body, { opacity: 0.8 }]}>
+                Age: <Text style={{ fontWeight: "900" }}>{details.ageLabel}</Text>
+              </Text>
+            ) : null}
           </View>
 
           <View style={{ marginTop: spacing.lg }}>
-            <PrimaryButton label="Log a Tasting" onPress={logThisWhiskey} />
+            <PrimaryButton label="Log a Tasting" onPress={withSuccess(logThisWhiskey)} />
           </View>
         </Card>
 
@@ -481,12 +549,11 @@ export default function WhiskeyDetailScreen() {
           <Text style={type.sectionHeader}>Buffalo Happy Hour</Text>
 
           <Text style={[type.body, { opacity: 0.8 }]}>
-            Score:{" "}
-            <Text style={{ fontWeight: "900" }}>{bhh.score ?? "—"}</Text>
+            Score: <Text style={{ fontWeight: "900" }}>{bhh.score ?? "—"}</Text>
           </Text>
 
           {bhh.youtubeUrl ? (
-            <SoftButton label="Watch on YouTube" onPress={() => Linking.openURL(bhh.youtubeUrl!)} />
+            <SoftButton label="Watch on YouTube" onPress={withTick(openYouTube)} />
           ) : null}
         </Card>
 
@@ -502,7 +569,7 @@ export default function WhiskeyDetailScreen() {
             recent.map((t, idx) => (
               <Pressable
                 key={`${t.id}:${idx}`}
-                onPress={() => editTasting(String(t.id))}
+                onPress={withTick(() => editTasting(String(t.id)))}
                 style={({ pressed }) => ({
                   backgroundColor: colors.surface,
                   borderRadius: radii.md,
@@ -524,9 +591,7 @@ export default function WhiskeyDetailScreen() {
                   </Text>
                 ) : null}
 
-                <Text style={[type.body, { opacity: 0.6, fontSize: 12 }]}>
-                  Tap to edit
-                </Text>
+                <Text style={[type.body, { opacity: 0.6, fontSize: 12 }]}>Tap to edit</Text>
               </Pressable>
             ))
           )}

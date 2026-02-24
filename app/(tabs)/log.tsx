@@ -18,6 +18,9 @@ import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
+// ✅ HAPTICS (intentional + future-proof)
+import { withError, withSuccess, withTick } from "../../lib/hapticsPress";
+
 /* ------------------- Helpers ------------------- */
 
 function isUuid(v: string) {
@@ -162,7 +165,7 @@ export default function LogTab() {
     setSubmittingCandidate(false);
   }
 
-  function clearQuery() {
+  const clearQuery = withTick(() => {
     setQuery("");
     setSelected(null);
     setCustomApproved(false);
@@ -170,7 +173,7 @@ export default function LogTab() {
     setCustomModalOpen(false);
     resetContributionFields();
     setTimeout(() => inputRef.current?.focus?.(), 50);
-  }
+  });
 
   function onType(text: string) {
     setQuery(text);
@@ -190,14 +193,14 @@ export default function LogTab() {
     router.push(`/whiskey/${encodeURIComponent(safeId)}?intent=log`);
   }
 
-  function onPickSuggestion(s: Suggestion) {
+  const onPickSuggestion = withTick((s: Suggestion) => {
     setQuery(s.whiskeyName);
     setSelected(s);
     setCustomApproved(false);
     resetContributionFields();
     setCustomModalOpen(false);
     goToWhiskeyProfile(s.whiskeyId);
-  }
+  });
 
   function goToCustomTasting(name: string, wantsToContribute: boolean) {
     const base =
@@ -221,18 +224,18 @@ export default function LogTab() {
     router.push(finalPath as any);
   }
 
-  function onUseCustom() {
+  const onUseCustom = withTick(() => {
     if (selected) return;
     const name = query.trim();
     if (name.length < 2) return;
     setCustomModalOpen(true);
-  }
+  });
 
-  function onModalCancel() {
+  const onModalCancel = withError(() => {
     setCustomModalOpen(false);
-  }
+  });
 
-  function onModalJustLogIt() {
+  const onModalJustLogIt = withSuccess(() => {
     const name = query.trim();
     if (name.length < 2) return;
 
@@ -242,9 +245,9 @@ export default function LogTab() {
     resetContributionFields();
 
     goToCustomTasting(name, false);
-  }
+  });
 
-  function onModalHelpImprove() {
+  const onModalHelpImprove = withTick(() => {
     const name = query.trim();
     if (name.length < 2) return;
 
@@ -253,7 +256,7 @@ export default function LogTab() {
     setCustomApproved(true);
     setContribute(true);
     setShowContribForm(true);
-  }
+  });
 
   async function submitWhiskeyCandidate(name: string) {
     // Best-effort insert; even if it fails, we still proceed to tasting.
@@ -294,7 +297,7 @@ export default function LogTab() {
     }
   }
 
-  async function onSubmitAndReview() {
+  const onSubmitAndReview = withSuccess(async () => {
     const name = query.trim();
     if (name.length < 2) return;
     if (submittingCandidate) return;
@@ -304,7 +307,7 @@ export default function LogTab() {
     await submitWhiskeyCandidate(name);
 
     goToCustomTasting(name, true);
-  }
+  });
 
   /**
    * ✅ SOURCE OF TRUTH: whiskeys table
@@ -426,6 +429,27 @@ export default function LogTab() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
+
+  const onContinue = withSuccess(() => {
+    if (!hasEnoughQuery) return;
+
+    if (selected) {
+      goToWhiskeyProfile(selected.whiskeyId);
+      return;
+    }
+
+    if (suggestions.length > 0) {
+      goToWhiskeyProfile(suggestions[0].whiskeyId);
+      return;
+    }
+
+    setCustomModalOpen(true);
+  });
+
+  const onSkipContrib = withTick(() => {
+    setShowContribForm(false);
+    setContribute(false);
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -796,10 +820,7 @@ export default function LogTab() {
               </View>
 
               <Pressable
-                onPress={() => {
-                  setShowContribForm(false);
-                  setContribute(false);
-                }}
+                onPress={onSkipContrib}
                 style={({ pressed }) => ({
                   marginTop: spacing.xs,
                   alignSelf: "flex-start",
@@ -856,21 +877,7 @@ export default function LogTab() {
               </Pressable>
 
               <Pressable
-                onPress={() => {
-                  if (!hasEnoughQuery) return;
-
-                  if (selected) {
-                    goToWhiskeyProfile(selected.whiskeyId);
-                    return;
-                  }
-
-                  if (suggestions.length > 0) {
-                    goToWhiskeyProfile(suggestions[0].whiskeyId);
-                    return;
-                  }
-
-                  setCustomModalOpen(true);
-                }}
+                onPress={onContinue}
                 disabled={!hasEnoughQuery}
                 style={({ pressed }) => ({
                   flex: 0.56,
