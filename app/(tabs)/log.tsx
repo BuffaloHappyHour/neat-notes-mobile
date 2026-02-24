@@ -1,5 +1,7 @@
+// app/(tabs)/log.tsx
+import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -60,6 +62,14 @@ function parseNumericOrNull(v: string) {
   return n;
 }
 
+function formatWhen(v: string | null | undefined) {
+  if (!v) return "";
+  const t = Date.parse(String(v));
+  if (!Number.isFinite(t)) return "";
+  const d = new Date(t);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 /* ------------------- Types ------------------- */
 
 type Suggestion = {
@@ -68,13 +78,25 @@ type Suggestion = {
   bhhScore: number | null; // optional display
 };
 
+type RecentTastingRow = {
+  id: string; // tasting id
+  whiskeyId: string | null;
+  whiskeyName: string;
+  rating: number | null;
+  createdAt: string | null;
+};
+
+/* ------------------- UI ------------------- */
+
 function Card({
   title,
   subtitle,
+  rightHeader,
   children,
 }: {
   title: string;
   subtitle?: string;
+  rightHeader?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -90,13 +112,92 @@ function Card({
       }}
     >
       <View style={{ gap: 6 }}>
-        <Text style={type.sectionHeader}>{title}</Text>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: spacing.md,
+          }}
+        >
+          <Text style={type.sectionHeader}>{title}</Text>
+          {rightHeader ? rightHeader : null}
+        </View>
+
         {subtitle ? (
           <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>{subtitle}</Text>
         ) : null}
       </View>
+
       {children}
     </View>
+  );
+}
+
+function SmallLink({
+  label,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!!disabled}
+      style={({ pressed }) => ({
+        opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
+      })}
+    >
+      <Text style={[type.body, { fontWeight: "900", fontSize: 12, color: colors.accent }]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function RecentRow({
+  row,
+  onPress,
+}: {
+  row: RecentTastingRow;
+  onPress: () => void;
+}) {
+  const when = formatWhen(row.createdAt);
+  const ratingText =
+    row.rating != null && Number.isFinite(Number(row.rating)) ? `${Math.round(row.rating)}` : "—";
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderWidth: 1,
+        borderColor: colors.divider,
+        borderRadius: radii.md,
+        backgroundColor: pressed ? colors.highlight : "transparent",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      })}
+    >
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[type.body, { fontWeight: "900" }]} numberOfLines={1}>
+          {row.whiskeyName}
+        </Text>
+        <Text style={[type.microcopyItalic, { opacity: 0.75 }]} numberOfLines={1}>
+          {when ? `Logged ${when}` : "Logged"}
+        </Text>
+      </View>
+
+      <View style={{ minWidth: 44, alignItems: "flex-end", justifyContent: "center" }}>
+        <Text style={[type.body, { fontWeight: "900" }]}>{ratingText}</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -189,7 +290,6 @@ export default function LogTab() {
       console.log("[LogTab] Not navigating; invalid whiskeyId:", safeId);
       return;
     }
-    console.log("[LogTab] Navigating to whiskey profile:", safeId);
     router.push(`/whiskey/${encodeURIComponent(safeId)}?intent=log`);
   }
 
@@ -259,7 +359,6 @@ export default function LogTab() {
   });
 
   async function submitWhiskeyCandidate(name: string) {
-    // Best-effort insert; even if it fails, we still proceed to tasting.
     try {
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth?.user?.id;
@@ -270,28 +369,20 @@ export default function LogTab() {
       }
 
       const payload = {
-        created_by: userId, // ✅ correct column name
+        created_by: userId,
         name_raw: name,
         name_normalized: normalizeName(name),
         canonical_slug: slugify(name),
-
         whiskey_type: category.trim() || null,
         distillery: distillery.trim() || null,
         proof: parseNumericOrNull(proof),
         age: parseNumericOrNull(age),
-
         status: "pending",
       };
 
-      console.log("[LogTab] Candidate payload:", payload);
-
       const { error } = await supabase.from("whiskey_candidates").insert(payload);
 
-      if (error) {
-        console.log("[LogTab] whiskey_candidates insert failed:", error.message);
-      } else {
-        console.log("[LogTab] whiskey_candidates insert OK.");
-      }
+      if (error) console.log("[LogTab] whiskey_candidates insert failed:", error.message);
     } catch (e: any) {
       console.log("[LogTab] submitWhiskeyCandidate threw:", e?.message ?? e);
     }
@@ -303,16 +394,10 @@ export default function LogTab() {
     if (submittingCandidate) return;
 
     setSubmittingCandidate(true);
-
     await submitWhiskeyCandidate(name);
-
     goToCustomTasting(name, true);
   });
 
-  /**
-   * ✅ SOURCE OF TRUTH: whiskeys table
-   * We optionally decorate with BHH score (if bhh_reviews.whiskey_id exists).
-   */
   async function fetchSuggestions(term: string) {
     const t = term.trim();
     if (t.length < 2) {
@@ -324,7 +409,6 @@ export default function LogTab() {
     try {
       const safe = t.replace(/[%_]/g, "\\$&");
 
-      // If user pasted a UUID, try direct lookup first.
       if (isUuid(t)) {
         const { data: byId, error: byIdErr } = await supabase
           .from("whiskeys")
@@ -348,7 +432,6 @@ export default function LogTab() {
         }
       }
 
-      // Normal name search
       const { data: wData, error: wErr } = await supabase
         .from("whiskeys")
         .select("id, display_name")
@@ -364,7 +447,6 @@ export default function LogTab() {
         bhhScore: null,
       }));
 
-      // Optional: pull BHH best score for these whiskey ids
       const ids = base.map((b) => b.whiskeyId).filter(isUuid);
       if (ids.length > 0) {
         const { data: bData, error: bErr } = await supabase
@@ -394,7 +476,6 @@ export default function LogTab() {
         }
       }
 
-      // Prefer bottles with BHH score (if present), then alpha
       const list = base
         .sort((a, b) => {
           const as = a.bhhScore ?? -Infinity;
@@ -427,7 +508,6 @@ export default function LogTab() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
   const onContinue = withSuccess(() => {
@@ -450,6 +530,71 @@ export default function LogTab() {
     setShowContribForm(false);
     setContribute(false);
   });
+
+  /* ------------------- Recent Tastings ------------------- */
+
+  const [recentLoading, setRecentLoading] = useState(false);
+  const [recentError, setRecentError] = useState("");
+  const [recentRows, setRecentRows] = useState<RecentTastingRow[]>([]);
+
+  const fetchRecent = useCallback(async () => {
+    setRecentLoading(true);
+    setRecentError("");
+
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth?.user?.id;
+
+      if (!userId) {
+        setRecentRows([]);
+        setRecentLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("tastings")
+        .select("id, whiskey_id, whiskey_name, rating, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (error) throw new Error(error.message);
+
+      const rows: RecentTastingRow[] = (data as any[]).map((r) => ({
+        id: String(r.id),
+        whiskeyId: r.whiskey_id ? String(r.whiskey_id) : null,
+        whiskeyName: String(r.whiskey_name ?? "Whiskey"),
+        rating: r.rating == null || !Number.isFinite(Number(r.rating)) ? null : Number(r.rating),
+        createdAt: r.created_at ? String(r.created_at) : null,
+      }));
+
+      setRecentRows(rows);
+    } catch (e: any) {
+      setRecentRows([]);
+      setRecentError(String(e?.message ?? e));
+    } finally {
+      setRecentLoading(false);
+    }
+  }, []);
+
+  // ✅ Fix: use the row you clicked. actionsRow doesn't exist here.
+  // ✅ This routes to the *regular* tasting view (cloud-tasting) with tastingId.
+  function goTasting(row: RecentTastingRow) {
+  const id = String(row?.id ?? "").trim();
+  if (!id) return;
+
+  router.push(
+    `/log/cloud-tasting?tastingId=${encodeURIComponent(id)}&mode=edit&readonly=0` as any
+  );
+}
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchRecent();
+    }, [fetchRecent])
+  );
+
+  /* ------------------- Render ------------------- */
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -538,7 +683,6 @@ export default function LogTab() {
 
       <ScrollView
         contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}
-        // ✅ key fixes for nested scroll + keyboard interaction
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         nestedScrollEnabled
@@ -554,7 +698,6 @@ export default function LogTab() {
         </View>
 
         <Card title="Bottle" subtitle="Start typing to search">
-          {/* Search input with clear (×) */}
           <View style={{ position: "relative" }}>
             <TextInput
               ref={inputRef}
@@ -609,7 +752,6 @@ export default function LogTab() {
             {helperLine}
           </Text>
 
-          {/* ✅ RESTORED: Loading indicator */}
           {loading ? (
             <View
               style={{
@@ -624,7 +766,6 @@ export default function LogTab() {
             </View>
           ) : null}
 
-          {/* ✅ Suggestions list — now scrollable inside outer ScrollView */}
           {suggestions.length > 0 ? (
             <ScrollView
               style={{
@@ -637,7 +778,6 @@ export default function LogTab() {
                 backgroundColor: colors.background,
               }}
               contentContainerStyle={{ paddingVertical: 2 }}
-              // ✅ key fixes
               nestedScrollEnabled
               keyboardShouldPersistTaps="always"
               showsVerticalScrollIndicator
@@ -677,7 +817,6 @@ export default function LogTab() {
             </Text>
           ) : null}
 
-          {/* Contribution form */}
           {customApproved && showContribForm ? (
             <View
               style={{
@@ -832,7 +971,6 @@ export default function LogTab() {
             </View>
           ) : null}
 
-          {/* Button swap */}
           {isHelpImproveMode ? (
             <View style={{ marginTop: spacing.md }}>
               <Pressable
@@ -890,6 +1028,41 @@ export default function LogTab() {
               >
                 <Text style={[type.button, { color: colors.background }]}>Continue</Text>
               </Pressable>
+            </View>
+          )}
+        </Card>
+
+        <Card
+          title="Recent tastings"
+          subtitle="Your latest entries"
+          rightHeader={
+            <SmallLink
+              label="View All"
+              onPress={withTick(() => router.push("/tasting/all" as any))}
+              disabled={recentRows.length === 0}
+            />
+          }
+        >
+          {recentLoading ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <ActivityIndicator />
+              <Text style={[type.body, { opacity: 0.7 }]}>Loading…</Text>
+            </View>
+          ) : null}
+
+          {recentError ? (
+            <Text style={[type.body, { opacity: 0.8 }]}>Error: {recentError}</Text>
+          ) : null}
+
+          {!recentLoading && recentRows.length === 0 ? (
+            <Text style={[type.body, { opacity: 0.72 }]}>
+              Not seeing anything yet? Sign in and log your first tasting.
+            </Text>
+          ) : (
+            <View style={{ gap: spacing.sm }}>
+              {recentRows.map((r) => (
+                <RecentRow key={r.id} row={r} onPress={withTick(() => goTasting(r))} />
+              ))}
             </View>
           )}
         </Card>
