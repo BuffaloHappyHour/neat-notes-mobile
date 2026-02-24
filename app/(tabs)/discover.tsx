@@ -1,7 +1,19 @@
+// app/(tabs)/discover.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Keyboard, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  Keyboard,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 
@@ -10,6 +22,9 @@ import { shadows } from "../../lib/shadows";
 import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
+
+// ✅ HAPTICS (intentional taps)
+import { withSuccess, withTick } from "../../lib/hapticsPress";
 
 /** ---------- Types ---------- */
 
@@ -66,15 +81,7 @@ function Card({
         </View>
 
         {subtitle ? (
-          <Text
-            style={[
-              type.microcopyItalic,
-              {
-                opacity: 0.72,
-                lineHeight: 18,
-              },
-            ]}
-          >
+          <Text style={[type.microcopyItalic, { lineHeight: 18 }]}>
             {subtitle}
           </Text>
         ) : null}
@@ -111,9 +118,16 @@ function IconButton({
       })}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <Ionicons name={icon} size={16} color={colors.textPrimary} style={{ opacity: 0.9 }} />
+        <Ionicons
+          name={icon}
+          size={16}
+          color={colors.textPrimary}
+          style={{ opacity: 0.9 }}
+        />
         {badgeText ? (
-          <Text style={[type.body, { fontWeight: "900", fontSize: 12 }]}>{badgeText}</Text>
+          <Text style={[type.body, { fontWeight: "900", fontSize: 12 }]}>
+            {badgeText}
+          </Text>
         ) : null}
       </View>
     </Pressable>
@@ -123,7 +137,13 @@ function IconButton({
 /** Accent divider: small tan nub + long grey line */
 function SectionDivider() {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", marginVertical: spacing.md }}>
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        marginVertical: spacing.md,
+      }}
+    >
       <View
         style={{
           width: 26,
@@ -147,11 +167,19 @@ function SectionDivider() {
 }
 
 /** Compact 3-line whiskey tile */
-function WhiskeyTile({ row, onPress }: { row: WhiskeyCardRow; onPress: () => void }) {
+function WhiskeyTile({
+  row,
+  onPress,
+}: {
+  row: WhiskeyCardRow;
+  onPress: () => void;
+}) {
   const hasCommunity = row.communityCount > 0 && row.communityAvg != null;
 
   const proofText =
-    row.proof != null && Number.isFinite(Number(row.proof)) ? `${Math.round(Number(row.proof))} proof` : null;
+    row.proof != null && Number.isFinite(Number(row.proof))
+      ? `${Math.round(Number(row.proof))} proof`
+      : null;
 
   return (
     <Pressable
@@ -169,21 +197,34 @@ function WhiskeyTile({ row, onPress }: { row: WhiskeyCardRow; onPress: () => voi
       })}
     >
       <View style={{ gap: 6 }}>
-        <Text style={[type.body, { fontWeight: "900", fontSize: 15 }]} numberOfLines={1}>
+        <Text
+          style={[type.body, { fontWeight: "900", fontSize: 15 }]}
+          numberOfLines={1}
+        >
           {row.whiskeyName}
         </Text>
 
-        <Text style={[type.body, { opacity: 0.75, fontSize: 12 }]} numberOfLines={1}>
+        <Text
+          style={[type.body, { opacity: 0.75, fontSize: 12 }]}
+          numberOfLines={1}
+        >
           {row.whiskeyType ?? "—"}
           {proofText ? ` • ${proofText}` : ""}
         </Text>
 
-        <Text style={[type.body, { opacity: 0.8, fontSize: 12 }]} numberOfLines={1}>
+        <Text
+          style={[type.body, { opacity: 0.8, fontSize: 12 }]}
+          numberOfLines={1}
+        >
           Community:{" "}
-          <Text style={{ fontWeight: "900" }}>{hasCommunity ? row.communityAvg?.toFixed(1) : "—"}</Text>
+          <Text style={{ fontWeight: "900" }}>
+            {hasCommunity ? row.communityAvg?.toFixed(1) : "—"}
+          </Text>
           {"  •  "}
           BHH:{" "}
-          <Text style={{ fontWeight: "900" }}>{row.bhhScore != null ? Math.round(row.bhhScore) : "—"}</Text>
+          <Text style={{ fontWeight: "900" }}>
+            {row.bhhScore != null ? Math.round(row.bhhScore) : "—"}
+          </Text>
         </Text>
       </View>
     </Pressable>
@@ -230,19 +271,31 @@ function SectionRow({
           </View>
 
           {subtitle ? (
-            <Text style={[type.body, { opacity: 0.65, fontSize: 12 }]}>{subtitle}</Text>
+            <Text style={[type.body, { opacity: 0.72, fontSize: 12 }]}>
+              {subtitle}
+            </Text>
           ) : null}
         </View>
 
-        <Pressable onPress={onSeeAll} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
-          <Text style={[type.body, { fontWeight: "900", fontSize: 12, color: colors.accent }]}>
+        <Pressable
+          onPress={onSeeAll}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+        >
+          <Text
+            style={[
+              type.body,
+              { fontWeight: "900", fontSize: 12, color: colors.accent },
+            ]}
+          >
             View All
           </Text>
         </Pressable>
       </View>
 
       {rows.length === 0 ? (
-        <Text style={[type.body, { opacity: 0.65 }]}>{emptyMessage ?? "Nothing here yet."}</Text>
+        <Text style={[type.body, { opacity: 0.7 }]}>
+          {emptyMessage ?? "Nothing here yet."}
+        </Text>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={{ flexDirection: "row", gap: spacing.md, paddingVertical: 2 }}>
@@ -304,9 +357,13 @@ async function fetchWhiskeyCardsByIds(idsInOrder: string[]): Promise<WhiskeyCard
   (cData as any[]).forEach((c) => {
     const id = String(c.whiskey_id);
     const avg =
-      c.community_avg == null || !Number.isFinite(Number(c.community_avg)) ? null : Number(c.community_avg);
+      c.community_avg == null || !Number.isFinite(Number(c.community_avg))
+        ? null
+        : Number(c.community_avg);
     const count =
-      c.community_count == null || !Number.isFinite(Number(c.community_count)) ? 0 : Number(c.community_count);
+      c.community_count == null || !Number.isFinite(Number(c.community_count))
+        ? 0
+        : Number(c.community_count);
     communityMap.set(id, { avg, count });
   });
 
@@ -392,9 +449,10 @@ async function fetchSectionIds(section: SectionKey, limit: number): Promise<stri
     return (data as any[]).map((r) => String(r.whiskey_id)).filter(isUuidLike);
   }
 
+  // ✅ RECENT = community, anonymous
   if (section === "RECENT") {
     const { data, error } = await supabase
-      .from("tastings")
+      .from("public_tastings")
       .select("whiskey_id, created_at")
       .order("created_at", { ascending: false })
       .limit(Math.max(300, limit * 20));
@@ -413,10 +471,10 @@ async function fetchSectionIds(section: SectionKey, limit: number): Promise<stri
     return ids.slice(0, limit);
   }
 
-  // TRENDING
+  // ✅ TRENDING = community, anonymous (last 7 days)
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
-    .from("tastings")
+    .from("public_tastings")
     .select("whiskey_id, created_at")
     .gte("created_at", since)
     .limit(5000);
@@ -439,7 +497,19 @@ async function fetchSectionIds(section: SectionKey, limit: number): Promise<stri
 /** ---------- Screen ---------- */
 
 export default function DiscoverTab() {
+  const insets = useSafeAreaInsets();
+  const { height: windowH } = useWindowDimensions();
+
+  // Keep some breathing room above the home indicator + below the sheet
+  const sheetMaxHeight = Math.max(
+    320,
+    Math.round(windowH - insets.top - insets.bottom - spacing.xl)
+  );
+
+  const sheetPaddingBottom = insets.bottom + spacing.lg;
+
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [statusError, setStatusError] = useState<string>("");
 
   // Filter state
@@ -531,8 +601,12 @@ export default function DiscoverTab() {
     loadTypes();
   }, []);
 
-  async function loadSectionPools() {
-    setLoading(true);
+  async function loadSectionPools(opts?: { silent?: boolean }) {
+    const silent = !!opts?.silent;
+
+    if (silent) setRefreshing(true);
+    else setLoading(true);
+
     setStatusError("");
 
     try {
@@ -570,7 +644,8 @@ export default function DiscoverTab() {
       setNewestPool([]);
       setStatusError(String(e?.message ?? e));
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false);
+      else setLoading(false);
     }
   }
 
@@ -597,7 +672,10 @@ export default function DiscoverTab() {
   }, [trendingPool, recentPool, highestPool, newestPool, selectedType, minProofText, maxProofText]);
 
   const libraryEmpty =
-    trendingPool.length === 0 && recentPool.length === 0 && highestPool.length === 0 && newestPool.length === 0;
+    trendingPool.length === 0 &&
+    recentPool.length === 0 &&
+    highestPool.length === 0 &&
+    newestPool.length === 0;
 
   async function openSeeAll(section: SectionKey) {
     setSeeAllOpen(true);
@@ -642,10 +720,18 @@ export default function DiscoverTab() {
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={withTick(() => loadSectionPools({ silent: true }))}
+          />
+        }
       >
         <View style={{ gap: spacing.sm }}>
           <Text style={type.screenTitle}>Discover</Text>
-          <Text style={[type.body, { opacity: 0.7 }]}>See what the community is tasting</Text>
+          <Text style={[type.body, { opacity: 0.74 }]}>
+            See what the community is tasting
+          </Text>
         </View>
 
         <Card
@@ -654,37 +740,38 @@ export default function DiscoverTab() {
           rightHeader={
             <IconButton
               icon="options-outline"
-              onPress={() => setFilterOpen(true)}
+              onPress={withTick(() => setFilterOpen(true))}
               badgeText={filterBadge ? "Active" : undefined}
             />
           }
         >
-          {/* Softer, italic callout to avoid competing with the title/subtitle */}
-          <Text style={[type.microcopyItalic, { opacity: 0.78, lineHeight: 20 }]}>
-            See what’s new — maybe you’ll find your next favorite dram.
+          <Text style={[type.microcopyItalic, { lineHeight: 20 }]}>
+            Pull down to refresh — trending updates even when you’re not logging.
           </Text>
 
           {filterBadge ? (
-            <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.75, fontSize: 12 }]}>
+            <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.78, fontSize: 12 }]}>
               Filters: {filterBadge}
             </Text>
           ) : null}
 
           {loading ? (
-            <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.65 }]}>Loading…</Text>
+            <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.72 }]}>Loading…</Text>
           ) : null}
 
           {statusError ? (
-            <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.75 }]}>Error: {statusError}</Text>
+            <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.8 }]}>
+              Error: {statusError}
+            </Text>
           ) : null}
         </Card>
 
         <SectionRow
           title="Trending"
-          subtitle="Most tasted in the last 7 days."
+          subtitle="Most tasted in the last 7 days (community)."
           rows={trending}
-          onSeeAll={() => openSeeAll("TRENDING")}
-          onPressRow={(r) => goWhiskey(r.whiskeyId)}
+          onSeeAll={withTick(() => openSeeAll("TRENDING"))}
+          onPressRow={(r) => withTick(() => goWhiskey(r.whiskeyId))()}
           emptyMessage={libraryEmpty ? "No results." : "No matches for your filters."}
         />
 
@@ -692,10 +779,10 @@ export default function DiscoverTab() {
 
         <SectionRow
           title="Recently Reviewed"
-          subtitle="Latest community tastings."
+          subtitle="Latest community tastings (anonymous)."
           rows={recent}
-          onSeeAll={() => openSeeAll("RECENT")}
-          onPressRow={(r) => goWhiskey(r.whiskeyId)}
+          onSeeAll={withTick(() => openSeeAll("RECENT"))}
+          onPressRow={(r) => withTick(() => goWhiskey(r.whiskeyId))()}
           emptyMessage={libraryEmpty ? "No results." : "No matches for your filters."}
         />
 
@@ -705,8 +792,8 @@ export default function DiscoverTab() {
           title="Highest Rated"
           subtitle="Top community averages (min review threshold)."
           rows={highest}
-          onSeeAll={() => openSeeAll("HIGHEST")}
-          onPressRow={(r) => goWhiskey(r.whiskeyId)}
+          onSeeAll={withTick(() => openSeeAll("HIGHEST"))}
+          onPressRow={(r) => withTick(() => goWhiskey(r.whiskeyId))()}
           emptyMessage={libraryEmpty ? "No results." : "No matches for your filters."}
         />
 
@@ -716,22 +803,27 @@ export default function DiscoverTab() {
           title="Newest Additions"
           subtitle="Fresh additions to the library."
           rows={newest}
-          onSeeAll={() => openSeeAll("NEWEST")}
-          onPressRow={(r) => goWhiskey(r.whiskeyId)}
+          onSeeAll={withTick(() => openSeeAll("NEWEST"))}
+          onPressRow={(r) => withTick(() => goWhiskey(r.whiskeyId))()}
           emptyMessage={libraryEmpty ? "No results." : "No matches for your filters."}
         />
 
         <View style={{ marginTop: spacing.lg, paddingTop: spacing.lg }}>
-          <Text style={[type.body, { opacity: 0.6, fontSize: 12, textAlign: "center" }]}>
-            Powered by community tastings and Buffalo Happy Hour reviews
+          <Text style={[type.body, { opacity: 0.62, fontSize: 12, textAlign: "center" }]}>
+            Powered by anonymous community tastings and Buffalo Happy Hour reviews
           </Text>
         </View>
       </ScrollView>
 
-      {/* View All Modal */}
-      <Modal visible={seeAllOpen} transparent animationType="fade" onRequestClose={() => setSeeAllOpen(false)}>
+      {/* View All Modal (bulletproof height + safe area) */}
+      <Modal
+        visible={seeAllOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSeeAllOpen(false)}
+      >
         <Pressable
-          onPress={() => setSeeAllOpen(false)}
+          onPress={withTick(() => setSeeAllOpen(false))}
           style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}
         >
           <Pressable
@@ -741,25 +833,27 @@ export default function DiscoverTab() {
               borderTopLeftRadius: 22,
               borderTopRightRadius: 22,
               padding: spacing.lg,
-              paddingBottom: spacing.xl * 2,
-              marginBottom: spacing.lg,
+              paddingBottom: sheetPaddingBottom,
               borderWidth: 1,
               borderColor: colors.divider,
               ...shadows.card,
               gap: spacing.lg,
-              maxHeight: "82%",
+              maxHeight: Math.min(sheetMaxHeight, Math.round(windowH * 0.86)),
             }}
           >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <Text style={type.sectionHeader}>{seeAllTitle}</Text>
-              <Pressable onPress={() => setSeeAllOpen(false)} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+              <Pressable
+                onPress={withTick(() => setSeeAllOpen(false))}
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              >
                 <Text style={[type.body, { fontWeight: "900", color: colors.accent }]}>Close</Text>
               </Pressable>
             </View>
 
-            {seeAllLoading ? <Text style={[type.body, { opacity: 0.7 }]}>Loading…</Text> : null}
+            {seeAllLoading ? <Text style={[type.body, { opacity: 0.75 }]}>Loading…</Text> : null}
 
-            {seeAllError ? <Text style={[type.body, { opacity: 0.75 }]}>Error: {seeAllError}</Text> : null}
+            {seeAllError ? <Text style={[type.body, { opacity: 0.82 }]}>Error: {seeAllError}</Text> : null}
 
             <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
               <View style={{ gap: spacing.md }}>
@@ -767,14 +861,14 @@ export default function DiscoverTab() {
                   <WhiskeyTile
                     key={`seeall:${r.whiskeyId}`}
                     row={r}
-                    onPress={() => {
+                    onPress={withTick(() => {
                       setSeeAllOpen(false);
                       goWhiskey(r.whiskeyId);
-                    }}
+                    })}
                   />
                 ))}
                 {!seeAllLoading && seeAllRows.length === 0 && !seeAllError ? (
-                  <Text style={[type.body, { opacity: 0.7 }]}>No results yet.</Text>
+                  <Text style={[type.body, { opacity: 0.75 }]}>No results yet.</Text>
                 ) : null}
               </View>
             </ScrollView>
@@ -782,10 +876,15 @@ export default function DiscoverTab() {
         </Pressable>
       </Modal>
 
-      {/* Filters Modal */}
-      <Modal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
+      {/* Filters Modal (bulletproof height + internal scroll) */}
+      <Modal
+        visible={filterOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFilterOpen(false)}
+      >
         <Pressable
-          onPress={() => setFilterOpen(false)}
+          onPress={withTick(() => setFilterOpen(false))}
           style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}
         >
           <Pressable
@@ -795,139 +894,148 @@ export default function DiscoverTab() {
               borderTopLeftRadius: 22,
               borderTopRightRadius: 22,
               padding: spacing.lg,
-              paddingBottom: spacing.xl * 2,
-              marginBottom: spacing.lg,
+              paddingBottom: sheetPaddingBottom,
               borderWidth: 1,
               borderColor: colors.divider,
               ...shadows.card,
               gap: spacing.lg,
+              maxHeight: Math.min(sheetMaxHeight, Math.round(windowH * 0.86)),
             }}
           >
             <Text style={type.sectionHeader}>Filters</Text>
 
-            {/* Type dropdown */}
-            <View style={{ gap: spacing.sm }}>
-              <Text style={[type.body, { fontWeight: "900" }]}>Type</Text>
+            {/* Make the body scroll if height is constrained */}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ gap: spacing.lg }}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Type dropdown */}
+              <View style={{ gap: spacing.sm }}>
+                <Text style={[type.body, { fontWeight: "900" }]}>Type</Text>
 
-              <Pressable
-                onPress={() => setTypePickerOpen(true)}
-                style={({ pressed }) => ({
-                  borderWidth: 1,
-                  borderColor: colors.divider,
-                  borderRadius: radii.md,
-                  paddingVertical: 12,
-                  paddingHorizontal: 12,
-                  backgroundColor: pressed ? colors.highlight : "transparent",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                })}
-              >
-                <Text style={[type.body, { opacity: 0.9 }]}>{selectedType ?? "All Types"}</Text>
-                <Ionicons name="chevron-down" size={16} color={colors.textPrimary} />
-              </Pressable>
-            </View>
-
-            {/* Proof Range */}
-            <View style={{ gap: spacing.sm }}>
-              <Text style={[type.body, { fontWeight: "900" }]}>Proof</Text>
-
-              <View style={{ flexDirection: "row", gap: spacing.md }}>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Text style={[type.body, { opacity: 0.7, fontSize: 12 }]}>Min</Text>
-                  <TextInput
-                    value={minProofText}
-                    onChangeText={(t) => setMinProofText(t.replace(/[^\d.]/g, ""))}
-                    placeholder="e.g. 80"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                    style={{
-                      borderWidth: 1,
-                      borderColor: colors.divider,
-                      borderRadius: radii.md,
-                      padding: 12,
-                      backgroundColor: "transparent",
-                      color: colors.textPrimary,
-                      fontFamily: type.body.fontFamily,
-                    }}
-                  />
-                </View>
-
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Text style={[type.body, { opacity: 0.7, fontSize: 12 }]}>Max</Text>
-                  <TextInput
-                    value={maxProofText}
-                    onChangeText={(t) => setMaxProofText(t.replace(/[^\d.]/g, ""))}
-                    placeholder="e.g. 120"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                    style={{
-                      borderWidth: 1,
-                      borderColor: colors.divider,
-                      borderRadius: radii.md,
-                      padding: 12,
-                      backgroundColor: "transparent",
-                      color: colors.textPrimary,
-                      fontFamily: type.body.fontFamily,
-                    }}
-                  />
-                </View>
+                <Pressable
+                  onPress={withTick(() => setTypePickerOpen(true))}
+                  style={({ pressed }) => ({
+                    borderWidth: 1,
+                    borderColor: colors.divider,
+                    borderRadius: radii.md,
+                    paddingVertical: 12,
+                    paddingHorizontal: 12,
+                    backgroundColor: pressed ? colors.highlight : "transparent",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  })}
+                >
+                  <Text style={[type.body, { opacity: 0.92 }]}>{selectedType ?? "All Types"}</Text>
+                  <Ionicons name="chevron-down" size={16} color={colors.textPrimary} />
+                </Pressable>
               </View>
 
-              <Text style={[type.body, { opacity: 0.6, fontSize: 12 }]}>Tip: Leave blank for no min/max.</Text>
-            </View>
+              {/* Proof Range */}
+              <View style={{ gap: spacing.sm }}>
+                <Text style={[type.body, { fontWeight: "900" }]}>Proof</Text>
 
-            {/* Reset / Done */}
-            <View style={{ flexDirection: "row", gap: spacing.md }}>
-              <Pressable
-                onPress={() => {
-                  setSelectedType(null);
-                  setMinProofText("");
-                  setMaxProofText("");
-                }}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: spacing.lg,
-                  borderRadius: radii.md,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 1,
-                  borderColor: colors.divider,
-                  backgroundColor: pressed ? colors.highlight : colors.surface,
-                })}
-              >
-                <Text style={type.button}>Reset</Text>
-              </Pressable>
+                <View style={{ flexDirection: "row", gap: spacing.md }}>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Text style={[type.body, { opacity: 0.74, fontSize: 12 }]}>Min</Text>
+                    <TextInput
+                      value={minProofText}
+                      onChangeText={(t) => setMinProofText(t.replace(/[^\d.]/g, ""))}
+                      placeholder="e.g. 80"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                      style={{
+                        borderWidth: 1,
+                        borderColor: colors.divider,
+                        borderRadius: radii.md,
+                        padding: 12,
+                        backgroundColor: "transparent",
+                        color: colors.textPrimary,
+                        fontFamily: type.body.fontFamily,
+                      }}
+                    />
+                  </View>
 
-              <Pressable
-                onPress={() => {
-                  const mn = parseMaybeNumber(minProofText);
-                  const mx = parseMaybeNumber(maxProofText);
-                  if (mn != null && mx != null && mn > mx) {
-                    setMinProofText(String(mx));
-                    setMaxProofText(String(mn));
-                  }
-                  Keyboard.dismiss();
-                  setFilterOpen(false);
-                }}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: spacing.lg,
-                  borderRadius: radii.md,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: pressed ? colors.accentPressed : colors.accent,
-                })}
-              >
-                <Text style={[type.button, { color: colors.background }]}>Done</Text>
-              </Pressable>
-            </View>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Text style={[type.body, { opacity: 0.74, fontSize: 12 }]}>Max</Text>
+                    <TextInput
+                      value={maxProofText}
+                      onChangeText={(t) => setMaxProofText(t.replace(/[^\d.]/g, ""))}
+                      placeholder="e.g. 120"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                      style={{
+                        borderWidth: 1,
+                        borderColor: colors.divider,
+                        borderRadius: radii.md,
+                        padding: 12,
+                        backgroundColor: "transparent",
+                        color: colors.textPrimary,
+                        fontFamily: type.body.fontFamily,
+                      }}
+                    />
+                  </View>
+                </View>
+
+                <Text style={[type.body, { opacity: 0.68, fontSize: 12 }]}>
+                  Tip: Leave blank for no min/max.
+                </Text>
+              </View>
+
+              {/* Reset / Done */}
+              <View style={{ flexDirection: "row", gap: spacing.md }}>
+                <Pressable
+                  onPress={withTick(() => {
+                    setSelectedType(null);
+                    setMinProofText("");
+                    setMaxProofText("");
+                  })}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: spacing.lg,
+                    borderRadius: radii.md,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: colors.divider,
+                    backgroundColor: pressed ? colors.highlight : colors.surface,
+                  })}
+                >
+                  <Text style={type.button}>Reset</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={withSuccess(() => {
+                    const mn = parseMaybeNumber(minProofText);
+                    const mx = parseMaybeNumber(maxProofText);
+                    if (mn != null && mx != null && mn > mx) {
+                      setMinProofText(String(mx));
+                      setMaxProofText(String(mn));
+                    }
+                    Keyboard.dismiss();
+                    setFilterOpen(false);
+                  })}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: spacing.lg,
+                    borderRadius: radii.md,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: pressed ? colors.accentPressed : colors.accent,
+                  })}
+                >
+                  <Text style={[type.button, { color: colors.background }]}>Done</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* Type Picker Modal */}
+      {/* Type Picker Modal (bulletproof height + safe area) */}
       <Modal
         visible={typePickerOpen}
         transparent
@@ -935,7 +1043,7 @@ export default function DiscoverTab() {
         onRequestClose={() => setTypePickerOpen(false)}
       >
         <Pressable
-          onPress={() => setTypePickerOpen(false)}
+          onPress={withTick(() => setTypePickerOpen(false))}
           style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}
         >
           <Pressable
@@ -945,13 +1053,12 @@ export default function DiscoverTab() {
               borderTopLeftRadius: 22,
               borderTopRightRadius: 22,
               padding: spacing.lg,
-              paddingBottom: spacing.xl * 2,
-              marginBottom: spacing.lg,
+              paddingBottom: sheetPaddingBottom,
               borderWidth: 1,
               borderColor: colors.divider,
               ...shadows.card,
               gap: spacing.lg,
-              maxHeight: "70%",
+              maxHeight: Math.min(sheetMaxHeight, Math.round(windowH * 0.78)),
             }}
           >
             <Text style={type.sectionHeader}>Select Type</Text>
@@ -959,20 +1066,29 @@ export default function DiscoverTab() {
             <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
               <View style={{ gap: 10 }}>
                 <Pressable
-                  onPress={() => {
+                  onPress={withTick(() => {
                     setSelectedType(null);
                     setTypePickerOpen(false);
-                  }}
+                  })}
                   style={({ pressed }) => ({
                     paddingVertical: 12,
                     borderRadius: radii.md,
                     borderWidth: 1,
                     borderColor: colors.divider,
-                    backgroundColor: !selectedType ? colors.accent : pressed ? colors.highlight : "transparent",
+                    backgroundColor: !selectedType
+                      ? colors.accent
+                      : pressed
+                      ? colors.highlight
+                      : "transparent",
                     paddingHorizontal: 12,
                   })}
                 >
-                  <Text style={[type.body, { color: !selectedType ? colors.background : colors.textPrimary }]}>
+                  <Text
+                    style={[
+                      type.body,
+                      { color: !selectedType ? colors.background : colors.textPrimary },
+                    ]}
+                  >
                     All Types
                   </Text>
                 </Pressable>
@@ -982,20 +1098,29 @@ export default function DiscoverTab() {
                   return (
                     <Pressable
                       key={t}
-                      onPress={() => {
+                      onPress={withTick(() => {
                         setSelectedType(t);
                         setTypePickerOpen(false);
-                      }}
+                      })}
                       style={({ pressed }) => ({
                         paddingVertical: 12,
                         borderRadius: radii.md,
                         borderWidth: 1,
                         borderColor: colors.divider,
-                        backgroundColor: active ? colors.accent : pressed ? colors.highlight : "transparent",
+                        backgroundColor: active
+                          ? colors.accent
+                          : pressed
+                          ? colors.highlight
+                          : "transparent",
                         paddingHorizontal: 12,
                       })}
                     >
-                      <Text style={[type.body, { color: active ? colors.background : colors.textPrimary }]}>
+                      <Text
+                        style={[
+                          type.body,
+                          { color: active ? colors.background : colors.textPrimary },
+                        ]}
+                      >
                         {t}
                       </Text>
                     </Pressable>

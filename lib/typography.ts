@@ -76,15 +76,19 @@ export const type: TypeScale = {
     color: colors.textPrimary,
   },
 
-  // Cormorant italic — whisper layer (prompts only)
-    microcopyItalic: {
+  /**
+   * Cormorant italic — refined “whisper” layer (but still readable).
+   * The key change: default to textPrimary so it never looks washed out on iOS.
+   * If a screen wants it lighter, it can apply opacity at the callsite.
+   */
+  microcopyItalic: {
     fontFamily: fontFamilies.headingItalic,
-    fontSize: 16,
-    lineHeight: 24,
-    letterSpacing: 0.5,
-    color: colors.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+    letterSpacing: 0.35,
+    color: colors.textPrimary,
+    opacity: 0.84,
   },
-
 
   // Montserrat — UI actions (never italic, never all caps)
   button: {
@@ -95,13 +99,12 @@ export const type: TypeScale = {
     color: colors.textPrimary,
   },
 
-  // Cormorant — rating number display
-   ratingNumber: {
+  // Montserrat medium — rating number display
+  ratingNumber: {
     fontFamily: fontFamilies.bodyMedium,
     fontSize: 48,
     lineHeight: 52,
     letterSpacing: 1,
     color: colors.textPrimary,
   },
-
 };

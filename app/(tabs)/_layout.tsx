@@ -1,13 +1,16 @@
 // app/(tabs)/_layout.tsx
+import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 
 import { colors } from "../../lib/theme";
 
 export default function TabsLayout() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      edges={["top", "bottom"]}
+    >
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -22,7 +25,6 @@ export default function TabsLayout() {
           tabBarActiveTintColor: colors.accent,
           tabBarInactiveTintColor: colors.textSecondary,
 
-          // Helps the bar feel richer/less "flat"
           tabBarItemStyle: {
             paddingTop: 6,
             paddingBottom: 6,
