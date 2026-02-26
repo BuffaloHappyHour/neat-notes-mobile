@@ -1,24 +1,28 @@
+// components/ui/Card.tsx
 import React from "react";
-import { View, ViewStyle } from "react-native";
-import { COLORS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
+import { View, type StyleProp, type ViewStyle } from "react-native";
+
+import { radii } from "../../lib/radii";
+import { shadows } from "../../lib/shadows";
+import { spacing } from "../../lib/spacing";
+import { colors } from "../../lib/theme";
 
 type Props = {
   children: React.ReactNode;
-  style?: ViewStyle;
-  padding?: number;
+  style?: StyleProp<ViewStyle>;
 };
 
-export function Card({ children, style, padding = SPACING.md }: Props) {
+export function Card({ children, style }: Props) {
   return (
     <View
       style={[
         {
-          backgroundColor: COLORS.card,
+          backgroundColor: colors.surface,
+          borderRadius: radii.lg,
+          padding: spacing.lg,
           borderWidth: 1,
-          borderColor: COLORS.border,
-          borderRadius: RADIUS.lg,
-          padding,
-          ...SHADOW.card,
+          borderColor: colors.divider,
+          ...shadows.card,
         },
         style,
       ]}

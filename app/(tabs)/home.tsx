@@ -1,10 +1,10 @@
 // app/(tabs)/home.tsx
-import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
-import { supabase } from "../../lib/supabase";
+import { FeatureCard } from "../../components/ui/FeatureCard";
+import { PrimaryButton } from "../../components/ui/PrimaryButton";
 
 import { radii } from "../../lib/radii";
 import { shadows } from "../../lib/shadows";
@@ -15,68 +15,8 @@ import { type } from "../../lib/typography";
 // ✅ Intentional haptics wrapper (respects user setting)
 import { withTick } from "../../lib/hapticsPress";
 
-function Card({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View
-      style={{
-        backgroundColor: colors.surface,
-        borderRadius: radii.lg,
-        padding: spacing.lg,
-        borderWidth: 1,
-        borderColor: colors.divider,
-        ...shadows.card,
-        gap: spacing.md,
-      }}
-    >
-      <View style={{ gap: spacing.xs }}>
-        <Text style={type.sectionHeader}>{title}</Text>
-        {subtitle ? (
-          <Text style={[type.microcopyItalic, { fontSize: 16, lineHeight: 22 }]}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-      {children}
-    </View>
-  );
-}
-
-function PrimaryButton({
-  label,
-  onPress,
-  disabled,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => ({
-        borderRadius: radii.md,
-        paddingVertical: spacing.lg,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: pressed ? colors.accentPressed : colors.accent,
-        opacity: disabled ? 0.5 : pressed ? 0.95 : 1,
-      })}
-    >
-      <Text style={[type.button, { fontSize: 17, color: colors.background }]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
+import { useHomeStats } from "../../src/home/hooks/useHomeStats";
+import { pluralize } from "../../src/home/utils/pluralize";
 
 function InlineNotice({
   title,
@@ -115,74 +55,8 @@ function InlineNotice({
   );
 }
 
-function pluralize(n: number, singular: string, plural = `${singular}s`) {
-  return n === 1 ? singular : plural;
-}
-
 export default function HomeTab() {
-  const [isAuthed, setIsAuthed] = useState(false);
-  const [firstName, setFirstName] = useState<string | null>(null);
-
-  const [tastingCount, setTastingCount] = useState<number | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
-
-  const refreshAuthAndStats = useCallback(async () => {
-    const { data } = await supabase.auth.getSession();
-    const user = data.session?.user;
-    const authed = !!user;
-
-    setIsAuthed(authed);
-
-    if (!authed) {
-      setFirstName(null);
-      setTastingCount(null);
-      return;
-    }
-
-    const userId = user!.id;
-
-    try {
-      setStatsLoading(true);
-
-      // 1) Fetch first_name (personalization)
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("first_name")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (!profileError && profile?.first_name) {
-        setFirstName(profile.first_name);
-      } else {
-        setFirstName(null);
-      }
-
-      // 2) Fetch tasting count
-      const { count, error } = await supabase
-        .from("tastings")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId);
-
-      if (error) {
-        setTastingCount(null);
-      } else {
-        setTastingCount(typeof count === "number" ? count : 0);
-      }
-    } finally {
-      setStatsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refreshAuthAndStats();
-  }, [refreshAuthAndStats]);
-
-  useFocusEffect(
-    useCallback(() => {
-      refreshAuthAndStats();
-      return () => {};
-    }, [refreshAuthAndStats])
-  );
+  const { isAuthed, firstName, tastingCount, statsLoading } = useHomeStats();
 
   const dynamic = useMemo(() => {
     if (!isAuthed) {
@@ -239,18 +113,21 @@ export default function HomeTab() {
     if (!isAuthed || tastingCount === null) {
       return {
         title: "Log a pour",
-        subtitle: "Capture your rating and impressions — fast, clean, and consistent.",
+        subtitle:
+          "Capture your rating and impressions — fast, clean, and consistent.",
       };
     }
     if (tastingCount <= 0) {
       return {
         title: "Log your first pour",
-        subtitle: "Start simple. Neat Notes gets smarter as your history grows.",
+        subtitle:
+          "Start simple. Neat Notes gets smarter as your history grows.",
       };
     }
     return {
       title: "Log your next pour",
-      subtitle: "Build consistency. That’s how your palate becomes clear.",
+      subtitle:
+        "Build consistency. That’s how your palate becomes clear.",
     };
   }, [isAuthed, tastingCount]);
 
@@ -276,13 +153,18 @@ export default function HomeTab() {
       keyboardShouldPersistTaps="handled"
     >
       <View style={{ gap: spacing.xl }}>
-        {/* Brand header (STATIC) */}
+        {/* Brand header */}
         <View style={{ gap: spacing.sm }}>
           <Text style={[type.screenTitle, { fontSize: 38, lineHeight: 42 }]}>
             Neat Notes
           </Text>
 
-          <Text style={[type.microcopyItalic, { fontSize: 18, lineHeight: 24 }]}>
+          <Text
+            style={[
+              type.microcopyItalic,
+              { fontSize: 18, lineHeight: 24 },
+            ]}
+          >
             Understand your palate
           </Text>
 
@@ -295,7 +177,7 @@ export default function HomeTab() {
           />
         </View>
 
-        {/* Dynamic warmth block (UNDER brand header) */}
+        {/* Dynamic section */}
         <View style={{ gap: spacing.sm }}>
           {firstName ? (
             <Text style={[type.body, { fontSize: 18, fontWeight: "600" }]}>
@@ -316,10 +198,12 @@ export default function HomeTab() {
             {dynamic.subline}
           </Text>
 
-          {/* Sign-in CTA lives right here when not authed */}
           {!isAuthed ? (
             <View style={{ marginTop: spacing.sm }}>
-              <PrimaryButton label="Sign In / Create Account" onPress={goSignIn} />
+              <PrimaryButton
+                label="Sign In / Create Account"
+                onPress={goSignIn}
+              />
             </View>
           ) : null}
 
@@ -332,7 +216,6 @@ export default function HomeTab() {
           />
         </View>
 
-        {/* Beta framing (only for authed users) */}
         {isAuthed ? (
           <InlineNotice
             title="Founding Tester (Beta)"
@@ -342,18 +225,16 @@ export default function HomeTab() {
           />
         ) : null}
 
-        {/* Log */}
-        <Card title={logCard.title} subtitle={logCard.subtitle}>
-          <PrimaryButton label="Start Logging" onPress={goLog} />
-        </Card>
+        <FeatureCard title={logCard.title} subtitle={logCard.subtitle}>
+          <PrimaryButton label="Continue" onPress={goLog} />
+        </FeatureCard>
 
-        {/* Discover */}
-        <Card
+        <FeatureCard
           title="Discover"
           subtitle="Explore whiskies and build your personal library. Community insights come later."
         >
-          <PrimaryButton label="Open Discover" onPress={goDiscover} />
-        </Card>
+          <PrimaryButton label="Find your next pour" onPress={goDiscover} />
+        </FeatureCard>
       </View>
     </ScrollView>
   );

@@ -1,6 +1,11 @@
+// components/ui/PrimaryButton.tsx
 import React from "react";
 import { Pressable, Text, ViewStyle } from "react-native";
-import { COLORS, RADIUS, SPACING, TEXT as TEXTS } from "../../constants/theme";
+
+import { radii } from "../../lib/radii";
+import { spacing } from "../../lib/spacing";
+import { colors } from "../../lib/theme";
+import { type } from "../../lib/typography";
 
 type Props = {
   label: string;
@@ -14,26 +19,29 @@ export function PrimaryButton({ label, onPress, disabled, style }: Props) {
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      style={[
+      style={({ pressed }) => [
         {
-          backgroundColor: COLORS.tan,
-          paddingVertical: SPACING.sm + 2,
-          paddingHorizontal: SPACING.md,
-          borderRadius: RADIUS.xl,
+          backgroundColor: pressed ? colors.accentPressed : colors.accent,
+          paddingVertical: spacing.lg,
+          paddingHorizontal: spacing.md,
+          borderRadius: radii.xl,
           alignItems: "center",
           justifyContent: "center",
-          opacity: disabled ? 0.6 : 1,
+          opacity: disabled ? 0.55 : 1,
         },
         style,
       ]}
     >
       <Text
-        style={{
-          color: COLORS.card,
-          fontSize: TEXTS.body,
-          fontWeight: "800",
-          letterSpacing: 0.2,
-        }}
+        style={[
+          type.button,
+          {
+            color: colors.background, // 👈 charcoal theme text
+            fontSize: 17,
+            fontWeight: "400", // 👈 more subtle/premium
+            letterSpacing: 0.2,
+          },
+        ]}
       >
         {label}
       </Text>
