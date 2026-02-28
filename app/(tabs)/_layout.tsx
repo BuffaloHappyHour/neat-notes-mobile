@@ -1,33 +1,55 @@
-// app/(tabs)/_layout.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import React from "react";
+import { View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors } from "../../lib/theme";
+import { type } from "../../lib/typography";
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+
+  const baseHeight = 68;
+  const bottomInset = Math.max(12, insets.bottom);
+  const tabBarHeight = baseHeight + bottomInset;
+
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      edges={["top", "bottom"]}
-    >
+    <View style={{ flex: 1, backgroundColor: colors.background, paddingBottom: tabBarHeight }}>
       <Tabs
         screenOptions={{
           headerShown: false,
 
+          // ✅ Put tab bar above everything
           tabBarStyle: {
-            backgroundColor: colors.background,
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+
+            backgroundColor: colors.surface,
             borderTopColor: colors.divider,
             borderTopWidth: 1,
-            elevation: 0, // android shadow off
+
+            paddingTop: 10,
+            paddingBottom: bottomInset,
+            height: tabBarHeight,
+
+            zIndex: 9999,
           },
 
           tabBarActiveTintColor: colors.accent,
           tabBarInactiveTintColor: colors.textSecondary,
 
+          tabBarLabelStyle: {
+            fontFamily: type.body.fontFamily,
+            fontSize: 11,
+            letterSpacing: 0.3,
+            marginTop: 2,
+          },
+
           tabBarItemStyle: {
-            paddingTop: 6,
-            paddingBottom: 6,
+            paddingHorizontal: 6,
           },
         }}
       >
@@ -35,8 +57,12 @@ export default function TabsLayout() {
           name="home"
           options={{
             title: "Home",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="home-outline" size={size} color={color} />
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "home" : "home-outline"}
+                size={size ?? 24}
+                color={color}
+              />
             ),
           }}
         />
@@ -45,8 +71,12 @@ export default function TabsLayout() {
           name="discover"
           options={{
             title: "Discover",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="search-outline" size={size} color={color} />
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "search" : "search-outline"}
+                size={size ?? 22}
+                color={color}
+              />
             ),
           }}
         />
@@ -55,8 +85,12 @@ export default function TabsLayout() {
           name="log"
           options={{
             title: "Log",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="create-outline" size={size} color={color} />
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "create" : "create-outline"}
+                size={size ?? 22}
+                color={color}
+              />
             ),
           }}
         />
@@ -65,12 +99,16 @@ export default function TabsLayout() {
           name="profile"
           options={{
             title: "Profile",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="person-outline" size={size} color={color} />
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "person" : "person-outline"}
+                size={size ?? 22}
+                color={color}
+              />
             ),
           }}
         />
       </Tabs>
-    </SafeAreaView>
+    </View>
   );
 }
