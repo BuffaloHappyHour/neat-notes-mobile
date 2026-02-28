@@ -1,7 +1,13 @@
 // app/(tabs)/discover.tsx
 import { router } from "expo-router";
 import React, { useMemo } from "react";
-import { RefreshControl, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import {
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { spacing } from "../../lib/spacing";
@@ -23,10 +29,11 @@ export default function DiscoverTab() {
   const insets = useSafeAreaInsets();
   const { height: windowH } = useWindowDimensions();
 
-  console.log("✅ DiscoverTab loaded: app/(tabs)/discover.tsx");
-  
   const sheetMaxHeight = useMemo(() => {
-    return Math.max(320, Math.round(windowH - insets.top - insets.bottom - spacing.xl));
+    return Math.max(
+      320,
+      Math.round(windowH - insets.top - insets.bottom - spacing.xl)
+    );
   }, [windowH, insets.top, insets.bottom]);
 
   const sheetPaddingBottom = insets.bottom + spacing.lg;
@@ -46,9 +53,16 @@ export default function DiscoverTab() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
-          padding: spacing.xl,
+          // ✅ Match Home: wider feel
+          paddingHorizontal: spacing.lg,
+
+          // ✅ Match Home: headroom
+          paddingTop: spacing.xl + spacing.lg,
+
           paddingBottom: spacing.xl * 2,
-          gap: spacing.lg,
+
+          // ✅ tighter rhythm (Home-like)
+          gap: spacing.md,
         }}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
@@ -57,14 +71,36 @@ export default function DiscoverTab() {
           <RefreshControl
             refreshing={d.refreshing}
             onRefresh={withTick(() => d.refresh({ silent: true }))}
+            tintColor={colors.accent}
           />
         }
       >
-        <View style={{ gap: spacing.sm }}>
-          <Text style={type.screenTitle}>Discover</Text>
-          <Text style={[type.body, { opacity: 0.74 }]}>See what the community is tasting</Text>
+        {/* Header (Home style) */}
+        <View style={{ gap: spacing.xs }}>
+          <Text style={[type.screenTitle, { fontSize: 34, lineHeight: 40 }]}>
+            Discover
+          </Text>
+
+          <Text
+            style={[
+              type.microcopyItalic,
+              { fontSize: 16, lineHeight: 22, opacity: 0.86 },
+            ]}
+          >
+            See what the community is tasting
+          </Text>
+
+          {/* ✅ keep it simple (no leather / no gradients here) */}
+          <View
+            style={{
+              height: 1,
+              backgroundColor: colors.divider,
+              marginTop: spacing.md,
+            }}
+          />
         </View>
 
+        {/* Header Card (now calmer / less redundant via component changes) */}
         <DiscoverHeaderCard
           onOpenFilters={withTick(() => d.setFilterOpen(true))}
           filterBadgeActive={!!d.filterBadge}
@@ -72,7 +108,7 @@ export default function DiscoverTab() {
           loading={d.loading}
           statusError={d.statusError}
         />
-
+        {/* Sections */}
         <SectionRow
           title="Trending"
           subtitle="Most tasted in the last 7 days (community)."
@@ -115,8 +151,14 @@ export default function DiscoverTab() {
           emptyMessage={emptyMessage}
         />
 
-        <View style={{ marginTop: spacing.lg, paddingTop: spacing.lg }}>
-          <Text style={[type.body, { opacity: 0.62, fontSize: 12, textAlign: "center" }]}>
+        {/* Footer */}
+        <View style={{ marginTop: spacing.lg, paddingTop: spacing.md }}>
+          <Text
+            style={[
+              type.caption,
+              { opacity: 0.7, fontSize: 12, textAlign: "center" },
+            ]}
+          >
             Powered by anonymous community tastings and Buffalo Happy Hour reviews
           </Text>
         </View>

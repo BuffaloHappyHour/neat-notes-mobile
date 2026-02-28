@@ -32,11 +32,8 @@ export function WhiskeyTile({
 
   const metaLine = useMemo(() => {
     const parts: string[] = [];
-
-    // Only include pieces that have real values
     if (communityText) parts.push(`Community: ${communityText}`);
     if (bhhText) parts.push(`BHH: ${bhhText}`);
-
     if (parts.length === 0) return null;
     return parts.join("  •  ");
   }, [communityText, bhhText]);
@@ -46,42 +43,42 @@ export function WhiskeyTile({
       onPress={onPress}
       style={({ pressed }) => ({
         width: 220,
-        backgroundColor: colors.surface,
+
+        // ✅ slightly “raised” tint so it doesn’t feel like the same surface as the page
+        backgroundColor: colors.surfaceRaised,
+
         borderWidth: 1,
         borderColor: colors.divider,
         borderRadius: radii.lg,
+
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.md,
-        opacity: pressed ? 0.9 : 1,
+
+        opacity: pressed ? 0.92 : 1,
+
+        // ✅ more lift, less “outline”
         ...shadows.card,
       })}
     >
       <View style={{ gap: 6 }}>
-        <Text
-          style={[type.body, { fontWeight: "900", fontSize: 15 }]}
-          numberOfLines={1}
-        >
+        <Text style={[type.body, { fontWeight: "900", fontSize: 15 }]} numberOfLines={1}>
           {row.whiskeyName}
         </Text>
 
-        <Text
-          style={[type.body, { opacity: 0.75, fontSize: 12 }]}
-          numberOfLines={1}
-        >
+        <Text style={[type.caption, { opacity: 0.92 }]} numberOfLines={1}>
           {row.whiskeyType ?? "—"}
           {proofText ? ` • ${proofText}` : ""}
         </Text>
 
-       
-          <Text
-  style={[
-    type.body,
-    { opacity: 0.55, fontSize: 12, fontStyle: "italic" },
-  ]}
-  numberOfLines={1}
->
-  No ratings yet
-</Text>
+        {metaLine ? (
+          <Text style={[type.caption, { opacity: 0.85 }]} numberOfLines={1}>
+            {metaLine}
+          </Text>
+        ) : (
+          <Text style={[type.caption, { opacity: 0.7, fontStyle: "italic" }]} numberOfLines={1}>
+            No ratings yet
+          </Text>
+        )}
       </View>
     </Pressable>
   );

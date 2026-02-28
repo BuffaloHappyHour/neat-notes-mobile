@@ -1,23 +1,23 @@
 // src/log/services/tastingSave.service.ts
 import {
-    trackTastingSaved,
-    trackTastingSaveFailed,
+  trackTastingSaved,
+  trackTastingSaveFailed,
 } from "../../../lib/analytics";
 import { hapticError, hapticSuccess } from "../../../lib/haptics";
 import { supabase } from "../../../lib/supabase";
 
 import {
-    clamp100,
-    isUuid,
-    normalizeKey,
-    safeText,
-    uniqStringsKeepOrder,
+  clamp100,
+  isUuid,
+  normalizeKey,
+  safeText,
+  uniqStringsKeepOrder,
 } from "../utils/text";
 
 import {
-    deletePublicMirrorBySourceTastingId,
-    getMyShareSetting,
-    upsertPublicMirror,
+  deletePublicMirrorBySourceTastingId,
+  getMyShareSetting,
+  upsertPublicMirror,
 } from "./publicMirror.service";
 import { maybeCreateWhiskeyCandidate } from "./whiskeyCandidates.service";
 
@@ -74,7 +74,6 @@ export async function saveCloudTasting(params: {
   replaceTastingFlavorNodes: (tastingId: string, selectedNodeIds: string[]) => Promise<void>;
 
   // ✅ refined nodes writer (new): writes sentiment column too
-  // Keep optional so nothing breaks until we wire it through
   replaceTastingFlavorNodesWithSentiment?: (
     tastingId: string,
     selectedNodeIds: string[],
@@ -168,6 +167,33 @@ export async function saveCloudTasting(params: {
     await replaceTastingFlavorNodes(tid, selectedNodeIds);
   };
 
+  // ✅ Helper: mirror safely (NEVER fail the save because of mirror rules)
+  const syncPublicMirrorSafely = async (sourceTastingId: string, shareOk: boolean) => {
+    // If user turned sharing off: ensure mirror row is removed
+    if (!shareOk) {
+      await deletePublicMirrorBySourceTastingId(sourceTastingId);
+      return;
+    }
+
+    // Sharing is on, but public_tastings requires whiskey_id (NOT NULL).
+    // If we don't have a whiskeyId, skip mirror + delete any previous mirror row.
+    if (!safeWhiskeyId) {
+      await deletePublicMirrorBySourceTastingId(sourceTastingId);
+      return;
+    }
+
+    // We have a valid whiskeyId -> safe to upsert
+    await upsertPublicMirror({
+      sourceTastingId,
+      whiskeyId: safeWhiskeyId,
+      rating: Number(rating),
+      flavorTags: mergedFlavorTags.length ? mergedFlavorTags : null,
+      dislikeTags: noDislikes ? null : dislikeTags.length ? dislikeTags : null,
+      personalNotes: personalOrNull,
+      selectedNodeIds,
+    });
+  };
+
   // We track offline errors cleanly
   const trackFail = async (message: string) => {
     const lower = String(message ?? "").toLowerCase();
@@ -203,19 +229,8 @@ export async function saveCloudTasting(params: {
 
       await writeRefinedSelections(tastingId);
 
-      if (shareOk) {
-        await upsertPublicMirror({
-          sourceTastingId: tastingId,
-          whiskeyId: safeWhiskeyId,
-          rating: Number(rating),
-          flavorTags: mergedFlavorTags.length ? mergedFlavorTags : null,
-          dislikeTags: noDislikes ? null : dislikeTags.length ? dislikeTags : null,
-          personalNotes: personalOrNull,
-          selectedNodeIds,
-        });
-      } else {
-        await deletePublicMirrorBySourceTastingId(tastingId);
-      }
+      // ✅ mirror should never be able to break saving
+      await syncPublicMirrorSafely(tastingId, shareOk);
 
       await hapticSuccess();
 
@@ -254,19 +269,8 @@ export async function saveCloudTasting(params: {
 
     await writeRefinedSelections(newId);
 
-    if (shareOk) {
-      await upsertPublicMirror({
-        sourceTastingId: newId,
-        whiskeyId: safeWhiskeyId,
-        rating: Number(rating),
-        flavorTags: mergedFlavorTags.length ? mergedFlavorTags : null,
-        dislikeTags: noDislikes ? null : dislikeTags.length ? dislikeTags : null,
-        personalNotes: personalOrNull,
-        selectedNodeIds,
-      });
-    } else {
-      await deletePublicMirrorBySourceTastingId(newId);
-    }
+    // ✅ mirror should never be able to break saving
+    await syncPublicMirrorSafely(newId, shareOk);
 
     if (!lockName) {
       await maybeCreateWhiskeyCandidate(safeName);

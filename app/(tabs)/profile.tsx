@@ -81,95 +81,131 @@ export default function ProfileTab() {
   }
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{
-        paddingHorizontal: spacing.xl,
-        paddingTop: spacing.xl,
-        paddingBottom: spacing.xxl,
-      }}
-    >
-      {/* Header */}
-      <ProfileHeader
-        welcomeTitle={welcomeTitle}
-        isAuthed={isAuthed}
-        isAdmin={isAdmin}
-        refreshing={refreshing}
-        onRefresh={() => loadAll({ silent: true })}
-      />
+  <ScrollView
+    style={{ flex: 1, backgroundColor: colors.background }}
+    contentContainerStyle={{
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.xl + spacing.lg,
+      paddingBottom: spacing.xl * 2,
+    }}
+  >
+    {/* Header */}
+    <ProfileHeader
+      welcomeTitle={welcomeTitle}
+      isAuthed={isAuthed}
+      isAdmin={isAdmin}
+      refreshing={refreshing}
+      onRefresh={() => loadAll({ silent: true })}
+    />
 
-      {!isAuthed ? (
-        <View style={{ marginTop: spacing.lg }}>
-          <SignInCard />
-        </View>
-      ) : (
-        <View style={{ marginTop: spacing.md }}>
-          {/* ===== HERO immediately after name ===== */}
-          {clarity ? (
-            <View style={{ marginTop: spacing.sm, marginBottom: spacing.sectionGap }}>
-              <PalateClarityCard
-                clarityIndex={clarity.clarityIndex}
-                tierLabel={clarity.meta.tierLabel}
-                confidenceLevel={clarity.meta.confidenceLevel}
-                totalTastings={clarity.meta.totalTastings}
-                daysSinceLastTasting={clarity.meta.daysSinceLastTasting}
-              />
-            </View>
-          ) : null}
-
-          {/* ===== JOURNAL INSIGHTS (one intentional frame) ===== */}
-          <View
-            style={{
-              backgroundColor: colors.surface ?? colors.background,
-              borderRadius: radii.xxl ?? radii.xl,
-              borderWidth: 1,
-              borderColor: colors.borderSubtle ?? colors.divider,
-              padding: spacing.cardPadding ?? spacing.lg,
-              ...shadows.e1,
-            }}
-          >
-            {/* Group title */}
-            <View style={{ gap: spacing.xs }}>
-              <Text style={type.sectionHeader}>Journal insights</Text>
-              <Text style={[type.caption, { color: colors.textSecondary }]}>
-                A snapshot of your palate and recent pours.
-              </Text>
-            </View>
-
-            <View style={{ height: 1, backgroundColor: colors.divider, opacity: 0.65, marginVertical: spacing.lg }} />
-
-            <YourStatsCard
-              embedded
-              tastingsText={tastingsText}
-              avgText={avgText}
-              top5={top5}
-              onLongPressRow={openActionsForRow}
-            />
-
-            <View style={{ height: 1, backgroundColor: colors.divider, opacity: 0.65, marginVertical: spacing.lg }} />
-
-            <CategoryMixCard embedded mixError={mixError} mix={mix} mixTotal={mixTotal} />
-
-            <View style={{ height: 1, backgroundColor: colors.divider, opacity: 0.65, marginVertical: spacing.lg }} />
-
-            <RecentEntriesCard
-              embedded
-              recentError={recentError}
-              recent={recent}
-              onLongPressRow={openActionsForRow}
+    {!isAuthed ? (
+      <View style={{ marginTop: spacing.lg }}>
+        <SignInCard />
+      </View>
+    ) : (
+      <View style={{ marginTop: spacing.md }}>
+        {/* ===== HERO immediately after name ===== */}
+        {clarity ? (
+          <View style={{ marginTop: spacing.sm, marginBottom: spacing.sectionGap }}>
+            <PalateClarityCard
+              clarityIndex={clarity.clarityIndex}
+              tierLabel={clarity.meta.tierLabel}
+              confidenceLevel={clarity.meta.confidenceLevel}
+              totalTastings={clarity.meta.totalTastings}
+              daysSinceLastTasting={clarity.meta.daysSinceLastTasting}
             />
           </View>
-        </View>
-      )}
+        ) : null}
 
-      <TastingActionsSheet
-        visible={actionsOpen}
-        title={actionsTitle}
-        deleting={deleting}
-        onClose={closeActions}
-        onEdit={editFromActions}
-        onDelete={deleteFromActions}
-      />
-    </ScrollView>
-  );
+        {/* ===== JOURNAL INSIGHTS (one intentional frame) ===== */}
+<View
+  style={{
+    backgroundColor: colors.surface ?? colors.background,
+    borderRadius: radii.xxl ?? radii.xl,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle ?? colors.divider,
+
+    // ✅ tighter than before
+    padding: spacing.md,
+
+    ...shadows.card,
+  }}
+>
+  {/* Group title */}
+  <View style={{ gap: 4 }}>
+    <Text style={type.sectionHeader}>Journal insights</Text>
+    <Text style={[type.caption, { color: colors.textSecondary }]}>
+      A snapshot of your palate and recent pours.
+    </Text>
+
+    {/* subtle accent dash */}
+    <View
+      style={{
+        width: 26,
+        height: 2,
+        borderRadius: 1,
+        backgroundColor: colors.accent,
+        opacity: 0.8,
+        marginTop: spacing.xs, // ✅ was spacing.sm
+      }}
+    />
+  </View>
+
+  <View
+    style={{
+      height: 1,
+      backgroundColor: colors.divider,
+      opacity: 0.45, // ✅ was 0.5
+      marginVertical: spacing.md, // ✅ was spacing.lg
+    }}
+  />
+
+  <YourStatsCard
+    embedded
+    tastingsText={tastingsText}
+    avgText={avgText}
+    top5={top5}
+    onLongPressRow={openActionsForRow}
+  />
+
+  <View
+    style={{
+      height: 1,
+      backgroundColor: colors.divider,
+      opacity: 0.45,
+      marginVertical: spacing.md,
+    }}
+  />
+
+  <CategoryMixCard embedded mixError={mixError} mix={mix} mixTotal={mixTotal} />
+
+  <View
+    style={{
+      height: 1,
+      backgroundColor: colors.divider,
+      opacity: 0.45,
+      marginVertical: spacing.md,
+    }}
+  />
+
+  <RecentEntriesCard
+    embedded
+    recentError={recentError}
+    recent={recent}
+    onLongPressRow={openActionsForRow}
+  />
+</View>
+     </View>
+    )}
+
+    <TastingActionsSheet
+      visible={actionsOpen}
+      title={actionsTitle}
+      deleting={deleting}
+      onClose={closeActions}
+      onEdit={editFromActions}
+      onDelete={deleteFromActions}
+    />
+  </ScrollView>
+  )
 }

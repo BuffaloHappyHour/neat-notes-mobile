@@ -15,8 +15,8 @@ export function StatPill({ label, value }: { label: string; value: string }) {
         borderColor: colors.borderSubtle ?? colors.divider,
         backgroundColor: colors.surfaceSunken ?? colors.surface,
         borderRadius: radii.xl ?? radii.lg,
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.sm,
         gap: 6,
       }}
     >

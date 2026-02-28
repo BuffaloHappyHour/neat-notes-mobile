@@ -25,7 +25,7 @@ export function SectionRow({
   emptyMessage?: string;
 }) {
   return (
-    <View style={{ gap: spacing.sm }}>
+    <View style={{ gap: 10 }}>
       <View
         style={{
           flexDirection: "row",
@@ -38,33 +38,35 @@ export function SectionRow({
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <View
               style={{
-                width: 10,
-                height: 10,
+                width: 9,
+                height: 9,
                 borderRadius: 2,
                 backgroundColor: colors.accent,
-                opacity: 0.95,
+                opacity: 0.75,
               }}
             />
-            <Text style={[type.sectionHeader, { fontSize: 18 }]}>{title}</Text>
+            <Text style={[type.sectionHeader, { fontSize: 18, lineHeight: 22 }]}>{title}</Text>
           </View>
 
           {subtitle ? (
-            <Text style={[type.body, { opacity: 0.72, fontSize: 12 }]}>{subtitle}</Text>
+            <Text style={[type.caption, { opacity: 0.86 }]}>{subtitle}</Text>
           ) : null}
         </View>
 
         <Pressable
-          onPress={() => onSeeAll()} // ✅ ensure we call THIS instance’s handler
+          onPress={onSeeAll}
+          hitSlop={10}
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >
-          <Text style={[type.body, { fontWeight: "900", fontSize: 12, color: colors.accent }]}>
+          {/* ✅ calmer than before (less “button”) */}
+          <Text style={[type.caption, { color: colors.textSecondary, opacity: 0.9, fontWeight: "700" }]}>
             View All
           </Text>
         </Pressable>
       </View>
 
       {rows.length === 0 ? (
-        <Text style={[type.body, { opacity: 0.7 }]}>{emptyMessage ?? "Nothing here yet."}</Text>
+        <Text style={[type.caption, { opacity: 0.8 }]}>{emptyMessage ?? "Nothing here yet."}</Text>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
           <View style={{ flexDirection: "row", gap: spacing.md, paddingVertical: 2 }}>

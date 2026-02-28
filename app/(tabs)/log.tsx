@@ -1,7 +1,7 @@
 // app/(tabs)/log.tsx
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -88,27 +88,75 @@ type RecentTastingRow = {
 
 /* ------------------- UI ------------------- */
 
+function SoftDivider() {
+  // tan line that’s softer at edges and brighter in the middle (like Home)
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", marginTop: spacing.md }}>
+      <View
+        style={{
+          flex: 1,
+          height: 2,
+          backgroundColor: colors.accentFaint,
+          opacity: 0.15,
+          borderRadius: 2,
+        }}
+      />
+      <View
+        style={{
+          width: 170,
+          height: 2,
+          backgroundColor: colors.accent,
+          opacity: 0.7,
+          borderRadius: 2,
+          marginHorizontal: spacing.sm,
+        }}
+      />
+      <View
+        style={{
+          flex: 1,
+          height: 2,
+          backgroundColor: colors.accentFaint,
+          opacity: 0.15,
+          borderRadius: 2,
+        }}
+      />
+    </View>
+  );
+}
+
 function Card({
   title,
   subtitle,
   rightHeader,
   children,
+  padV,
+  padH,
+  gap,
 }: {
   title: string;
   subtitle?: string;
   rightHeader?: React.ReactNode;
   children: React.ReactNode;
+
+  // ✅ Optional overrides (lets Bottle be tighter without touching Recent)
+  padV?: number;
+  padH?: number;
+  gap?: number;
 }) {
   return (
     <View
       style={{
         backgroundColor: colors.surface,
         borderRadius: radii.lg,
-        padding: spacing.lg,
         borderWidth: 1,
         borderColor: colors.divider,
+
+        // ✅ default = your new tighter spec (Home/Discover feel)
+        paddingVertical: padV ?? 14,
+        paddingHorizontal: padH ?? spacing.lg,
+
         ...shadows.card,
-        gap: spacing.md,
+        gap: gap ?? spacing.md,
       }}
     >
       <View style={{ gap: 6 }}>
@@ -120,12 +168,14 @@ function Card({
             gap: spacing.md,
           }}
         >
-          <Text style={type.sectionHeader}>{title}</Text>
+          <Text style={[type.sectionHeader, { fontSize: 18 }]}>{title}</Text>
           {rightHeader ? rightHeader : null}
         </View>
 
         {subtitle ? (
-          <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>{subtitle}</Text>
+          <Text style={[type.microcopyItalic, { opacity: 0.82, lineHeight: 18 }]}>
+            {subtitle}
+          </Text>
         ) : null}
       </View>
 
@@ -178,7 +228,13 @@ function RecentRow({
         borderWidth: 1,
         borderColor: colors.divider,
         borderRadius: radii.md,
-        backgroundColor: pressed ? colors.highlight : "transparent",
+
+        // ✅ subtle lift: looks like a “row card”
+        backgroundColor: colors.surface,
+        ...shadows.card,
+
+        opacity: pressed ? 0.92 : 1,
+
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
@@ -577,16 +633,14 @@ export default function LogTab() {
     }
   }, []);
 
-  // ✅ Fix: use the row you clicked. actionsRow doesn't exist here.
-  // ✅ This routes to the *regular* tasting view (cloud-tasting) with tastingId.
   function goTasting(row: RecentTastingRow) {
-  const id = String(row?.id ?? "").trim();
-  if (!id) return;
+    const id = String(row?.id ?? "").trim();
+    if (!id) return;
 
-  router.push(
-    `/log/cloud-tasting?tastingId=${encodeURIComponent(id)}&mode=edit&readonly=0` as any
-  );
-}
+    router.push(
+      `/log/cloud-tasting?tastingId=${encodeURIComponent(id)}&mode=edit&readonly=0` as any
+    );
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -621,20 +675,24 @@ export default function LogTab() {
               borderRadius: radii.lg,
               borderWidth: 1,
               borderColor: colors.divider,
-              padding: spacing.lg,
+              paddingVertical: spacing.lg,
+              paddingHorizontal: spacing.lg,
               gap: spacing.md,
               ...shadows.card,
             }}
           >
             <View style={{ gap: 6 }}>
-              <Text style={[type.sectionHeader, { fontSize: 18 }]}>Add a custom bottle?</Text>
-              <Text style={[type.body, { opacity: 0.88, lineHeight: 20 }]}>
+              <Text
+  style={[
+    type.sectionHeader,
+    { fontSize: 18, opacity: 0.96, letterSpacing: 0.2 },
+  ]}
+>Add a custom bottle?</Text>
+              <Text style={[type.body, { opacity: 0.82, lineHeight: 18 }]}>
                 We didn’t find that bottle yet. If you’d like, you can add a couple details to help
                 keep the catalog clean — totally optional.
               </Text>
-              <Text style={[type.microcopyItalic, { opacity: 0.78 }]}>
-                Even 1–2 fields helps a ton.
-              </Text>
+              <Text style={[type.microcopyItalic, { opacity: 0.78 }]}>Even 1–2 fields helps a ton.</Text>
             </View>
 
             <View style={{ gap: spacing.sm }}>
@@ -682,46 +740,66 @@ export default function LogTab() {
       </Modal>
 
       <ScrollView
-        contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.xl + spacing.lg,
+          paddingBottom: spacing.xl * 2,
+          gap: spacing.md,
+        }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         nestedScrollEnabled
       >
+        {/* Header (match Home/Discover) */}
         <View style={{ gap: spacing.xs }}>
-          <Text style={type.screenTitle}>What are you drinking?</Text>
-          <Text style={[type.microcopyItalic, { opacity: 0.88 }]}>
+          <Text style={[type.screenTitle, { fontSize: 34, lineHeight: 40 }]}>
+            What are you drinking?
+          </Text>
+
+          <Text style={[type.microcopyItalic, { fontSize: 16, lineHeight: 22, opacity: 0.86 }]}>
             Search the library, or add a custom bottle.
           </Text>
-          <Text style={[type.body, { opacity: 0.65, fontSize: 12 }]}>
+
+          <Text style={[type.body, { opacity: 0.6, fontSize: 12 }]}>
             You’ll confirm on the whiskey profile before logging.
           </Text>
+
+          <View style={{ height: 1, backgroundColor: colors.divider, marginTop: spacing.md }} />
         </View>
 
-        <Card title="Bottle" subtitle="Start typing to search">
+        <Card title="Start typing to search">
+          {/* Field */}
           <View style={{ position: "relative" }}>
-            <TextInput
-              ref={inputRef}
-              value={query}
-              onChangeText={onType}
-              placeholder="Type a bottle name…"
-              placeholderTextColor={colors.textSecondary}
-              autoCorrect={false}
-              autoCapitalize="words"
-              returnKeyType="search"
-              selectionColor={colors.accent}
+            <View
               style={{
                 borderWidth: 1,
                 borderColor: colors.divider,
                 borderRadius: radii.md,
-                paddingVertical: spacing.md,
-                paddingHorizontal: spacing.md,
-                paddingRight: 44,
-                color: colors.textPrimary,
-                backgroundColor: "transparent",
-                fontFamily: type.body.fontFamily,
-                fontSize: 16,
+                backgroundColor: colors.background,
               }}
-            />
+            >
+              <TextInput
+                ref={inputRef}
+                value={query}
+                onChangeText={onType}
+                placeholder="Type a bottle name…"
+                placeholderTextColor={colors.textSecondary}
+                autoCorrect={false}
+                autoCapitalize="words"
+                returnKeyType="search"
+                selectionColor={colors.accent}
+                style={{
+                  paddingVertical: spacing.sm,
+                  paddingHorizontal: spacing.sm,
+                  paddingRight: 44,
+                  color: colors.textPrimary,
+                  backgroundColor: "transparent",
+                  fontFamily: type.body.fontFamily,
+                  fontSize: 16,
+                }}
+              />
+            </View>
 
             {query.length > 0 ? (
               <Pressable
@@ -737,10 +815,11 @@ export default function LogTab() {
                   borderRadius: 16,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: colors.background,
+                  backgroundColor: colors.surface,
                   borderWidth: 1,
                   borderColor: colors.divider,
                   opacity: pressed ? 0.75 : 1,
+                  ...shadows.card,
                 })}
               >
                 <Text style={{ color: colors.textPrimary, fontSize: 18, lineHeight: 18 }}>×</Text>
@@ -753,24 +832,18 @@ export default function LogTab() {
           </Text>
 
           {loading ? (
-            <View
-              style={{
-                marginTop: spacing.sm,
-                flexDirection: "row",
-                gap: 10,
-                alignItems: "center",
-              }}
-            >
+            <View style={{ marginTop: spacing.xs, flexDirection: "row", gap: 10, alignItems: "center" }}>
               <ActivityIndicator />
               <Text style={[type.body, { opacity: 0.65, fontSize: 12 }]}>Searching…</Text>
             </View>
           ) : null}
 
+          {/* Suggestions */}
           {suggestions.length > 0 ? (
             <ScrollView
               style={{
                 marginTop: spacing.md,
-                maxHeight: 260,
+                maxHeight: 160,
                 borderWidth: 1,
                 borderColor: colors.divider,
                 borderRadius: radii.md,
@@ -794,15 +867,19 @@ export default function LogTab() {
                       borderBottomWidth: isLast ? 0 : 1,
                       borderBottomColor: colors.divider,
                       opacity: pressed ? 0.75 : 1,
-                      backgroundColor: "transparent",
+                      backgroundColor: pressed ? colors.highlight : colors.surface,
                       gap: 6,
+                      borderRadius: radii.md,
+                      marginHorizontal: 6,
+                      marginVertical: 4,
+                      ...shadows.card,
                     })}
                   >
                     <Text style={[type.body, { fontWeight: "800" }]} numberOfLines={2}>
                       {s.whiskeyName}
                     </Text>
 
-                    <Text style={[type.microcopyItalic, { opacity: 0.75, fontSize: 12 }]}>
+                    <Text style={[type.microcopyItalic, { opacity: 0.75, fontSize: 12 }]} numberOfLines={1}>
                       Tap to view profile
                       {typeof s.bhhScore === "number" ? ` • BHH ${Math.round(s.bhhScore)}` : ""}
                       {idx === 0 ? " • Top match" : ""}
@@ -816,7 +893,9 @@ export default function LogTab() {
               No matches found. You can use a custom entry.
             </Text>
           ) : null}
+        </Card>
 
+          {/* Contribution form */}
           {customApproved && showContribForm ? (
             <View
               style={{
@@ -848,7 +927,7 @@ export default function LogTab() {
                   paddingVertical: 10,
                   paddingHorizontal: 12,
                   color: colors.textPrimary,
-                  backgroundColor: "transparent",
+                  backgroundColor: colors.surface,
                   fontFamily: type.body.fontFamily,
                   fontSize: 14,
                 }}
@@ -868,7 +947,7 @@ export default function LogTab() {
                   paddingVertical: 10,
                   paddingHorizontal: 12,
                   color: colors.textPrimary,
-                  backgroundColor: "transparent",
+                  backgroundColor: colors.surface,
                   fontFamily: type.body.fontFamily,
                   fontSize: 14,
                 }}
@@ -889,7 +968,7 @@ export default function LogTab() {
                     paddingVertical: 10,
                     paddingHorizontal: 12,
                     color: colors.textPrimary,
-                    backgroundColor: "transparent",
+                    backgroundColor: colors.surface,
                     fontFamily: type.body.fontFamily,
                     fontSize: 14,
                   }}
@@ -908,7 +987,7 @@ export default function LogTab() {
                     paddingVertical: 10,
                     paddingHorizontal: 12,
                     color: colors.textPrimary,
-                    backgroundColor: "transparent",
+                    backgroundColor: colors.surface,
                     fontFamily: type.body.fontFamily,
                     fontSize: 14,
                   }}
@@ -931,7 +1010,7 @@ export default function LogTab() {
                     paddingVertical: 10,
                     paddingHorizontal: 12,
                     color: colors.textPrimary,
-                    backgroundColor: "transparent",
+                    backgroundColor: colors.surface,
                     fontFamily: type.body.fontFamily,
                     fontSize: 14,
                   }}
@@ -951,7 +1030,7 @@ export default function LogTab() {
                     paddingVertical: 10,
                     paddingHorizontal: 12,
                     color: colors.textPrimary,
-                    backgroundColor: "transparent",
+                    backgroundColor: colors.surface,
                     fontFamily: type.body.fontFamily,
                     fontSize: 14,
                   }}
@@ -971,66 +1050,85 @@ export default function LogTab() {
             </View>
           ) : null}
 
-          {isHelpImproveMode ? (
-            <View style={{ marginTop: spacing.md }}>
-              <Pressable
-                onPress={onSubmitAndReview}
-                disabled={!hasEnoughQuery || submittingCandidate}
-                style={({ pressed }) => ({
-                  width: "100%",
-                  borderRadius: radii.md,
-                  paddingVertical: spacing.lg,
-                  alignItems: "center",
-                  backgroundColor: colors.accent,
-                  opacity: !hasEnoughQuery || submittingCandidate ? 0.55 : pressed ? 0.9 : 1,
-                })}
-              >
-                {submittingCandidate ? (
-                  <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
-                    <ActivityIndicator />
-                    <Text style={[type.button, { color: colors.background }]}>Submitting…</Text>
-                  </View>
-                ) : (
-                  <Text style={[type.button, { color: colors.background }]}>Submit & review</Text>
-                )}
-              </Pressable>
-            </View>
-          ) : (
-            <View style={{ flexDirection: "row", gap: spacing.md, marginTop: spacing.md }}>
-              <Pressable
-                onPress={onUseCustom}
-                disabled={!!selected || !hasEnoughQuery}
-                style={({ pressed }) => ({
-                  flex: 0.44,
-                  borderRadius: radii.md,
-                  paddingVertical: spacing.lg,
-                  alignItems: "center",
-                  borderWidth: 1,
-                  borderColor: colors.divider,
-                  backgroundColor: customApproved ? colors.highlight : colors.surface,
-                  opacity: !!selected || !hasEnoughQuery ? 0.45 : pressed ? 0.9 : 1,
-                })}
-              >
-                <Text style={[type.button, { color: colors.textPrimary }]}>Custom</Text>
-              </Pressable>
+{/* Actions */}
+{isHelpImproveMode ? (
+  <View style={{ marginTop: spacing.sm }}>
+    <Pressable
+      onPress={onSubmitAndReview}
+      disabled={!hasEnoughQuery || submittingCandidate}
+      style={({ pressed }) => ({
+        width: "100%",
+        borderRadius: radii.md,
 
-              <Pressable
-                onPress={onContinue}
-                disabled={!hasEnoughQuery}
-                style={({ pressed }) => ({
-                  flex: 0.56,
-                  borderRadius: radii.md,
-                  paddingVertical: spacing.lg,
-                  alignItems: "center",
-                  backgroundColor: canProceed ? colors.accent : colors.divider,
-                  opacity: pressed ? 0.9 : 1,
-                })}
-              >
-                <Text style={[type.button, { color: colors.background }]}>Continue</Text>
-              </Pressable>
-            </View>
-          )}
-        </Card>
+        // ✅ smaller buttons (was spacing.lg)
+        paddingVertical: 14,
+
+        alignItems: "center",
+        backgroundColor: colors.accent,
+
+        // ✅ a little less “cardy” than before
+        ...shadows.card,
+        opacity: !hasEnoughQuery || submittingCandidate ? 0.55 : pressed ? 0.92 : 1,
+      })}
+    >
+      {submittingCandidate ? (
+        <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+          <ActivityIndicator />
+          <Text style={[type.button, { color: colors.background }]}>Submitting…</Text>
+        </View>
+      ) : (
+        <Text style={[type.button, { color: colors.background }]}>Submit & review</Text>
+      )}
+    </Pressable>
+  </View>
+) : (
+  <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }}>
+    <Pressable
+      onPress={onUseCustom}
+      disabled={!!selected || !hasEnoughQuery}
+      style={({ pressed }) => ({
+        flex: 0.44,
+        borderRadius: radii.md,
+
+        // ✅ smaller buttons (was spacing.lg)
+        paddingVertical: 14,
+
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: colors.divider,
+        backgroundColor: colors.surface,
+
+        // ✅ keep depth but slightly calmer
+        ...shadows.card,
+        opacity: !!selected || !hasEnoughQuery ? 0.45 : pressed ? 0.92 : 1,
+      })}
+    >
+      <Text style={[type.button, { color: colors.textPrimary }]}>Custom</Text>
+    </Pressable>
+
+    <Pressable
+      onPress={onContinue}
+      disabled={!hasEnoughQuery}
+      style={({ pressed }) => ({
+        flex: 0.56,
+        borderRadius: radii.md,
+
+        // ✅ smaller buttons (was spacing.lg)
+        paddingVertical: 14,
+
+        alignItems: "center",
+        backgroundColor: canProceed ? colors.accent : colors.divider,
+
+        ...shadows.card,
+        opacity: pressed ? 0.92 : 1,
+      })}
+    >
+      <Text style={[type.button, { color: colors.background }]}>Continue</Text>
+    </Pressable>
+  </View>
+)}
+
+        <SoftDivider />
 
         <Card
           title="Recent tastings"
@@ -1050,9 +1148,7 @@ export default function LogTab() {
             </View>
           ) : null}
 
-          {recentError ? (
-            <Text style={[type.body, { opacity: 0.8 }]}>Error: {recentError}</Text>
-          ) : null}
+          {recentError ? <Text style={[type.body, { opacity: 0.8 }]}>Error: {recentError}</Text> : null}
 
           {!recentLoading && recentRows.length === 0 ? (
             <Text style={[type.body, { opacity: 0.72 }]}>

@@ -3,13 +3,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { SectionKey, WhiskeyCardRow } from "../services/discover.service";
 import {
-    fetchHighestBhhIds,
-    fetchHighestCommunityIds,
-    fetchNewestIds,
-    fetchRecentIds,
-    fetchTrendingIds,
-    fetchWhiskeyCardsByIds,
-    isViableCard,
+  fetchHighestBhhIds,
+  fetchHighestCommunityIds,
+  fetchNewestIds,
+  fetchRecentIds,
+  fetchTrendingIds,
+  fetchWhiskeyCardsByIds,
+  isViableCard,
 } from "../services/discover.service";
 
 function parseMaybeNumber(v: string) {
@@ -58,6 +58,12 @@ export function useDiscover() {
   const [seeAllError, setSeeAllError] = useState("");
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Prevent accidental double-fetches
+  const inFlightRef = useRef(false);
+
+  // Ensure we only do the initial fetch once (no “reload on tab tap”)
+  const didInitialLoadRef = useRef(false);
 
   const filterBadge = useMemo(() => {
     const parts: string[] = [];
@@ -122,6 +128,10 @@ export function useDiscover() {
   async function loadSectionPools(opts?: { silent?: boolean }) {
     const silent = !!opts?.silent;
 
+    // guard: avoid overlapping fetches
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+
     if (silent) setRefreshing(true);
     else setLoading(true);
 
@@ -160,7 +170,6 @@ export function useDiscover() {
       setHighestPool(highCards);
 
       // ✅ NEWEST should show “new”, even if unrated.
-      // Filters (type/proof) will still apply later, but do NOT delete unrated items here.
       setNewestPool(newestCards);
     } catch (e: any) {
       setTrendingPool([]);
@@ -171,14 +180,20 @@ export function useDiscover() {
     } finally {
       if (silent) setRefreshing(false);
       else setLoading(false);
+
+      inFlightRef.current = false;
     }
   }
 
+  // ✅ Initial load only (prevents reload when returning to tab)
   useEffect(() => {
+    if (didInitialLoadRef.current) return;
+    didInitialLoadRef.current = true;
     loadSectionPools();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedType, minProofText, maxProofText]);
+  }, []);
 
+  // ✅ Filters now ONLY re-filter locally (no network)
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 

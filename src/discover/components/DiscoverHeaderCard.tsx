@@ -11,12 +11,10 @@ import { type } from "../../../lib/typography";
 
 function Card({
   title,
-  subtitle,
   rightHeader,
   children,
 }: {
   title: string;
-  subtitle?: string;
   rightHeader?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -25,33 +23,37 @@ function Card({
       style={{
         backgroundColor: colors.surface,
         borderRadius: radii.lg,
-        padding: spacing.lg,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.lg,
         borderWidth: 1,
         borderColor: colors.divider,
         ...shadows.card,
-        gap: spacing.md,
+        gap: spacing.sm,
       }}
     >
-      <View style={{ gap: 6 }}>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: spacing.md,
-          }}
-        >
-          <Text style={type.sectionHeader}>{title}</Text>
-          {rightHeader ? rightHeader : null}
-        </View>
-
-        {subtitle ? (
-          <Text style={[type.microcopyItalic, { lineHeight: 18 }]}>
-            {subtitle}
-          </Text>
-        ) : null}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: spacing.md,
+        }}
+      >
+        <Text style={[type.sectionHeader, { fontSize: 18 }]}>
+          {title}
+        </Text>
+        {rightHeader ? rightHeader : null}
       </View>
-
+<View
+  style={{
+    width: 24,
+    height: 2,
+    backgroundColor: colors.accent,
+    marginTop: 6,
+    marginBottom: 2,
+    opacity: 0.7,
+  }}
+/>
       {children}
     </View>
   );
@@ -79,22 +81,39 @@ function IconButton({
         paddingHorizontal: 10,
         backgroundColor: pressed ? colors.highlight : "transparent",
         opacity: pressed ? 0.92 : 1,
+        gap: 8,
       })}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <Ionicons
-          name={icon}
-          size={16}
-          color={colors.textPrimary}
-          style={{ opacity: 0.9 }}
-        />
-        {badgeText ? (
-          <Text style={[type.body, { fontWeight: "900", fontSize: 12 }]}>
-            {badgeText}
-          </Text>
-        ) : null}
-      </View>
+      <Ionicons
+        name={icon}
+        size={16}
+        color={colors.textPrimary}
+        style={{ opacity: 0.9 }}
+      />
+      {badgeText ? (
+        <Text style={[type.caption, { fontWeight: "800", opacity: 0.9 }]}>
+          {badgeText}
+        </Text>
+      ) : null}
     </Pressable>
+  );
+}
+
+function SmallPill({ label }: { label: string }) {
+  return (
+    <View
+      style={{
+        alignSelf: "flex-start",
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 999,
+        backgroundColor: colors.accentFaint,
+        borderWidth: 1,
+        borderColor: colors.borderSubtle,
+      }}
+    >
+      <Text style={[type.caption, { opacity: 0.9 }]}>{label}</Text>
+    </View>
   );
 }
 
@@ -111,37 +130,37 @@ export function DiscoverHeaderCard({
   loading: boolean;
   statusError: string;
 }) {
+  const hasFilters = !!filterBadgeText;
+
   return (
     <Card
-      title="Discover"
-      subtitle="Curated lists, refreshed as the community logs."
+      title="Narrow down to what you like"
       rightHeader={
         <IconButton
           icon="options-outline"
           onPress={onOpenFilters}
-          badgeText={filterBadgeActive ? "Active" : undefined}
+          badgeText={filterBadgeActive ? "Filters" : undefined}
         />
       }
     >
-      <Text style={[type.microcopyItalic, { lineHeight: 20 }]}>
-        Pull down to refresh — trending updates even when you’re not logging.
+
+
+      {/* Helper line (caption) */}
+      <Text style={[type.microcopyItalic, { opacity: 0.72, lineHeight: 18 }]}>
+        Trending updates even when you’re not logging.
       </Text>
 
-      {filterBadgeText ? (
-        <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.78, fontSize: 12 }]}>
-          Filters: {filterBadgeText}
-        </Text>
-      ) : null}
+      {/* Chips / status */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 2 }}>
+        {hasFilters ? <SmallPill label={`Filters: ${filterBadgeText}`} /> : null}
+        {loading ? <SmallPill label="Updating…" /> : null}
+        {statusError ? <SmallPill label="Issue loading data" /> : null}
+      </View>
 
-      {loading ? (
-        <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.72 }]}>
-          Loading…
-        </Text>
-      ) : null}
-
+      {/* If you want the actual error visible, keep it subtle */}
       {statusError ? (
-        <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.8 }]}>
-          Error: {statusError}
+        <Text style={[type.caption, { opacity: 0.6, marginTop: 6 }]}>
+          {statusError}
         </Text>
       ) : null}
     </Card>

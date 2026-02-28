@@ -1,3 +1,4 @@
+// src/profile/components/YourStatsCard.tsx
 import { router } from "expo-router";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
@@ -28,49 +29,100 @@ export function YourStatsCard({
 }) {
   const Content = (
     <>
-      <View style={{ gap: spacing.xs }}>
-        <Text style={type.sectionHeader}>Statistics</Text>
-        <Text style={[type.caption, { color: colors.textSecondary }]}>
+      {/* ===== Statistics (tight) ===== */}
+      <View style={{ gap: 2 }}>
+        <Text style={[type.sectionHeader, { fontSize: 16 }]}>Statistics</Text>
+        <Text style={[type.caption, { color: colors.textSecondary, opacity: 0.9 }]}>
           A quick snapshot of your journal so far.
         </Text>
       </View>
 
-      <View style={{ marginTop: spacing.md, flexDirection: "row", gap: spacing.md }}>
+      <View style={{ marginTop: spacing.sm, flexDirection: "row", gap: spacing.md }}>
         <StatPill label="Tastings" value={tastingsText} />
         <StatPill label="Avg. rating" value={avgText} />
       </View>
 
+      {/* tighter divider */}
       <View
         style={{
           height: 1,
           backgroundColor: colors.divider,
-          opacity: 0.65,
-          marginTop: spacing.lg,
+          opacity: 0.5,
+          marginTop: spacing.md,
         }}
       />
 
-      <View style={{ marginTop: spacing.md, flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" }}>
-        <Text style={[type.labelCaps ?? type.body, { color: colors.textSecondary, opacity: 0.9 }]}>TOP 5</Text>
-        <Text style={[type.caption, { color: colors.textSecondary }]}>Tap to open</Text>
+      {/* ===== Top 5 (make it POP) ===== */}
+      <View
+        style={{
+          marginTop: spacing.md,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: spacing.md,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 2,
+              backgroundColor: colors.accent,
+              opacity: 0.9,
+            }}
+          />
+          <Text style={[type.sectionHeader, { fontSize: 16 }]}>Top 5</Text>
+        </View>
+
+        <Text style={[type.body, { fontSize: 12, color: colors.accent, fontWeight: "900" }]}>
+          Tap to open
+        </Text>
       </View>
 
       {top5.length === 0 ? (
-        <Text style={[type.caption, { marginTop: spacing.sm, color: colors.textSecondary }]}>No ratings yet.</Text>
+        <Text style={[type.caption, { marginTop: spacing.sm, color: colors.textSecondary }]}>
+          No ratings yet.
+        </Text>
       ) : (
         <View
           style={{
             marginTop: spacing.sm,
+
+            // distinct “feature” container
             borderWidth: 1,
             borderColor: colors.divider,
             borderRadius: radii.lg,
             overflow: "hidden",
+
+            // slightly different surface so it reads as special
             backgroundColor: colors.surfaceSunken ?? colors.surface,
+
+            // subtle accent rail = “this matters”
+            position: "relative",
           }}
         >
+          {/* accent rail */}
+          <View
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 3,
+              backgroundColor: colors.accent,
+              opacity: 0.65,
+            }}
+          />
+
           {top5.map((r, idx) => {
             const nm = (r.whiskey_name ?? "Whiskey").trim() || "Whiskey";
             const rt =
-              r.rating == null || !Number.isFinite(Number(r.rating)) ? "—" : String(Math.round(Number(r.rating)));
+              r.rating == null || !Number.isFinite(Number(r.rating))
+                ? "—"
+                : String(Math.round(Number(r.rating)));
+
+            const isLast = idx === top5.length - 1;
 
             return (
               <Pressable
@@ -84,25 +136,40 @@ export function YourStatsCard({
                 style={({ pressed }) => ({
                   flexDirection: "row",
                   alignItems: "center",
-                  paddingVertical: 10, // ✅ condensed
+                  paddingVertical: 11,
                   paddingHorizontal: spacing.md,
-                  borderBottomWidth: idx === top5.length - 1 ? 0 : 1,
+                  paddingLeft: spacing.md + 6, // space away from accent rail
+                  borderBottomWidth: isLast ? 0 : 1,
                   borderBottomColor: colors.divider,
                   backgroundColor: pressed ? (colors.accentFaint ?? colors.highlight) : "transparent",
                 })}
               >
-                {/* Smaller rank */}
-                <Text style={[type.caption, { width: 22, color: colors.textSecondary, opacity: 0.9 }]}>
-                  {idx + 1}
-                </Text>
+                {/* Rank badge */}
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: colors.divider,
+                    backgroundColor: colors.surface,
+                    marginRight: 10,
+                  }}
+                >
+                  <Text style={[type.caption, { color: colors.textSecondary, fontWeight: "900" }]}>
+                    {idx + 1}
+                  </Text>
+                </View>
 
                 {/* Name */}
-                <Text style={[type.body, { flex: 1, color: colors.textPrimary }]} numberOfLines={1}>
+                <Text style={[type.body, { flex: 1, color: colors.textPrimary, fontWeight: "900" }]} numberOfLines={1}>
                   {nm}
                 </Text>
 
                 {/* Rating */}
-                <Text style={[type.body, { width: 54, textAlign: "right", color: colors.textPrimary, opacity: 0.95 }]}>
+                <Text style={[type.body, { width: 54, textAlign: "right", color: colors.textPrimary, fontWeight: "900" }]}>
                   {rt}
                 </Text>
               </Pressable>

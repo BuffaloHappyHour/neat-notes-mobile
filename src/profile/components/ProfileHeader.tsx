@@ -1,5 +1,6 @@
 // src/profile/components/ProfileHeader.tsx
 import { Ionicons } from "@expo/vector-icons";
+import { router, type Href } from "expo-router";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 
@@ -29,6 +30,13 @@ export function ProfileHeader({
   shareAnon?: boolean; // ✅ optional
   onRefresh: () => void;
 }) {
+  // ✅ Typed routes (matches your app)
+  const SETTINGS_HREF: Href = "/account-settings";
+
+  // Admin route may or may not exist in your typed routes list.
+  // Using `as any` avoids TS blocking builds if admin is behind a file you haven’t created yet.
+  const ADMIN_HREF = "/admin" as any;
+
   return (
     <View style={{ gap: spacing.sm }}>
       {/* Top row */}
@@ -50,21 +58,21 @@ export function ProfileHeader({
         {/* Actions */}
         <View style={{ flexDirection: "row", gap: spacing.sm }}>
           {isAdmin ? (
-            <View
-              style={{
+            <Pressable
+              onPress={() => router.push(ADMIN_HREF)}
+              style={({ pressed }) => ({
                 alignSelf: "center",
                 paddingHorizontal: spacing.sm,
                 paddingVertical: 6,
                 borderRadius: 999,
                 borderWidth: 1,
                 borderColor: colors.borderSubtle ?? colors.divider,
-                backgroundColor: colors.accentFaint ?? colors.surface,
-              }}
+                backgroundColor: pressed ? colors.accentFaint : colors.accentFaint ?? colors.surface,
+                opacity: pressed ? 0.85 : 1,
+              })}
             >
-              <Text style={[type.caption, { color: colors.textPrimary }]}>
-                Admin
-              </Text>
-            </View>
+              <Text style={[type.caption, { color: colors.textPrimary }]}>Admin</Text>
+            </Pressable>
           ) : null}
 
           <Pressable
@@ -90,9 +98,8 @@ export function ProfileHeader({
             />
           </Pressable>
 
-          {/* Settings icon if you have it elsewhere; leaving placeholder behavior */}
           <Pressable
-            onPress={() => {}}
+            onPress={() => router.push(SETTINGS_HREF)}
             style={({ pressed }) => ({
               width: 38,
               height: 38,
