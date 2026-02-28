@@ -779,7 +779,7 @@ export default function LogTab() {
               }}
               contentContainerStyle={{ paddingVertical: 2 }}
               nestedScrollEnabled
-              keyboardShouldPersistTaps="always"
+              keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator
             >
               {suggestions.map((s, idx) => {

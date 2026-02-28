@@ -13,6 +13,11 @@ function clamp100(n: number) {
 
 /**
  * Expo-Go-safe slider (pure JS) so we don't depend on native slider modules.
+ * Goals:
+ * - tighter vertical rhythm
+ * - − / slider / + on one line
+ * - slider feels centered (no droop)
+ * - slider slightly shorter than full width
  */
 function SimpleSlider({
   value,
@@ -22,6 +27,7 @@ function SimpleSlider({
   step = 1,
   disabled,
   onSlidingChange,
+  trackWidthPct = 0.92,
 }: {
   value: number;
   onValueChange: (v: number) => void;
@@ -30,6 +36,7 @@ function SimpleSlider({
   step?: number;
   disabled?: boolean;
   onSlidingChange?: (sliding: boolean) => void;
+  trackWidthPct?: number;
 }) {
   const trackRef = useRef<View>(null);
 
@@ -122,7 +129,7 @@ function SimpleSlider({
 
   const pct = max === min ? 0 : ((clamp(value) - min) / (max - min)) * 100;
 
-  const THUMB = 24;
+  const THUMB = 22;
   const thumbLeft = useMemo(() => {
     if (trackW <= 0) return 0;
     const raw = (trackW * pct) / 100 - THUMB / 2;
@@ -130,48 +137,51 @@ function SimpleSlider({
   }, [trackW, pct]);
 
   return (
-    <View
-      ref={trackRef}
-      onLayout={(e) => {
-        setTrackW(e.nativeEvent.layout.width);
-        setTimeout(() => measureTrackX(), 0);
-      }}
-      style={{
-        height: 34,
-        justifyContent: "center",
-        opacity: disabled ? 0.55 : 1,
-      }}
-      {...pan.panHandlers}
-    >
+    <View style={{ alignItems: "center" }}>
       <View
-        style={{
-          height: 10,
-          borderRadius: 999,
-          backgroundColor: colors.divider,
-          overflow: "hidden",
+        ref={trackRef}
+        onLayout={(e) => {
+          setTrackW(e.nativeEvent.layout.width);
+          setTimeout(() => measureTrackX(), 0);
         }}
+        style={{
+          width: `${Math.max(0.6, Math.min(1, trackWidthPct)) * 100}%`,
+          height: 26, // ✅ optical centering
+          justifyContent: "center",
+          opacity: disabled ? 0.55 : 1,
+        }}
+        {...pan.panHandlers}
       >
         <View
           style={{
-            width: `${pct}%`,
-            height: "100%",
+            height: 10,
+            borderRadius: 999,
+            backgroundColor: colors.divider,
+            overflow: "hidden",
+          }}
+        >
+          <View
+            style={{
+              width: `${pct}%`,
+              height: "100%",
+              backgroundColor: colors.accent,
+            }}
+          />
+        </View>
+
+        <View
+          style={{
+            position: "absolute",
+            left: thumbLeft,
+            width: THUMB,
+            height: THUMB,
+            borderRadius: 999,
             backgroundColor: colors.accent,
+            borderWidth: 2,
+            borderColor: colors.surface,
           }}
         />
       </View>
-
-      <View
-        style={{
-          position: "absolute",
-          left: thumbLeft,
-          width: THUMB,
-          height: THUMB,
-          borderRadius: 999,
-          backgroundColor: colors.accent,
-          borderWidth: 2,
-          borderColor: colors.surface,
-        }}
-      />
     </View>
   );
 }
@@ -185,11 +195,17 @@ type Props = {
 
 export default function RatingSection({ locked, rating, setRating, onSlidingChange }: Props) {
   const repeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isDraggingRef = useRef(false);
+
+  const v = useMemo(() => clamp100(rating == null ? 0 : Number(rating)), [rating]);
 
   function stepRating(delta: number) {
+    if (locked) return;
+    if (isDraggingRef.current) return;
+
     setRating((prev) => {
       const base = prev == null ? 0 : Number(prev);
-      return clamp100(base + delta);
+      return clamp100(Math.round(base + delta));
     });
   }
 
@@ -199,6 +215,9 @@ export default function RatingSection({ locked, rating, setRating, onSlidingChan
   }
 
   function startRepeat(delta: number) {
+    if (locked) return;
+    if (isDraggingRef.current) return;
+
     stopRepeat();
     stepRating(delta);
     repeatTimerRef.current = setInterval(() => stepRating(delta), 80);
@@ -209,69 +228,17 @@ export default function RatingSection({ locked, rating, setRating, onSlidingChan
   }, []);
 
   return (
-    <View style={{ gap: spacing.md }}>
-      <Text style={type.sectionHeader}>Rating</Text>
-      <Text style={[type.microcopyItalic, { marginTop: spacing.xs, opacity: 0.85 }]}>
+    <View style={{ gap: spacing.xs + 2 }}>
+      <Text style={[type.sectionHeader, { fontSize: 22},{ marginBottom: 0 }]}>Rating</Text>
+      <Text style={[type.microcopyItalic, { marginTop: 0, opacity: 1 }]}>
         Drag the bar for big moves. Press + / − to refine (hold for fast).
       </Text>
 
-      <View style={{ marginTop: spacing.lg, gap: spacing.md }}>
-        <SimpleSlider
-          disabled={locked}
-          value={rating == null ? 0 : rating}
-          min={0}
-          max={100}
-          step={1}
-          onSlidingChange={(s: boolean) => onSlidingChange?.(s)}
-          onValueChange={(v) => setRating(clamp100(Math.round(v)))}
-        />
-
-        <View style={{ flexDirection: "row", gap: spacing.md, justifyContent: "space-between" }}>
-          <Pressable
-            onPress={() => stepRating(-1)}
-            onPressIn={() => startRepeat(-1)}
-            onPressOut={stopRepeat}
-            disabled={locked}
-            style={({ pressed }) => ({
-              width: 54,
-              height: 54,
-              borderRadius: radii.md,
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: colors.divider,
-              backgroundColor: pressed ? colors.highlight : "transparent",
-              opacity: locked ? 0.5 : 1,
-            })}
-          >
-            <Text style={[type.button, { fontSize: 22, color: colors.textPrimary }]}>−</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => stepRating(1)}
-            onPressIn={() => startRepeat(1)}
-            onPressOut={stopRepeat}
-            disabled={locked}
-            style={({ pressed }) => ({
-              width: 54,
-              height: 54,
-              borderRadius: radii.md,
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: colors.divider,
-              backgroundColor: pressed ? colors.highlight : "transparent",
-              opacity: locked ? 0.5 : 1,
-            })}
-          >
-            <Text style={[type.button, { fontSize: 22, color: colors.textPrimary }]}>+</Text>
-          </Pressable>
-        </View>
-
+      <View style={{ marginTop: spacing.xs, gap: spacing.xs }}>
         <Text
           style={{
-            fontSize: 56,
-            lineHeight: 60,
+            fontSize: 54,
+            lineHeight: 58,
             fontWeight: "900",
             textAlign: "center",
             color: colors.textPrimary,
@@ -279,8 +246,69 @@ export default function RatingSection({ locked, rating, setRating, onSlidingChan
             opacity: rating == null ? 0.35 : 1,
           }}
         >
-          {rating == null ? "—" : String(rating)}
+          {rating == null ? "—" : String(Math.round(v))}
         </Text>
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+          <Pressable
+            onPress={() => stepRating(-1)}
+            onPressIn={() => startRepeat(-1)}
+            onPressOut={stopRepeat}
+            disabled={locked}
+            style={({ pressed }) => ({
+              width: 46,
+              height: 46,
+              borderRadius: radii.md,
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: colors.divider,
+              backgroundColor: pressed ? colors.highlight : "rgba(255,255,255,0.03)",
+              opacity: locked ? 0.5 : 1,
+            })}
+          >
+            <Text style={[type.button, { fontSize: 22, color: colors.textPrimary }]}>−</Text>
+          </Pressable>
+
+          <View style={{ flex: 1 }}>
+            <SimpleSlider
+              disabled={locked}
+              value={v}
+              min={0}
+              max={100}
+              step={1}
+              onSlidingChange={(s: boolean) => {
+                isDraggingRef.current = s;
+                onSlidingChange?.(s);
+              }}
+              onValueChange={(next) => {
+                const rounded = clamp100(Math.round(Number(next)));
+                setRating(rounded);
+              }}
+              trackWidthPct={0.92}
+            />
+          </View>
+
+          <Pressable
+            onPress={() => stepRating(1)}
+            onPressIn={() => startRepeat(1)}
+            onPressOut={stopRepeat}
+            disabled={locked}
+            style={({ pressed }) => ({
+              width: 46,
+              height: 46,
+              borderRadius: radii.md,
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: colors.divider,
+              backgroundColor: pressed ? colors.highlight : "rgba(255,255,255,0.03)",
+              opacity: locked ? 0.5 : 1,
+            })}
+          >
+            <Text style={[type.button, { fontSize: 22, color: colors.textPrimary }]}>+</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );

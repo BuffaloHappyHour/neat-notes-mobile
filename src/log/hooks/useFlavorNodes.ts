@@ -1,5 +1,6 @@
-// app/log/hooks/useFlavorNodes.ts
+// src/log/hooks/useFlavorNodes.ts
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { hapticSuccess } from "../../../lib/haptics";
 import { supabase } from "../../../lib/supabase";
 
 /* ------------------- Types ------------------- */
@@ -8,7 +9,7 @@ export type FlavorNode = {
   id: string;
   parent_id: string | null;
   level: number | null;
-  family: string | null;
+  family: string | null; // keep for UI compatibility
   label: string;
   sort_order: number | null;
   is_active: boolean | null;
@@ -16,10 +17,12 @@ export type FlavorNode = {
 };
 
 export type RefineSortMode = "DEFAULT" | "SELECTED" | "AZ";
+export type ReviewSentiment = "LIKE" | "NEUTRAL" | "DISLIKE";
 
-type TastingFlavorNodeRow = {
-  node_id: string;
-  sentiment: string | null;
+type TastingFlavorSelectionRow = {
+  flavor_node_id: string;
+  intensity: number | null;
+  sentiment?: ReviewSentiment | null;
 };
 
 /* ------------------- Helpers ------------------- */
@@ -70,13 +73,11 @@ function isFinishLabel(label: string) {
   return safeText(label).toLowerCase() === "finish";
 }
 
-function isNegativeSentiment(v: any) {
-  const s = safeText(v).toLowerCase();
-  return s === "negative" || s === "neg" || s === "-1" || s === "dislike";
+function asSentiment(v: any): ReviewSentiment {
+  const s = safeText(v).toUpperCase();
+  if (s === "LIKE" || s === "DISLIKE" || s === "NEUTRAL") return s as ReviewSentiment;
+  return "NEUTRAL";
 }
-
-// IMPORTANT: enum is case-sensitive in Postgres
-const POS_SENTIMENT = "positive";
 
 /* ------------------- Tree helpers ------------------- */
 
@@ -108,7 +109,11 @@ function getTopLevelLabelForNode(nodeId: string, byId: Map<string, FlavorNode>) 
   return lbl;
 }
 
-function isNodeUnderAnyRoot(nodeId: string, allowedRootIds: Set<string>, byId: Map<string, FlavorNode>) {
+function isNodeUnderAnyRoot(
+  nodeId: string,
+  allowedRootIds: Set<string>,
+  byId: Map<string, FlavorNode>
+) {
   if (allowedRootIds.size === 0) return true; // no scope => all
   const rootId = getRootIdForNode(nodeId, byId);
   if (!rootId) return false;
@@ -128,12 +133,8 @@ export function useFlavorNodesEngine(params: {
   // optional: initial selection when editing an existing tasting
   initialSelectedNodeIds?: string[];
 }) {
-  const {
-    flavorTags,
-    setFlavorTags,
-    fallbackDislikeTags = [],
-    initialSelectedNodeIds = [],
-  } = params;
+  const { flavorTags, setFlavorTags, fallbackDislikeTags = [], initialSelectedNodeIds = [] } =
+    params;
 
   // Refine modal state
   const [refineOpen, setRefineOpen] = useState(false);
@@ -217,6 +218,7 @@ export function useFlavorNodesEngine(params: {
       if (!k) continue;
       m.set(k, n.id);
     }
+
     // include dislikes root lookup for dislike grid (but NOT in topLevelNodes)
     const rootAll = byParent.get("__ROOT__") ?? [];
     for (const n of rootAll) {
@@ -239,11 +241,15 @@ export function useFlavorNodesEngine(params: {
   }, [topLevelNodes]);
 
   const ALL_TOP_LEVEL_LABELS = useMemo(() => {
-    const fromDb = topLevelNodes.map((n) => safeText(n.label)).filter(Boolean);
-    return fromDb.filter((t) => !isFinishLabel(t) && normalizeKey(t) !== "dislikes");
-  }, [topLevelNodes]);
+  const fromDb = topLevelNodes.map((n) => safeText(n.label)).filter(Boolean);
 
-  // dislikes from flavor_nodes "Dislikes" branch
+  // ✅ IMPORTANT: ensure labels are unique (prevents duplicate React keys in NotesGrid)
+  const uniq = uniqStringsKeepOrder(fromDb);
+
+  return uniq.filter((t) => !isFinishLabel(t) && normalizeKey(t) !== "dislikes");
+}, [topLevelNodes]);
+
+  // dislikes from flavor_nodes_v2 "Dislikes" branch (if it exists)
   const DISLIKE_TAGS = useMemo(() => {
     const dislikesRootId = rootIdByLabel.get("dislikes");
     if (!dislikesRootId) return fallbackDislikeTags;
@@ -251,7 +257,6 @@ export function useFlavorNodesEngine(params: {
     const kids = (byParent.get(dislikesRootId) ?? [])
       .map((n) => safeText(n.label))
       .filter(Boolean);
-
     return kids.length ? kids : fallbackDislikeTags;
   }, [rootIdByLabel, byParent, fallbackDislikeTags]);
 
@@ -272,13 +277,18 @@ export function useFlavorNodesEngine(params: {
   /* ------------------- Drilldown navigation ------------------- */
 
   const currentParentId = refinePath.length ? refinePath[refinePath.length - 1] : "__ROOT__";
-
-  const currentNodes = useMemo(() => byParent.get(currentParentId) ?? [], [byParent, currentParentId]);
+  const currentNodes = useMemo(
+    () => byParent.get(currentParentId) ?? [],
+    [byParent, currentParentId]
+  );
 
   /* ------------------- Sorting ------------------- */
 
   function applySort(list: FlavorNode[]) {
     const selectedSet = new Set(selectedNodeIds);
+
+    // ✅ Keep deep refine (L3+) stable (no reorder on tap)
+    const lockOrderAtDepth = refinePath.length >= 2;
 
     if (refineSort === "DEFAULT") return list;
 
@@ -292,7 +302,9 @@ export function useFlavorNodesEngine(params: {
       return copy;
     }
 
-    // SELECTED first
+    // SELECTED first — but not when deep
+    if (lockOrderAtDepth) return list;
+
     const selected: FlavorNode[] = [];
     const rest: FlavorNode[] = [];
     for (const n of list) {
@@ -348,12 +360,20 @@ export function useFlavorNodesEngine(params: {
 
     // Drilldown mode
     const levelList = currentNodes.filter((n) => !isFinishLabel(n.label));
-    // hide dislikes anywhere
     const filtered = levelList.filter(
       (n) => normalizeKey(safeText(getTopLevelLabelForNode(n.id, byId) ?? "")) !== "dislikes"
     );
     return applySort(filtered);
-  }, [refineSearch, allNodes, currentNodes, refineSort, selectedNodeIds, scopedRootIdSet, byId]);
+  }, [
+    refineSearch,
+    allNodes,
+    currentNodes,
+    refineSort,
+    selectedNodeIds,
+    scopedRootIdSet,
+    byId,
+    refinePath,
+  ]);
 
   /* ------------------- “Not seeing it?” add-family helpers ------------------- */
 
@@ -379,7 +399,13 @@ export function useFlavorNodesEngine(params: {
   /* ------------------- Selection helpers ------------------- */
 
   function toggleNodeId(id: string) {
-    setSelectedNodeIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    try {
+      hapticSuccess();
+    } catch {}
+
+    setSelectedNodeIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   }
 
   /* ------------------- Derived UI strings ------------------- */
@@ -391,9 +417,7 @@ export function useFlavorNodesEngine(params: {
 
   const selectedNodeLabelsPreview = useMemo(() => {
     if (!selectedNodeIds.length) return "";
-    const labels = selectedNodeIds
-      .map((id) => safeText(byId.get(id)?.label))
-      .filter(Boolean);
+    const labels = selectedNodeIds.map((id) => safeText(byId.get(id)?.label)).filter(Boolean);
     const uniq = uniqStringsKeepOrder(labels);
     return uniq.slice(0, 3).join(", ") + (uniq.length > 3 ? "…" : "");
   }, [selectedNodeIds, byId]);
@@ -403,9 +427,7 @@ export function useFlavorNodesEngine(params: {
     if (!refinePath.length) {
       return scopedRootIds.length ? "Browsing within your selected notes" : "Browsing all notes";
     }
-    const labels = refinePath
-      .map((id) => safeText(byId.get(id)?.label))
-      .filter(Boolean);
+    const labels = refinePath.map((id) => safeText(byId.get(id)?.label)).filter(Boolean);
     return labels.length ? labels.join("  ›  ") : "Browsing…";
   }, [refineSearch, refinePath, byId, scopedRootIds.length]);
 
@@ -415,15 +437,15 @@ export function useFlavorNodesEngine(params: {
     return "";
   }, [scopedRootIds.length, selectedNodeIds.length]);
 
-  /* ------------------- Fetch flavor_nodes ------------------- */
+  /* ------------------- Fetch flavor_nodes_v2 ------------------- */
 
   const fetchFlavorNodes = useCallback(async () => {
     setNodesLoading(true);
     setNodesError(null);
     try {
       const { data, error } = await supabase
-        .from("flavor_nodes")
-        .select("id,parent_id,level,family,label,sort_order,is_active,slug")
+        .from("flavor_nodes_v2")
+        .select("id,parent_id,level,label,sort_order,is_active,slug")
         .eq("is_active", true);
 
       if (error) throw new Error(error.message);
@@ -434,7 +456,7 @@ export function useFlavorNodesEngine(params: {
           id: safeText(r.id),
           parent_id: r.parent_id ? safeText(r.parent_id) : null,
           level: r.level == null ? null : Number(r.level),
-          family: r.family != null ? safeText(r.family) : null,
+          family: null, // ✅ v2 doesn't have family
           label: safeText(r.label),
           sort_order: r.sort_order == null ? null : Number(r.sort_order),
           is_active: r.is_active == null ? true : Boolean(r.is_active),
@@ -458,29 +480,69 @@ export function useFlavorNodesEngine(params: {
     void fetchFlavorNodes();
   }, [fetchFlavorNodes]);
 
-  /* ------------------- tasting_flavor_nodes load/replace ------------------- */
+  /* ------------------- tasting_flavor_selections_v2 load/replace ------------------- */
 
   async function loadTastingFlavorNodes(tid: string) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+    if (!userId) return [];
+
     const { data, error } = await supabase
-      .from("tasting_flavor_nodes")
-      .select("node_id, sentiment")
-      .eq("tasting_id", tid);
+      .from("tasting_flavor_selections_v2")
+      .select("flavor_node_id,intensity,sentiment")
+      .eq("tasting_id", tid)
+      .eq("user_id", userId);
 
     if (error) throw new Error(error.message);
 
-    const rows = Array.isArray(data) ? ((data as any) as TastingFlavorNodeRow[]) : [];
-    const positive = rows
-      .filter((r) => isUuid(r.node_id) && !isNegativeSentiment(r.sentiment))
-      .map((r) => safeText(r.node_id));
+    const rows = Array.isArray(data) ? (data as any as TastingFlavorSelectionRow[]) : [];
+    const ids = rows.map((r) => safeText(r.flavor_node_id)).filter((x) => isUuid(x));
+    return uniqUuidsKeepOrder(ids);
+  }
 
-    return uniqUuidsKeepOrder(positive);
+  async function loadTastingFlavorSentiments(tid: string) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+    if (!userId) return {} as Record<string, ReviewSentiment>;
+
+    const { data, error } = await supabase
+      .from("tasting_flavor_selections_v2")
+      .select("flavor_node_id,sentiment")
+      .eq("tasting_id", tid)
+      .eq("user_id", userId);
+
+    if (error) throw new Error(error.message);
+
+    const rows = Array.isArray(data) ? (data as any[]) : [];
+    const out: Record<string, ReviewSentiment> = {};
+    for (const r of rows) {
+      const id = safeText(r.flavor_node_id);
+      if (!isUuid(id)) continue;
+      out[id] = asSentiment((r as any).sentiment);
+    }
+    return out;
   }
 
   async function replaceTastingFlavorNodes(tid: string, nodeIds: string[]) {
+    // Back-compat: still works without sentiments
+    return replaceTastingFlavorNodesWithSentiment(tid, nodeIds, {});
+  }
+
+  async function replaceTastingFlavorNodesWithSentiment(
+    tid: string,
+    nodeIds: string[],
+    sentimentById: Record<string, ReviewSentiment>
+  ) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+    if (!userId) throw new Error("Not signed in");
+
+    // delete existing selections for this tasting/user
     const { error: delErr } = await supabase
-      .from("tasting_flavor_nodes")
+      .from("tasting_flavor_selections_v2")
       .delete()
-      .eq("tasting_id", tid);
+      .eq("tasting_id", tid)
+      .eq("user_id", userId);
 
     if (delErr) throw new Error(delErr.message);
 
@@ -489,11 +551,13 @@ export function useFlavorNodesEngine(params: {
 
     const inserts = clean.map((id) => ({
       tasting_id: tid,
-      node_id: id,
-      sentiment: POS_SENTIMENT,
+      user_id: userId,
+      flavor_node_id: id,
+      intensity: null,
+      sentiment: asSentiment(sentimentById[id]),
     }));
 
-    const { error: insErr } = await supabase.from("tasting_flavor_nodes").insert(inserts);
+    const { error: insErr } = await supabase.from("tasting_flavor_selections_v2").insert(inserts);
     if (insErr) throw new Error(insErr.message);
   }
 
@@ -559,6 +623,8 @@ export function useFlavorNodesEngine(params: {
 
     // join table ops
     loadTastingFlavorNodes,
+    loadTastingFlavorSentiments,
     replaceTastingFlavorNodes,
+    replaceTastingFlavorNodesWithSentiment,
   };
 }

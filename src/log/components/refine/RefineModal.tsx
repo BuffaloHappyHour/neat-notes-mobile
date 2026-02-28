@@ -1,108 +1,17 @@
-// app/log/components/refine/RefineModal.tsx
-import React from "react";
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+// src/log/components/refine/RefineModal.tsx
+import React, { useMemo, useState } from "react";
+import { Alert, Modal, View } from "react-native";
 
-import { radii } from "../../../../lib/radii";
-import { shadows } from "../../../../lib/shadows";
 import { spacing } from "../../../../lib/spacing";
 import { colors } from "../../../../lib/theme";
-import { type } from "../../../../lib/typography";
+import { RefineModalProps, ReviewSentiment } from "./types";
 
-type FlavorNode = {
-  id: string;
-  parent_id: string | null;
-  level: number | null;
-  family: string | null;
-  label: string;
-  sort_order: number | null;
-  is_active: boolean | null;
-  slug: string | null;
-};
+import { RefineBottomNav } from "./components/RefineBottomNav";
+import { RefineBrowseBody } from "./components/RefineBrowseBody";
+import { RefineHeader } from "./components/RefineHeader";
+import { RefineReviewBody } from "./components/RefineReviewBody";
 
-type RefineSortMode = "DEFAULT" | "SELECTED" | "AZ";
-
-type PillProps = {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  disabled?: boolean;
-};
-
-type SectionGroupHeaderProps = {
-  title: string;
-  onBrowse: () => void;
-  disabled?: boolean;
-};
-
-export function RefineModal(props: {
-  visible: boolean;
-  locked: boolean;
-
-  // state
-  refineSearch: string;
-  setRefineSearch: (v: string) => void;
-
-  refinePath: string[];
-  setRefinePath: (updater: (prev: string[]) => string[]) => void;
-
-  refineSort: RefineSortMode;
-  setRefineSort: (v: RefineSortMode) => void;
-
-  addFamilyOpen: boolean;
-  setAddFamilyOpen: (updater: (prev: boolean) => boolean) => void;
-
-  // derived
-  scopedRootIds: string[];
-  selectedCountText: string;
-  refineBreadcrumb: string;
-
-  // actions
-  closeRefine: () => void;
-  fetchFlavorNodes: () => void;
-
-  // data for "Not seeing it?"
-  addableFamilies: string[];
-  addFamilyLabel: (lbl: string) => void;
-
-  // render helpers
-  Pill: (p: PillProps) => React.ReactElement;
-  SectionGroupHeader: (p: SectionGroupHeaderProps) => React.ReactElement;
-  renderNodeRow: (n: FlavorNode, allowMore: boolean) => React.ReactElement;
-
-  // data for lists
-  nodesLoading: boolean;
-  nodesError: string | null;
-
-  visibleNodes: FlavorNode[];
-
-  // grouped browse
-  rootLabelById: Map<string, string>;
-  byParent: Map<string, FlavorNode[]>;
-  applySort: (list: FlavorNode[]) => FlavorNode[];
-  isFinishLabel: (label: string) => boolean;
-
-  // full browse fallback
-  topLevelNodes: FlavorNode[];
-  normalizeKey: (s: string) => string;
-  safeText: (v: any) => string;
-
-  // ✅ Correct signature (engine provides a closure)
-  getTopLevelLabelForNode: (nodeId: string) => string | null;
-
-  byId: Map<string, FlavorNode>;
-
-  // selection
-  selectedNodeIds: string[];
-  setSelectedNodeIds: (ids: string[]) => void;
-}) {
+export function RefineModal(props: RefineModalProps) {
   const {
     visible,
     locked,
@@ -148,9 +57,119 @@ export function RefineModal(props: {
     safeText,
     getTopLevelLabelForNode,
 
+    byId,
+
     selectedNodeIds,
     setSelectedNodeIds,
-  } = props;
+
+    // ✅ optional (we’ll safely fall back if missing)
+    sentimentById: sentimentByIdFromProps,
+    setSentimentById: setSentimentByIdFromProps,
+  } = props as any;
+
+  const [mode, setMode] = useState<"BROWSE" | "REVIEW">("BROWSE");
+  const [optionsOpen, setOptionsOpen] = useState(false);
+
+  // ✅ Local fallback so we never crash even if props are missing at runtime
+  const [localSentiments, setLocalSentiments] = useState<Record<string, ReviewSentiment>>({});
+  const sentimentById: Record<string, ReviewSentiment> = sentimentByIdFromProps ?? localSentiments;
+  const setSentimentById: React.Dispatch<
+    React.SetStateAction<Record<string, ReviewSentiment>>
+  > = setSentimentByIdFromProps ?? setLocalSentiments;
+
+  const isSearching = !!refineSearch?.trim();
+  const isDeep = refinePath.length > 0;
+
+  const showAddFamilyBlock = scopedRootIds.length > 0;
+
+  const selectedNodesForReview = useMemo(() => {
+    const list = selectedNodeIds
+      .map((id: string) => byId.get(id))
+      .filter(Boolean);
+    return list;
+  }, [selectedNodeIds, byId]);
+
+  const confirmClearAll = () => {
+    if (locked) return;
+    if (selectedNodeIds.length === 0) return;
+
+    Alert.alert(
+      "Clear refined notes?",
+      "This will remove all refined notes you selected for this tasting.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: () => {
+            setSelectedNodeIds([]);
+            setSentimentById({});
+            setMode("BROWSE");
+          },
+        },
+      ]
+    );
+  };
+
+  const handleBottomBack = () => {
+    if (locked) return;
+
+    if (mode === "REVIEW") {
+      setMode("BROWSE");
+      return;
+    }
+
+    if (isSearching) {
+      setRefineSearch("");
+      setRefinePath(() => []);
+      return;
+    }
+
+    if (isDeep) {
+      setRefinePath((p: string[]) => p.slice(0, -1));
+      return;
+    }
+  };
+
+  const handleBottomDone = () => {
+    if (locked) return;
+
+    if (mode === "BROWSE") {
+      setOptionsOpen(false);
+      setMode("REVIEW");
+      return;
+    }
+
+    // REVIEW -> Apply (later: persist sentiment)
+    closeRefine();
+  };
+
+  const bottomBackEnabled = useMemo(() => {
+    if (locked) return false;
+    if (mode === "REVIEW") return true;
+    if (isSearching) return true;
+    if (isDeep) return true;
+    return false;
+  }, [locked, mode, isSearching, isDeep]);
+
+  const bottomBackLabel = useMemo(() => {
+    if (mode === "REVIEW") return "Back";
+    if (isSearching) return "Clear search";
+    return "Back";
+  }, [mode, isSearching]);
+
+  // Browse: "Review" (doesn’t exit)
+  // Review: "Apply" (calmer than "Finish")
+  const doneLabel = useMemo(() => (mode === "BROWSE" ? "Review" : "Apply"), [mode]);
+
+  const setSentiment = (id: string, s: ReviewSentiment) => {
+    setSentimentById((prev) => ({ ...(prev ?? {}), [id]: s }));
+  };
+
+  const handleSkipReview = () => {
+    if (locked) return;
+    closeRefine();
+  };
 
   return (
     <Modal
@@ -160,463 +179,81 @@ export function RefineModal(props: {
       onRequestClose={() => closeRefine()}
     >
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        {/* Header */}
-        <View
-          style={{
-            paddingTop: spacing.lg,
-            paddingHorizontal: spacing.lg,
-            paddingBottom: spacing.md,
-            gap: spacing.xs,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.divider,
-            backgroundColor: colors.background,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Text style={[type.sectionHeader, { marginBottom: 0 }]}>
-              Refine flavor notes
-            </Text>
+        <RefineHeader
+          mode={mode}
+          locked={locked}
+          onClose={() => closeRefine()}
+          onTopDone={() => closeRefine()}
+          refineSearch={refineSearch}
+          setRefineSearch={setRefineSearch}
+          resetPath={() => setRefinePath(() => [])}
+          scopedRootIds={scopedRootIds}
+          selectedCountText={selectedCountText}
+          optionsOpen={optionsOpen}
+          setOptionsOpen={setOptionsOpen}
+          refineSort={refineSort}
+          setRefineSort={setRefineSort}
+          Pill={Pill}
+          refineBreadcrumb={refineBreadcrumb}
+          canClear={selectedNodeIds.length > 0}
+          onClearAll={confirmClearAll}
+          showAddFamilyBlock={showAddFamilyBlock}
+          addFamilyOpen={addFamilyOpen}
+          toggleAddFamilyOpen={() => setAddFamilyOpen((v: boolean) => !v)}
+          addableFamilies={addableFamilies}
+          addFamilyLabel={addFamilyLabel}
+        />
 
-            <Pressable
-              onPress={() => closeRefine()}
-              style={({ pressed }) => ({
-                paddingVertical: 20,
-                paddingHorizontal: 14,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: colors.divider,
-                backgroundColor: pressed ? colors.highlight : "transparent",
-              })}
-            >
-              <Text style={[type.button, { color: colors.textPrimary }]}>
-                Done
-              </Text>
-            </Pressable>
-          </View>
-
-          <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
-            Advanced is optional — explore deeper if you’d like.
-          </Text>
-
-          <TextInput
-            value={refineSearch}
-            onChangeText={(t) => {
-              setRefineSearch(t);
-              setRefinePath(() => []);
-            }}
-            placeholder={
-              scopedRootIds.length
-                ? "Search within your selected notes…"
-                : "Search notes…"
-            }
-            placeholderTextColor={colors.textSecondary}
-            editable={!locked}
-            style={{
-              paddingVertical: 12,
-              paddingHorizontal: spacing.md,
-              borderRadius: radii.md,
-              borderWidth: 1,
-              borderColor: colors.divider,
-              backgroundColor: "transparent",
-              color: colors.textPrimary,
-              fontSize: 16,
-              fontFamily: type.body.fontFamily,
-              opacity: locked ? 0.7 : 1,
-            }}
-          />
-
-          {/* Controls */}
-          <View style={{ gap: 8 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <Pressable
-                disabled={locked || (!refinePath.length && !refineSearch)}
-                onPress={() => {
-                  if (refineSearch) {
-                    setRefineSearch("");
-                    return;
-                  }
-                  setRefinePath((p) => p.slice(0, -1));
-                }}
-                style={({ pressed }) => ({
-                  paddingVertical: 8,
-                  paddingHorizontal: 10,
-                  borderRadius: radii.md,
-                  borderWidth: 1,
-                  borderColor: colors.divider,
-                  backgroundColor: pressed ? colors.highlight : "transparent",
-                  opacity:
-                    locked || (!refinePath.length && !refineSearch) ? 0.4 : 1,
-                })}
-              >
-                <Text style={[type.button, { color: colors.textPrimary }]}>
-                  {refineSearch ? "Clear search" : "Back"}
-                </Text>
-              </Pressable>
-
-              <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
-                {selectedCountText}
-              </Text>
-            </View>
-
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 8,
-                alignItems: "center",
-              }}
-            >
-              <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
-                Sort:
-              </Text>
-              <Pill
-                label="Default"
-                active={refineSort === "DEFAULT"}
-                onPress={() => setRefineSort("DEFAULT")}
-                disabled={locked}
-              />
-              <Pill
-                label="Selected"
-                active={refineSort === "SELECTED"}
-                onPress={() => setRefineSort("SELECTED")}
-                disabled={locked}
-              />
-              <Pill
-                label="A–Z"
-                active={refineSort === "AZ"}
-                onPress={() => setRefineSort("AZ")}
-                disabled={locked}
-              />
-            </View>
-
-            <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
-              {refineBreadcrumb}
-            </Text>
-
-            {/* Not seeing it? */}
-            {scopedRootIds.length > 0 ? (
-              <View style={{ gap: 8 }}>
-                <Pressable
-                  disabled={locked}
-                  onPress={() => setAddFamilyOpen((v) => !v)}
-                  style={({ pressed }) => ({
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    borderRadius: radii.md,
-                    borderWidth: 1,
-                    borderColor: colors.divider,
-                    backgroundColor: pressed ? colors.highlight : "transparent",
-                    opacity: locked ? 0.6 : 1,
-                  })}
-                >
-                  <Text style={[type.body, { fontWeight: "900" }]}>
-                    Not seeing it? Add another top-level note
-                  </Text>
-                  <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
-                    Example: caramel is usually under Sweet.
-                  </Text>
-                </Pressable>
-
-                {addFamilyOpen ? (
-                  <View
-                    style={{
-                      borderWidth: 1,
-                      borderColor: colors.divider,
-                      borderRadius: radii.md,
-                      padding: spacing.md,
-                      gap: 8,
-                      backgroundColor: colors.surface,
-                      ...shadows.card,
-                    }}
-                  >
-                    <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
-                      Add a family:
-                    </Text>
-
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        flexWrap: "wrap",
-                        gap: 8,
-                      }}
-                    >
-                      {addableFamilies.map((lbl) => (
-                        <Pill
-                          key={lbl}
-                          label={lbl}
-                          active={false}
-                          onPress={() => addFamilyLabel(lbl)}
-                          disabled={locked}
-                        />
-                      ))}
-                      {!addableFamilies.length ? (
-                        <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
-                          You’ve already added all families.
-                        </Text>
-                      ) : null}
-                    </View>
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-          </View>
-        </View>
-
-        {/* Body */}
         <View
           style={{
             flex: 1,
             paddingHorizontal: spacing.lg,
-            paddingTop: spacing.lg,
+            paddingTop: spacing.md,
           }}
         >
-          {nodesLoading ? (
-            <View style={{ paddingVertical: spacing.xl, alignItems: "center" }}>
-              <ActivityIndicator />
-              <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.7 }]}>
-                Loading notes…
-              </Text>
-            </View>
-          ) : nodesError ? (
-            <View style={{ gap: spacing.sm }}>
-              <Text style={[type.body, { opacity: 0.85 }]}>
-                Couldn’t load refined notes.
-              </Text>
-              <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
-                {nodesError}
-              </Text>
-
-              <Pressable
-                disabled={locked}
-                onPress={() => fetchFlavorNodes()}
-                style={({ pressed }) => ({
-                  paddingVertical: 11,
-                  paddingHorizontal: 12,
-                  borderRadius: radii.md,
-                  borderWidth: 1,
-                  borderColor: colors.divider,
-                  backgroundColor: pressed ? colors.highlight : "transparent",
-                  opacity: locked ? 0.6 : 1,
-                  alignItems: "center",
-                  justifyContent: "center",
-                })}
-              >
-                <Text style={[type.button, { color: colors.textPrimary }]}>
-                  Retry
-                </Text>
-              </Pressable>
-            </View>
+          {mode === "REVIEW" ? (
+            <RefineReviewBody
+              locked={locked}
+              selectedNodes={selectedNodesForReview as any}
+              safeText={safeText}
+              sentimentById={sentimentById}
+              setSentiment={setSentiment}
+              byId={byId}
+              onSkip={handleSkipReview}
+            />
           ) : (
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: spacing.xl * 2 }}
-            >
-              {refineSearch ? (
-                <View style={{ gap: 10 }}>
-                  {visibleNodes.map((n) => renderNodeRow(n, true))}
-                  {!visibleNodes.length ? (
-                    <View
-                      style={{
-                        gap: 6,
-                        alignItems: "center",
-                        paddingTop: spacing.md,
-                      }}
-                    >
-                      <Text
-                        style={[
-                          type.microcopyItalic,
-                          { opacity: 0.75, textAlign: "center" },
-                        ]}
-                      >
-                        No matches
-                        {scopedRootIds.length ? " in your selected notes" : ""}.
-                      </Text>
-                      {scopedRootIds.length ? (
-                        <Text
-                          style={[
-                            type.microcopyItalic,
-                            { opacity: 0.75, textAlign: "center" },
-                          ]}
-                        >
-                          Try adding another top-level note (e.g., Sweet for
-                          caramel).
-                        </Text>
-                      ) : null}
-                    </View>
-                  ) : null}
-                </View>
-              ) : (
-                <>
-                  {refinePath.length ? (
-                    <View style={{ gap: 10 }}>
-                      {visibleNodes.map((n) => renderNodeRow(n, true))}
-                      {!visibleNodes.length ? (
-                        <Text
-                          style={[
-                            type.microcopyItalic,
-                            { opacity: 0.75, textAlign: "center" },
-                          ]}
-                        >
-                          Nothing here yet.
-                        </Text>
-                      ) : null}
-                    </View>
-                  ) : (
-                    <>
-                      {scopedRootIds.length ? (
-                        <View style={{ gap: spacing.xl }}>
-                          {scopedRootIds.map((rootId) => {
-                            const title = safeText(rootLabelById.get(rootId) ?? "");
-                            const children = (byParent.get(rootId) ?? []).filter(
-                              (n) => !isFinishLabel(n.label)
-                            );
-                            const list = applySort(children);
-                            if (!title || !list.length) return null;
-
-                            return (
-                              <View key={rootId} style={{ gap: 10 }}>
-                                <SectionGroupHeader
-                                  title={title}
-                                  disabled={locked}
-                                  onBrowse={() => setRefinePath(() => [rootId])}
-                                />
-                                {list.map((n) => (
-                                  <React.Fragment key={n.id}>
-                                    {renderNodeRow(n, true)}
-                                  </React.Fragment>
-                                ))}
-                              </View>
-                            );
-                          })}
-                        </View>
-                      ) : (
-                        <View style={{ gap: spacing.xl }}>
-                          {applySort(topLevelNodes)
-                            .filter(
-                              (root) =>
-                                !isFinishLabel(root.label) &&
-                                normalizeKey(root.label) !== "dislikes"
-                            )
-                            .map((root) => {
-                              const title = safeText(root.label);
-
-                              const children = (byParent.get(root.id) ?? [])
-                                .filter((n) => !isFinishLabel(n.label))
-                                .filter(
-                                  (n) =>
-                                    normalizeKey(
-                                      safeText(getTopLevelLabelForNode(n.id) ?? "")
-                                    ) !== "dislikes"
-                                );
-
-                              const list = applySort(children).slice(0, 4);
-                              if (!title) return null;
-
-                              return (
-                                <View key={root.id} style={{ gap: 10 }}>
-                                  <SectionGroupHeader
-                                    title={title}
-                                    disabled={locked}
-                                    onBrowse={() => setRefinePath(() => [root.id])}
-                                  />
-
-                                  {list.length ? (
-                                    list.map((n) => (
-                                      <React.Fragment key={n.id}>
-                                        {renderNodeRow(n, true)}
-                                      </React.Fragment>
-                                    ))
-                                  ) : (
-                                    <Text
-                                      style={[
-                                        type.microcopyItalic,
-                                        { opacity: 0.7, textAlign: "center" },
-                                      ]}
-                                    >
-                                      Nothing here yet.
-                                    </Text>
-                                  )}
-                                </View>
-                              );
-                            })}
-                        </View>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-            </ScrollView>
+            <RefineBrowseBody
+              locked={locked}
+              nodesLoading={nodesLoading}
+              nodesError={nodesError}
+              fetchFlavorNodes={fetchFlavorNodes}
+              refineSearch={refineSearch}
+              refinePath={refinePath}
+              visibleNodes={visibleNodes}
+              renderNodeRow={renderNodeRow}
+              scopedRootIds={scopedRootIds}
+              rootLabelById={rootLabelById}
+              byParent={byParent}
+              applySort={applySort}
+              isFinishLabel={isFinishLabel}
+              topLevelNodes={topLevelNodes}
+              normalizeKey={normalizeKey}
+              safeText={safeText}
+              getTopLevelLabelForNode={getTopLevelLabelForNode}
+              SectionGroupHeader={SectionGroupHeader}
+              setRefinePath={setRefinePath}
+            />
           )}
         </View>
 
-        {/* Footer */}
-        <View
-          style={{
-            paddingHorizontal: spacing.lg,
-            paddingTop: spacing.md,
-            paddingBottom: spacing.lg + 40,
-            borderTopWidth: 1,
-            borderTopColor: colors.divider,
-            backgroundColor: colors.background,
-          }}
-        >
-          <View style={{ flexDirection: "row", gap: spacing.md }}>
-            <Pressable
-              disabled={locked || selectedNodeIds.length === 0}
-              onPress={() => setSelectedNodeIds([])}
-              style={({ pressed }) => ({
-                flex: 1,
-                borderRadius: radii.md,
-                paddingVertical: spacing.lg,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: colors.divider,
-                backgroundColor: "transparent",
-                opacity:
-                  locked || selectedNodeIds.length === 0
-                    ? 0.45
-                    : pressed
-                    ? 0.9
-                    : 1,
-              })}
-            >
-              <Text style={[type.button, { color: colors.textPrimary, textAlign: "center" }]}>
-                Clear
-              </Text>
-            </Pressable>
-
-            <Pressable
-              disabled={locked}
-              onPress={closeRefine}
-              style={({ pressed }) => ({
-                flex: 1,
-                borderRadius: radii.md,
-                paddingVertical: spacing.lg,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: colors.accent,
-                opacity: locked ? 0.6 : pressed ? 0.92 : 1,
-              })}
-            >
-              <Text style={[type.button, { color: colors.background, textAlign: "center" }]}>
-                Done
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+        <RefineBottomNav
+          locked={locked}
+          bottomBackEnabled={bottomBackEnabled}
+          bottomBackLabel={bottomBackLabel}
+          doneLabel={doneLabel}
+          onBack={handleBottomBack}
+          onDone={handleBottomDone}
+        />
       </View>
     </Modal>
   );

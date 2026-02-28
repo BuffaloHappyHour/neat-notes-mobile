@@ -2,6 +2,21 @@
 import { supabase } from "../../../lib/supabase";
 import { isUuid, safeText, uniqUuidsKeepOrder } from "../utils/text";
 
+type ReviewSentiment = "LIKE" | "NEUTRAL" | "DISLIKE";
+
+/**
+ * DB enum (based on your table screenshot):
+ * public.public_tasting_flavor_nodes.sentiment :: flavor_sentiment
+ * values appear to be: positive | neutral | negative
+ */
+function mapSentimentToPublicEnum(
+  v: ReviewSentiment | null | undefined
+): "positive" | "negative" {
+  if (v === "DISLIKE") return "negative";
+  // LIKE + NEUTRAL map to positive because enum has no neutral
+  return "positive";
+}
+
 export async function getMyShareSetting(): Promise<boolean> {
   const { data } = await supabase.auth.getSession();
   const user = data.session?.user;
@@ -41,7 +56,6 @@ export async function deletePublicMirrorBySourceTastingId(sourceTastingId: strin
   if (delKids) throw new Error(delKids.message);
 
   const { error: delParent } = await supabase.from("public_tastings").delete().eq("id", publicId);
-
   if (delParent) throw new Error(delParent.message);
 }
 
@@ -52,13 +66,30 @@ export async function upsertPublicMirror(params: {
   flavorTags: string[] | null;
   dislikeTags: string[] | null;
   personalNotes: string | null;
+
+  // v2 refined nodes
   selectedNodeIds: string[];
+
+  /**
+   * Optional: pass your new refine-review sentiment map.
+   * If omitted, we store "neutral" for each selected node in the public mirror.
+   */
+  sentimentById?: Record<string, ReviewSentiment>;
 }) {
-  const { sourceTastingId, whiskeyId, rating, flavorTags, dislikeTags, personalNotes, selectedNodeIds } =
-    params;
+  const {
+    sourceTastingId,
+    whiskeyId,
+    rating,
+    flavorTags,
+    dislikeTags,
+    personalNotes,
+    selectedNodeIds,
+    sentimentById,
+  } = params;
 
   if (!isUuid(sourceTastingId)) return;
 
+  // Get created_at from the source tasting (so public mirror matches it)
   const { data: tData, error: tErr } = await supabase
     .from("tastings")
     .select("id, created_at")
@@ -69,6 +100,7 @@ export async function upsertPublicMirror(params: {
 
   const createdAt = safeText((tData as any)?.created_at) || new Date().toISOString();
 
+  // Find existing public mirror row
   const { data: existing, error: exErr } = await supabase
     .from("public_tastings")
     .select("id")
@@ -115,6 +147,7 @@ export async function upsertPublicMirror(params: {
     }
   }
 
+  // Replace children
   const { error: delErr } = await supabase
     .from("public_tasting_flavor_nodes")
     .delete()
@@ -123,14 +156,39 @@ export async function upsertPublicMirror(params: {
   if (delErr) throw new Error(delErr.message);
 
   const clean = uniqUuidsKeepOrder(selectedNodeIds);
-  if (!clean.length) return;
+if (!clean.length) return;
 
-  const inserts = clean.map((nodeId) => ({
+// ✅ verify node ids exist in flavor_nodes_v2
+const { data: existingNodes, error: nodeErr } = await supabase
+  .from("flavor_nodes_v2")
+  .select("id")
+  .in("id", clean);
+
+if (nodeErr) throw new Error(nodeErr.message);
+
+const existingSet = new Set((existingNodes ?? []).map((r: any) => safeText(r.id)));
+const valid = clean.filter((id) => existingSet.has(id));
+const validFinal = valid.filter((id) => isUuid(id));
+if (!validFinal.length) return;
+
+const inserts = validFinal.map((nodeId) => {
+  const s = sentimentById?.[nodeId] ?? "NEUTRAL";
+  return {
     public_tasting_id: publicTastingId,
     node_id: nodeId,
-    sentiment: "positive",
-  }));
+    sentiment: mapSentimentToPublicEnum(s),
+  };
+});
 
   const { error: insKidsErr } = await supabase.from("public_tasting_flavor_nodes").insert(inserts);
-  if (insKidsErr) throw new Error(insKidsErr.message);
+
+  if (insKidsErr) {
+    // If someone forgets to apply the FK migration, this is the error they'll hit.
+    const msg = String(insKidsErr.message ?? "");
+    throw new Error(
+      msg.includes("violates foreign key constraint")
+        ? `${msg}\n\nFix: update public_tasting_flavor_nodes.node_id FK to reference flavor_nodes_v2(id).`
+        : msg
+    );
+  }
 }

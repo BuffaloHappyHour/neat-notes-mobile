@@ -66,7 +66,7 @@ export function SectionRow({
       {rows.length === 0 ? (
         <Text style={[type.body, { opacity: 0.7 }]}>{emptyMessage ?? "Nothing here yet."}</Text>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
           <View style={{ flexDirection: "row", gap: spacing.md, paddingVertical: 2 }}>
             {rows.map((r) => (
               <WhiskeyTile key={r.whiskeyId} row={r} onPress={() => onPressRow(r)} />

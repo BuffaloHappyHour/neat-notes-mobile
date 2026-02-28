@@ -1,4 +1,5 @@
-import React from "react";
+// src/log/components/ui/NotesGrid.tsx
+import React, { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { radii } from "../../../../lib/radii";
@@ -11,13 +12,25 @@ export function NotesGrid({
   selected,
   onToggle,
   disabled,
+  columns = 2,
 }: {
   tags: string[];
   selected: string[];
   onToggle: (tag: string) => void;
   disabled?: boolean;
+  columns?: 2 | 3;
 }) {
   const GAP = 10;
+
+  // These percentages are tuned for RN flexWrap + gap.
+  // (RN doesn't "true-grid" measure gaps like CSS grid, so we pick stable values.)
+  const basis = useMemo(() => {
+    return columns === 3 ? "30%" : "45%";
+  }, [columns]);
+
+  const pillMinHeight = columns === 3 ? 40 : 46;
+  const pillPadV = columns === 3 ? 8 : 8;
+  const labelFontSize = columns === 3 ? 12 : 13;
 
   return (
     <View style={{ gap: spacing.sm }}>
@@ -40,10 +53,10 @@ export function NotesGrid({
               style={({ pressed }) => ({
                 flexGrow: 0,
                 flexShrink: 0,
-                flexBasis: "46%",
-                maxWidth: "46%",
+                flexBasis: basis,
+                maxWidth: basis,
 
-                paddingVertical: 11,
+                paddingVertical: pillPadV,
                 paddingHorizontal: 12,
                 borderRadius: radii.md,
                 borderWidth: active ? 2 : 1,
@@ -53,7 +66,7 @@ export function NotesGrid({
 
                 alignItems: "center",
                 justifyContent: "center",
-                minHeight: 46,
+                minHeight: pillMinHeight,
               })}
             >
               <Text
@@ -63,7 +76,7 @@ export function NotesGrid({
                     fontWeight: active ? "900" : "800",
                     textAlign: "center",
                     opacity: active ? 1 : 0.9,
-                    fontSize: 13,
+                    fontSize: labelFontSize,
                   },
                 ]}
                 numberOfLines={1}

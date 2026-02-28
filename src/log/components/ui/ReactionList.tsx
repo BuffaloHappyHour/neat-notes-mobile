@@ -23,7 +23,7 @@ export function ReactionList({
   ];
 
   return (
-    <View style={{ gap: 10 }}>
+    <View style={{ gap: 5 }}>
       {opts.map((o) => {
         const active = value === o.key;
 
@@ -33,8 +33,8 @@ export function ReactionList({
             disabled={disabled}
             onPress={() => onChange(active ? null : o.key)}
             style={({ pressed }) => ({
-              paddingVertical: 11,
-              paddingHorizontal: 12,
+              paddingVertical: 10,
+              paddingHorizontal: 10,
               borderRadius: radii.md,
               borderWidth: active ? 2 : 1,
               borderColor: active ? colors.accent : colors.divider,
