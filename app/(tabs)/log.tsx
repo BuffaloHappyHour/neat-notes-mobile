@@ -656,7 +656,7 @@ export default function LogTab() {
 {customModalOpen ? (
   <Modal
     visible
-    transparent
+    transparent={false}
     animationType="fade"
     onRequestClose={onModalCancel}
   >
