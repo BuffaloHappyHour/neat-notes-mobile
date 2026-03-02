@@ -652,92 +652,106 @@ export default function LogTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* On-brand modal */}
-      <Modal
-        visible={customModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={onModalCancel}
+{/* On-brand modal */}
+{customModalOpen ? (
+  <Modal
+    visible
+    transparent
+    animationType="fade"
+    onRequestClose={onModalCancel}
+  >
+    <Pressable
+      onPress={onModalCancel}
+      style={{
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.55)",
+        padding: spacing.xl,
+        justifyContent: "center",
+      }}
+    >
+      <Pressable
+        onPress={() => {}}
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: radii.lg,
+          borderWidth: 1,
+          borderColor: colors.divider,
+          paddingVertical: spacing.lg,
+          paddingHorizontal: spacing.lg,
+          gap: spacing.md,
+          ...shadows.card,
+        }}
       >
-        <Pressable
-          onPress={onModalCancel}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.55)",
-            padding: spacing.xl,
-            justifyContent: "center",
-          }}
-        >
+        <View style={{ gap: 6 }}>
+          <Text
+            style={[
+              type.sectionHeader,
+              { fontSize: 18, opacity: 0.96, letterSpacing: 0.2 },
+            ]}
+          >
+            Add a custom bottle?
+          </Text>
+
+          <Text style={[type.body, { opacity: 0.82, lineHeight: 18 }]}>
+            We didn’t find that bottle yet. If you’d like, you can add a couple
+            details to help keep the catalog clean — totally optional.
+          </Text>
+
+          <Text style={[type.microcopyItalic, { opacity: 0.78 }]}>
+            Even 1–2 fields helps a ton.
+          </Text>
+        </View>
+
+        <View style={{ gap: spacing.sm }}>
           <Pressable
-            onPress={() => {}}
-            style={{
-              backgroundColor: colors.surface,
-              borderRadius: radii.lg,
+            onPress={onModalHelpImprove}
+            style={({ pressed }) => ({
+              borderRadius: radii.md,
+              paddingVertical: spacing.lg,
+              alignItems: "center",
+              backgroundColor: colors.accent,
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <Text style={[type.button, { color: colors.background }]}>
+              Help improve
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={onModalJustLogIt}
+            style={({ pressed }) => ({
+              borderRadius: radii.md,
+              paddingVertical: spacing.lg,
+              alignItems: "center",
               borderWidth: 1,
               borderColor: colors.divider,
-              paddingVertical: spacing.lg,
-              paddingHorizontal: spacing.lg,
-              gap: spacing.md,
-              ...shadows.card,
-            }}
+              backgroundColor: colors.surface,
+              opacity: pressed ? 0.9 : 1,
+            })}
           >
-            <View style={{ gap: 6 }}>
-              <Text
-  style={[
-    type.sectionHeader,
-    { fontSize: 18, opacity: 0.96, letterSpacing: 0.2 },
-  ]}
->Add a custom bottle?</Text>
-              <Text style={[type.body, { opacity: 0.82, lineHeight: 18 }]}>
-                We didn’t find that bottle yet. If you’d like, you can add a couple details to help
-                keep the catalog clean — totally optional.
-              </Text>
-              <Text style={[type.microcopyItalic, { opacity: 0.78 }]}>Even 1–2 fields helps a ton.</Text>
-            </View>
-
-            <View style={{ gap: spacing.sm }}>
-              <Pressable
-                onPress={onModalHelpImprove}
-                style={({ pressed }) => ({
-                  borderRadius: radii.md,
-                  paddingVertical: spacing.lg,
-                  alignItems: "center",
-                  backgroundColor: colors.accent,
-                  opacity: pressed ? 0.9 : 1,
-                })}
-              >
-                <Text style={[type.button, { color: colors.background }]}>Help improve</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={onModalJustLogIt}
-                style={({ pressed }) => ({
-                  borderRadius: radii.md,
-                  paddingVertical: spacing.lg,
-                  alignItems: "center",
-                  borderWidth: 1,
-                  borderColor: colors.divider,
-                  backgroundColor: colors.surface,
-                  opacity: pressed ? 0.9 : 1,
-                })}
-              >
-                <Text style={[type.button, { color: colors.textPrimary }]}>Just log it</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={onModalCancel}
-                style={({ pressed }) => ({
-                  paddingVertical: spacing.sm,
-                  alignItems: "center",
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Cancel</Text>
-              </Pressable>
-            </View>
+            <Text style={[type.button, { color: colors.textPrimary }]}>
+              Just log it
+            </Text>
           </Pressable>
-        </Pressable>
-      </Modal>
+
+          <Pressable
+            onPress={onModalCancel}
+            style={({ pressed }) => ({
+              paddingVertical: spacing.sm,
+              alignItems: "center",
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
+              Cancel
+            </Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Pressable>
+  </Modal>
+) : null}
 
       <ScrollView
         style={{ flex: 1 }}
