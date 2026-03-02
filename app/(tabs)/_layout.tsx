@@ -1,50 +1,69 @@
 // app/(tabs)/_layout.tsx
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
 import React from "react";
+import { Platform } from "react-native";
 
 import { colors } from "../../lib/theme";
+import { type } from "../../lib/typography";
 
 export default function TabsLayout() {
   return (
-    <NativeTabs
-      // Selected icon/label color
-      tintColor={colors.accent}
-      // Label styling (best-effort; native tabs still control some styling)
-      labelStyle={{
-  fontSize: 11,
-}}
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textMuted ?? "rgba(255,255,255,0.55)",
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontFamily: type?.body?.fontFamily,
+        },
+        tabBarStyle: {
+          backgroundColor: colors.background ?? "#111",
+          borderTopColor: "rgba(255,255,255,0.10)",
+          borderTopWidth: Platform.OS === "ios" ? 0.5 : 1,
+        },
+      }}
     >
-      <NativeTabs.Trigger name="home">
-        <Label>Home</Label>
-        <Icon
-          sf={{ default: "house", selected: "house.fill" }}
-        
-        />
-      </NativeTabs.Trigger>
+      <Tabs.Screen
+        name="home"
+        options={{
+          title: "Home",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home-outline" size={size} color={color} />
+          ),
+        }}
+      />
 
-      <NativeTabs.Trigger name="discover" role="search">
-        <Label>Discover</Label>
-        <Icon
-          sf={{ default: "magnifyingglass", selected: "magnifyingglass" }}
-         
-        />
-      </NativeTabs.Trigger>
+      <Tabs.Screen
+        name="discover"
+        options={{
+          title: "Discover",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="search-outline" size={size} color={color} />
+          ),
+        }}
+      />
 
-      <NativeTabs.Trigger name="log">
-        <Label>Log</Label>
-        <Icon
-          sf={{ default: "square.and.pencil", selected: "square.and.pencil" }}
-        
-        />
-      </NativeTabs.Trigger>
+      <Tabs.Screen
+        name="log"
+        options={{
+          title: "Log",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="create-outline" size={size} color={color} />
+          ),
+        }}
+      />
 
-      <NativeTabs.Trigger name="profile">
-        <Label>Profile</Label>
-        <Icon
-          sf={{ default: "person", selected: "person.fill" }}
-     
-        />
-      </NativeTabs.Trigger>
-    </NativeTabs>
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-outline" size={size} color={color} />
+          ),
+        }}
+      />
+    </Tabs>
   );
 }
