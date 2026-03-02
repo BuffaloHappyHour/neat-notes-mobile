@@ -5,6 +5,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -108,11 +109,16 @@ export function DiscoverModals({
     maxHeight: Math.min(sheetMaxHeight, Math.round(windowH * 0.86)),
   } as const;
 
-  const backdropStyle = {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    justifyContent: "flex-end" as const,
-  };
+  const styles = StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      justifyContent: "flex-end",
+    },
+    backdropCloser: {
+      ...StyleSheet.absoluteFillObject,
+    },
+  });
 
   return (
     <>
@@ -122,14 +128,19 @@ export function DiscoverModals({
       <Modal
         visible={seeAllOpen}
         transparent
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
         animationType="fade"
         onRequestClose={() => setSeeAllOpen(false)}
       >
-        <Pressable
-          onPress={withTick(() => setSeeAllOpen(false))}
-          style={backdropStyle}
-        >
-          {/* Stop taps from closing when touching the sheet */}
+        <View style={styles.backdrop}>
+          {/* Full-screen closer (behind the sheet) */}
+          <Pressable
+            style={styles.backdropCloser}
+            onPress={withTick(() => setSeeAllOpen(false))}
+          />
+
+          {/* Sheet (above the closer) */}
           <Pressable onPress={() => {}} style={sheetStyle}>
             <View
               style={{
@@ -144,7 +155,12 @@ export function DiscoverModals({
                 onPress={withTick(() => setSeeAllOpen(false))}
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
               >
-                <Text style={[type.body, { fontWeight: "900", color: colors.accent }]}>
+                <Text
+                  style={[
+                    type.body,
+                    { fontWeight: "900", color: colors.accent },
+                  ]}
+                >
                   Close
                 </Text>
               </Pressable>
@@ -155,7 +171,9 @@ export function DiscoverModals({
             ) : null}
 
             {seeAllError ? (
-              <Text style={[type.body, { opacity: 0.82 }]}>Error: {seeAllError}</Text>
+              <Text style={[type.body, { opacity: 0.82 }]}>
+                Error: {seeAllError}
+              </Text>
             ) : null}
 
             <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
@@ -169,12 +187,14 @@ export function DiscoverModals({
                 ))}
 
                 {!seeAllLoading && seeAllRows.length === 0 && !seeAllError ? (
-                  <Text style={[type.body, { opacity: 0.75 }]}>No results yet.</Text>
+                  <Text style={[type.body, { opacity: 0.75 }]}>
+                    No results yet.
+                  </Text>
                 ) : null}
               </View>
             </ScrollView>
           </Pressable>
-        </Pressable>
+        </View>
       </Modal>
 
       {/* =======================
@@ -183,13 +203,17 @@ export function DiscoverModals({
       <Modal
         visible={filterOpen}
         transparent
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
         animationType="fade"
         onRequestClose={() => setFilterOpen(false)}
       >
-        <Pressable
-          onPress={withTick(() => setFilterOpen(false))}
-          style={backdropStyle}
-        >
+        <View style={styles.backdrop}>
+          <Pressable
+            style={styles.backdropCloser}
+            onPress={withTick(() => setFilterOpen(false))}
+          />
+
           <Pressable onPress={() => {}} style={sheetStyle}>
             <Text style={type.sectionHeader}>Filters</Text>
 
@@ -239,7 +263,9 @@ export function DiscoverModals({
                     </Text>
                     <TextInput
                       value={minProofText}
-                      onChangeText={(t) => setMinProofText(t.replace(/[^\d.]/g, ""))}
+                      onChangeText={(t) =>
+                        setMinProofText(t.replace(/[^\d.]/g, ""))
+                      }
                       placeholder="e.g. 80"
                       placeholderTextColor={colors.textSecondary}
                       keyboardType="numeric"
@@ -261,7 +287,9 @@ export function DiscoverModals({
                     </Text>
                     <TextInput
                       value={maxProofText}
-                      onChangeText={(t) => setMaxProofText(t.replace(/[^\d.]/g, ""))}
+                      onChangeText={(t) =>
+                        setMaxProofText(t.replace(/[^\d.]/g, ""))
+                      }
                       placeholder="e.g. 120"
                       placeholderTextColor={colors.textSecondary}
                       keyboardType="numeric"
@@ -314,12 +342,14 @@ export function DiscoverModals({
                     backgroundColor: pressed ? colors.highlight : colors.accent,
                   })}
                 >
-                  <Text style={[type.button, { color: colors.background }]}>Done</Text>
+                  <Text style={[type.button, { color: colors.background }]}>
+                    Done
+                  </Text>
                 </Pressable>
               </View>
             </ScrollView>
           </Pressable>
-        </Pressable>
+        </View>
       </Modal>
 
       {/* =======================
@@ -328,13 +358,17 @@ export function DiscoverModals({
       <Modal
         visible={typePickerOpen}
         transparent
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
         animationType="fade"
         onRequestClose={() => setTypePickerOpen(false)}
       >
-        <Pressable
-          onPress={withTick(() => setTypePickerOpen(false))}
-          style={backdropStyle}
-        >
+        <View style={styles.backdrop}>
+          <Pressable
+            style={styles.backdropCloser}
+            onPress={withTick(() => setTypePickerOpen(false))}
+          />
+
           <Pressable
             onPress={() => {}}
             style={{
@@ -368,7 +402,9 @@ export function DiscoverModals({
                     style={[
                       type.body,
                       {
-                        color: !selectedType ? colors.background : colors.textPrimary,
+                        color: !selectedType
+                          ? colors.background
+                          : colors.textPrimary,
                       },
                     ]}
                   >
@@ -402,7 +438,9 @@ export function DiscoverModals({
                         style={[
                           type.body,
                           {
-                            color: active ? colors.background : colors.textPrimary,
+                            color: active
+                              ? colors.background
+                              : colors.textPrimary,
                           },
                         ]}
                       >
@@ -414,7 +452,7 @@ export function DiscoverModals({
               </View>
             </ScrollView>
           </Pressable>
-        </Pressable>
+        </View>
       </Modal>
     </>
   );

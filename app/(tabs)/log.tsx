@@ -655,20 +655,46 @@ export default function LogTab() {
 {/* On-brand modal */}
 {customModalOpen ? (
   <Modal
-    visible
-    transparent={false}
-    animationType="fade"
-    onRequestClose={onModalCancel}
+  visible
+  transparent={false}
+  presentationStyle="fullScreen"
+  animationType="fade"
+  onRequestClose={onModalCancel}
+>
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: colors.background,
+      padding: spacing.xl,
+      justifyContent: "center",
+    }}
   >
+    {/* Full-screen closer behind the card */}
     <Pressable
       onPress={onModalCancel}
       style={{
-        flex: 1,
-        backgroundColor: "rgba(0,0,0,0.55)",
-        padding: spacing.xl,
-        justifyContent: "center",
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+      }}
+    />
+
+    <Pressable
+      onPress={() => {}}
+      style={{
+        backgroundColor: colors.surface,
+        borderRadius: radii.lg,
+        borderWidth: 1,
+        borderColor: colors.divider,
+        paddingVertical: spacing.lg,
+        paddingHorizontal: spacing.lg,
+        gap: spacing.md,
+        ...shadows.card,
       }}
     >
+
       <Pressable
         onPress={() => {}}
         style={{
@@ -749,7 +775,8 @@ export default function LogTab() {
           </Pressable>
         </View>
       </Pressable>
-    </Pressable>
+      </Pressable>
+    </View>
   </Modal>
 ) : null}
 

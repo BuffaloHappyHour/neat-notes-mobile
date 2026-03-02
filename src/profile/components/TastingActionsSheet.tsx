@@ -1,5 +1,5 @@
 import React from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { radii } from "../../../lib/radii";
@@ -27,22 +27,30 @@ export function TastingActionsSheet({
 }) {
   const insets = useSafeAreaInsets();
 
+  const styles = StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: colors.overlay ?? "rgba(0,0,0,0.55)",
+      justifyContent: "flex-end",
+    },
+    backdropCloser: {
+      ...StyleSheet.absoluteFillObject,
+    },
+  });
+
   return (
     <Modal
       visible={visible}
       transparent
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
       animationType="fade"
       onRequestClose={onClose}
     >
-      {/* Backdrop */}
-      <Pressable
-        onPress={onClose}
-        style={{
-          flex: 1,
-          backgroundColor: colors.overlay ?? "rgba(0,0,0,0.55)",
-          justifyContent: "flex-end",
-        }}
-      >
+      <View style={styles.backdrop}>
+        {/* Full-screen closer (behind the sheet) */}
+        <Pressable style={styles.backdropCloser} onPress={onClose} />
+
         {/* Sheet */}
         <Pressable
           onPress={() => {}}
@@ -64,7 +72,7 @@ export function TastingActionsSheet({
             ...shadows.e3,
           }}
         >
-          {/* Subtle top highlight hairline (adds depth without “glow”) */}
+          {/* Subtle top highlight hairline */}
           <View
             style={{
               position: "absolute",
@@ -184,7 +192,7 @@ export function TastingActionsSheet({
             </Text>
           </Pressable>
         </Pressable>
-      </Pressable>
+      </View>
     </Modal>
   );
 }

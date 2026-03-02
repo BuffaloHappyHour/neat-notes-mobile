@@ -65,7 +65,11 @@ function formatDate(iso: string | null) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function sortLabel(mode: SortMode) {
@@ -225,7 +229,10 @@ export default function AllTastingsScreen() {
         throw new Error("You must be signed in to delete a tasting.");
       }
 
-      const { error } = await supabase.from("tastings").delete().eq("id", activeRow.id);
+      const { error } = await supabase
+        .from("tastings")
+        .delete()
+        .eq("id", activeRow.id);
       if (error) throw new Error(error.message);
 
       // Optimistic remove locally for instant UI response
@@ -255,8 +262,15 @@ export default function AllTastingsScreen() {
         }}
       >
         <Card>
-          <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>Your Tastings</Text>
-          <Text style={[type.microcopyItalic, { opacity: 0.85, color: colors.textPrimary }]}>
+          <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>
+            Your Tastings
+          </Text>
+          <Text
+            style={[
+              type.microcopyItalic,
+              { opacity: 0.85, color: colors.textPrimary },
+            ]}
+          >
             Search, sort, then tap an entry to view, edit, or delete it.
           </Text>
 
@@ -295,7 +309,11 @@ export default function AllTastingsScreen() {
                 onPress={() => setSearch("")}
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
               >
-                <Ionicons name="close-circle" size={18} color={colors.textPrimary as any} />
+                <Ionicons
+                  name="close-circle"
+                  size={18}
+                  color={colors.textPrimary as any}
+                />
               </Pressable>
             ) : null}
           </View>
@@ -325,11 +343,28 @@ export default function AllTastingsScreen() {
                 opacity: pressed ? 0.85 : 1,
               })}
             >
-              <Ionicons name="swap-vertical" size={16} color={colors.textPrimary as any} />
-              <Text style={[type.body, { fontWeight: "900", color: colors.textPrimary, fontSize: 13 }]}>
+              <Ionicons
+                name="swap-vertical"
+                size={16}
+                color={colors.textPrimary as any}
+              />
+              <Text
+                style={[
+                  type.body,
+                  {
+                    fontWeight: "900",
+                    color: colors.textPrimary,
+                    fontSize: 13,
+                  },
+                ]}
+              >
                 {sortLabel(sortMode)}
               </Text>
-              <Ionicons name="chevron-down" size={16} color={colors.textPrimary as any} />
+              <Ionicons
+                name="chevron-down"
+                size={16}
+                color={colors.textPrimary as any}
+              />
             </Pressable>
 
             {!loading && !err ? (
@@ -347,16 +382,26 @@ export default function AllTastingsScreen() {
 
         {loading ? (
           <Card>
-            <View style={{ alignItems: "center", paddingVertical: spacing.sm, gap: spacing.sm }}>
+            <View
+              style={{
+                alignItems: "center",
+                paddingVertical: spacing.sm,
+                gap: spacing.sm,
+              }}
+            >
               <ActivityIndicator />
-              <Text style={[type.body, { opacity: 0.7, color: colors.textPrimary }]}>Loading…</Text>
+              <Text style={[type.body, { opacity: 0.7, color: colors.textPrimary }]}>
+                Loading…
+              </Text>
             </View>
           </Card>
         ) : null}
 
         {err ? (
           <Card>
-            <Text style={[type.body, { color: colors.accent, opacity: 0.9 }]}>{err}</Text>
+            <Text style={[type.body, { color: colors.accent, opacity: 0.9 }]}>
+              {err}
+            </Text>
           </Card>
         ) : null}
 
@@ -364,11 +409,12 @@ export default function AllTastingsScreen() {
         <Modal
           visible={sortOpen}
           transparent
+          presentationStyle="overFullScreen"
+          statusBarTranslucent
           animationType="fade"
           onRequestClose={() => setSortOpen(false)}
         >
-          <Pressable
-            onPress={() => setSortOpen(false)}
+          <View
             style={{
               flex: 1,
               backgroundColor: "rgba(0,0,0,0.55)",
@@ -376,6 +422,11 @@ export default function AllTastingsScreen() {
               justifyContent: "center",
             }}
           >
+            <Pressable
+              onPress={() => setSortOpen(false)}
+              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+            />
+
             <Pressable
               onPress={() => {}}
               style={{
@@ -388,7 +439,9 @@ export default function AllTastingsScreen() {
                 ...shadows.card,
               }}
             >
-              <Text style={[type.sectionHeader, { fontSize: 16 }]}>Sort tastings</Text>
+              <Text style={[type.sectionHeader, { fontSize: 16 }]}>
+                Sort tastings
+              </Text>
 
               {([
                 { mode: "newest", label: "Newest → Oldest" },
@@ -416,13 +469,26 @@ export default function AllTastingsScreen() {
                       justifyContent: "space-between",
                     })}
                   >
-                    <Text style={[type.body, { fontWeight: "900", color: colors.textPrimary }]}>
+                    <Text
+                      style={[
+                        type.body,
+                        { fontWeight: "900", color: colors.textPrimary },
+                      ]}
+                    >
                       {opt.label}
                     </Text>
                     {active ? (
-                      <Ionicons name="checkmark-circle" size={18} color={colors.textPrimary as any} />
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={18}
+                        color={colors.textPrimary as any}
+                      />
                     ) : (
-                      <Ionicons name="ellipse-outline" size={18} color={colors.textPrimary as any} />
+                      <Ionicons
+                        name="ellipse-outline"
+                        size={18}
+                        color={colors.textPrimary as any}
+                      />
                     )}
                   </Pressable>
                 );
@@ -439,18 +505,19 @@ export default function AllTastingsScreen() {
                 <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Close</Text>
               </Pressable>
             </Pressable>
-          </Pressable>
+          </View>
         </Modal>
 
         {/* Long-press actions modal */}
         <Modal
           visible={actionsOpen}
           transparent
+          presentationStyle="overFullScreen"
+          statusBarTranslucent
           animationType="fade"
           onRequestClose={closeActions}
         >
-          <Pressable
-            onPress={closeActions}
+          <View
             style={{
               flex: 1,
               backgroundColor: "rgba(0,0,0,0.55)",
@@ -458,6 +525,11 @@ export default function AllTastingsScreen() {
               justifyContent: "flex-end",
             }}
           >
+            <Pressable
+              onPress={closeActions}
+              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+            />
+
             <Pressable
               onPress={() => {}}
               style={{
@@ -471,7 +543,9 @@ export default function AllTastingsScreen() {
               }}
             >
               <View style={{ gap: 6 }}>
-                <Text style={[type.sectionHeader, { fontSize: 16 }]}>Tasting options</Text>
+                <Text style={[type.sectionHeader, { fontSize: 16 }]}>
+                  Tasting options
+                </Text>
                 <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
                   {(activeRow?.whiskey_name ?? "Whiskey").trim() || "Whiskey"}
                 </Text>
@@ -482,7 +556,9 @@ export default function AllTastingsScreen() {
                   onPress={() => {
                     if (!activeRow) return;
                     closeActions();
-                    router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(activeRow.id)}`);
+                    router.push(
+                      `/log/cloud-tasting?tastingId=${encodeURIComponent(activeRow.id)}`
+                    );
                   }}
                   style={({ pressed }) => ({
                     borderRadius: radii.md,
@@ -492,7 +568,9 @@ export default function AllTastingsScreen() {
                     opacity: pressed ? 0.9 : 1,
                   })}
                 >
-                  <Text style={[type.button, { color: colors.background }]}>Edit</Text>
+                  <Text style={[type.button, { color: colors.background }]}>
+                    Edit
+                  </Text>
                 </Pressable>
 
                 <Pressable
@@ -522,11 +600,13 @@ export default function AllTastingsScreen() {
                     opacity: deleting ? 0.6 : pressed ? 0.7 : 1,
                   })}
                 >
-                  <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Cancel</Text>
+                  <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
+                    Cancel
+                  </Text>
                 </Pressable>
               </View>
             </Pressable>
-          </Pressable>
+          </View>
         </Modal>
       </View>
     );
@@ -543,7 +623,9 @@ export default function AllTastingsScreen() {
         {!isFirst ? <View style={{ height: 1, backgroundColor: colors.divider }} /> : null}
 
         <Pressable
-          onPress={() => router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(r.id)}`)}
+          onPress={() =>
+            router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(r.id)}`)
+          }
           onLongPress={() => openActionsForRow(r)}
           delayLongPress={250}
           style={({ pressed }) => ({
@@ -564,13 +646,22 @@ export default function AllTastingsScreen() {
               {nm}
             </Text>
 
-            <Text style={[type.body, { opacity: 0.7, color: colors.textPrimary, fontSize: 12 }]}>
+            <Text
+              style={[
+                type.body,
+                { opacity: 0.7, color: colors.textPrimary, fontSize: 12 },
+              ]}
+            >
               Rating: <Text style={{ fontWeight: "900" }}>{ratingText}</Text>
               {dateText ? `  •  ${dateText}` : ""}
             </Text>
           </View>
 
-          <Ionicons name="chevron-forward" size={18} color={colors.textPrimary as any} />
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textPrimary as any}
+          />
         </Pressable>
       </View>
     );
