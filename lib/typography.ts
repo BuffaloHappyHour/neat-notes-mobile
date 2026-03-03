@@ -149,5 +149,6 @@ export const type: TypeScale = {
     lineHeight: 22,
     letterSpacing: 0.2,
     color: colors.textPrimary,
+    
   },
 };

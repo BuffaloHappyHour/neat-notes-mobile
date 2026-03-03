@@ -19,10 +19,10 @@ export default function TabsLayout() {
           fontFamily: type?.body?.fontFamily,
         },
         tabBarStyle: {
-          backgroundColor: colors.background ?? "#111",
-          borderTopColor: "rgba(255,255,255,0.10)",
-          borderTopWidth: Platform.OS === "ios" ? 0.5 : 1,
-        },
+  backgroundColor: "transparent",
+  borderTopColor: "rgba(255,255,255,0.10)",
+  borderTopWidth: Platform.OS === "ios" ? 0.5 : 1,
+},
       }}
     >
       <Tabs.Screen

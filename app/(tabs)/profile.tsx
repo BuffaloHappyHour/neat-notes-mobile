@@ -82,7 +82,7 @@ export default function ProfileTab() {
 
   return (
   <ScrollView
-    style={{ flex: 1, backgroundColor: colors.background }}
+    style={{ flex: 1, backgroundColor: "transparent" }}
     contentContainerStyle={{
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.xl + spacing.lg,

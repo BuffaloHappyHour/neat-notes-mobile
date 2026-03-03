@@ -8,15 +8,17 @@ import { colors } from "../../../lib/theme";
 /**
  * Premium divider:
  * dim edges → brighter middle (Home-style)
+ * Now uses glassDivider token so it matches the new theme.
  */
 export function SectionDivider() {
-  return (
-    <View style={{ marginVertical: spacing.md }}>
+  const divider = (colors as any).glassDivider ?? colors.divider;
 
+  return (
+    <View style={{ marginVertical: spacing.sm }}>
       <View
         style={{
           height: 2,
-          marginTop: 8,
+          marginTop: 4,
           borderRadius: 999,
           overflow: "hidden",
           opacity: 0.95,
@@ -30,8 +32,8 @@ export function SectionDivider() {
             top: 0,
             bottom: 0,
             width: "25%",
-            backgroundColor: colors.accentFaint,
-            opacity: 0.5,
+            backgroundColor: divider,
+            opacity: 0.65,
           }}
         />
         {/* center highlight */}
@@ -43,7 +45,7 @@ export function SectionDivider() {
             bottom: 0,
             width: "50%",
             backgroundColor: colors.accent,
-            opacity: 0.2,
+            opacity: 0.12,
           }}
         />
         {/* right fade */}
@@ -54,8 +56,8 @@ export function SectionDivider() {
             top: 0,
             bottom: 0,
             width: "25%",
-            backgroundColor: colors.accentFaint,
-            opacity: 0.5,
+            backgroundColor: divider,
+            opacity: 0.65,
           }}
         />
       </View>

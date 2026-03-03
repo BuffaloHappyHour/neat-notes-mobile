@@ -38,30 +38,49 @@ export function WhiskeyTile({
     return parts.join("  •  ");
   }, [communityText, bhhText]);
 
+  const raised =
+    (colors as any).glassRaised ??
+    (colors as any).surfaceRaised ??
+    colors.surface;
+
+  const sunken = (colors as any).glassSunken ?? colors.highlight;
+
+  const border = (colors as any).glassBorder ?? colors.divider;
+
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => ({
-        width: 220,
+      style={({ pressed }) => {
+        // ✅ IMPORTANT: never set transform to null/undefined
+        const pressedStyle = pressed
+          ? { transform: [{ scale: 0.992 }] as any }
+          : {};
 
-        // ✅ slightly “raised” tint so it doesn’t feel like the same surface as the page
-        backgroundColor: colors.surfaceRaised,
+        return {
+          width: 220,
 
-        borderWidth: 1,
-        borderColor: colors.divider,
-        borderRadius: radii.lg,
+          backgroundColor: pressed ? sunken : raised,
 
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.md,
+          borderWidth: 1,
+          borderColor: border,
+          borderRadius: radii.lg,
 
-        opacity: pressed ? 0.92 : 1,
+          paddingVertical: spacing.md,
+          paddingHorizontal: spacing.md,
 
-        // ✅ more lift, less “outline”
-        ...shadows.card,
-      })}
+          opacity: pressed ? 0.98 : 1,
+
+          ...shadows.card,
+
+          ...pressedStyle,
+        };
+      }}
     >
       <View style={{ gap: 6 }}>
-        <Text style={[type.body, { fontWeight: "900", fontSize: 15 }]} numberOfLines={1}>
+        <Text
+          style={[type.body, { fontWeight: "900", fontSize: 15 }]}
+          numberOfLines={1}
+        >
           {row.whiskeyName}
         </Text>
 
@@ -75,11 +94,29 @@ export function WhiskeyTile({
             {metaLine}
           </Text>
         ) : (
-          <Text style={[type.caption, { opacity: 0.7, fontStyle: "italic" }]} numberOfLines={1}>
+          <Text
+            style={[type.caption, { opacity: 0.72, fontStyle: "italic" }]}
+            numberOfLines={1}
+          >
             No ratings yet
           </Text>
         )}
       </View>
+
+      {/* subtle inner “glass edge” hint */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 1,
+          left: 1,
+          right: 1,
+          height: 1,
+          borderRadius: radii.lg,
+          backgroundColor: (colors as any).glassDivider ?? border,
+          opacity: 0.28,
+        }}
+      />
     </Pressable>
   );
 }

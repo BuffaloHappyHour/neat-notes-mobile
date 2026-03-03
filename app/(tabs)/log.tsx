@@ -1,10 +1,8 @@
 // app/(tabs)/log.tsx
-import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -20,8 +18,11 @@ import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
-// ✅ HAPTICS (intentional + future-proof)
-import { withError, withSuccess, withTick } from "../../lib/hapticsPress";
+import { SearchSection } from "../../src/logTab/components/SearchSection";
+import { useRecentTastings } from "../../src/logTab/hooks/useRecentTastings";
+
+// ✅ HAPTICS
+import { withSuccess, withTick } from "../../lib/hapticsPress";
 
 /* ------------------- Helpers ------------------- */
 
@@ -30,36 +31,6 @@ function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     s
   );
-}
-
-function toQueryParam(v: string) {
-  return encodeURIComponent(String(v ?? "").trim());
-}
-
-function normalizeName(s: string) {
-  return String(s ?? "")
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLowerCase();
-}
-
-function slugify(s: string) {
-  return normalizeName(s)
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-+/g, "-");
-}
-
-function parseNumericOrNull(v: string) {
-  const t = String(v ?? "").trim();
-  if (!t) return null;
-
-  const cleaned = t.replace(/[^0-9.]+/g, "");
-  if (!cleaned) return null;
-
-  const n = Number(cleaned);
-  if (!Number.isFinite(n)) return null;
-  return n;
 }
 
 function formatWhen(v: string | null | undefined) {
@@ -73,23 +44,14 @@ function formatWhen(v: string | null | undefined) {
 /* ------------------- Types ------------------- */
 
 type Suggestion = {
-  whiskeyId: string; // ✅ MUST be whiskeys.id (UUID)
+  whiskeyId: string;
   whiskeyName: string;
-  bhhScore: number | null; // optional display
-};
-
-type RecentTastingRow = {
-  id: string; // tasting id
-  whiskeyId: string | null;
-  whiskeyName: string;
-  rating: number | null;
-  createdAt: string | null;
+  bhhScore: number | null;
 };
 
 /* ------------------- UI ------------------- */
 
 function SoftDivider() {
-  // tan line that’s softer at edges and brighter in the middle (like Home)
   return (
     <View style={{ flexDirection: "row", alignItems: "center", marginTop: spacing.md }}>
       <View
@@ -137,24 +99,22 @@ function Card({
   subtitle?: string;
   rightHeader?: React.ReactNode;
   children: React.ReactNode;
-
-  // ✅ Optional overrides (lets Bottle be tighter without touching Recent)
   padV?: number;
   padH?: number;
   gap?: number;
 }) {
+  const surface = (colors as any).glassRaised ?? (colors as any).surfaceRaised ?? colors.surface;
+  const border = (colors as any).glassBorder ?? colors.divider;
+
   return (
     <View
       style={{
-        backgroundColor: colors.surface,
+        backgroundColor: surface,
         borderRadius: radii.lg,
         borderWidth: 1,
-        borderColor: colors.divider,
-
-        // ✅ default = your new tighter spec (Home/Discover feel)
+        borderColor: border,
         paddingVertical: padV ?? 14,
         paddingHorizontal: padH ?? spacing.lg,
-
         ...shadows.card,
         gap: gap ?? spacing.md,
       }}
@@ -212,12 +172,15 @@ function RecentRow({
   row,
   onPress,
 }: {
-  row: RecentTastingRow;
+  row: { id: string; whiskeyName: string; rating: number | null; createdAt: string | null };
   onPress: () => void;
 }) {
   const when = formatWhen(row.createdAt);
   const ratingText =
     row.rating != null && Number.isFinite(Number(row.rating)) ? `${Math.round(row.rating)}` : "—";
+
+  const surface = (colors as any).glassSurface ?? colors.surface;
+  const border = (colors as any).glassBorder ?? colors.divider;
 
   return (
     <Pressable
@@ -226,15 +189,11 @@ function RecentRow({
         paddingVertical: 12,
         paddingHorizontal: 12,
         borderWidth: 1,
-        borderColor: colors.divider,
+        borderColor: border,
         borderRadius: radii.md,
-
-        // ✅ subtle lift: looks like a “row card”
-        backgroundColor: colors.surface,
+        backgroundColor: surface,
         ...shadows.card,
-
         opacity: pressed ? 0.92 : 1,
-
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
@@ -263,82 +222,41 @@ export default function LogTab() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Suggestion | null>(null);
 
-  // Custom flow
-  const [customApproved, setCustomApproved] = useState(false);
-
-  // Contribution capture (for custom whiskies)
-  const [contribute, setContribute] = useState(false);
-  const [showContribForm, setShowContribForm] = useState(false);
-
-  const [distillery, setDistillery] = useState("");
-  const [category, setCategory] = useState(""); // bourbon/scotch/rye/etc
-  const [age, setAge] = useState("");
-  const [proof, setProof] = useState("");
-  const [country, setCountry] = useState("");
-  const [region, setRegion] = useState("");
-
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
-
-  // On-brand modal for custom prompt
-  const [customModalOpen, setCustomModalOpen] = useState(false);
-
-  // Submit state
-  const [submittingCandidate, setSubmittingCandidate] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput | null>(null);
 
+  // ✅ Recent tastings: cached + no refresh on every tab switch
+  const recent = useRecentTastings({ staleMs: 60_000 });
+
   const qTrim = query.trim();
   const hasEnoughQuery = qTrim.length >= 2;
 
-  const isHelpImproveMode = customApproved && showContribForm && contribute;
-
-  const canProceed = useMemo(() => {
-    if (!hasEnoughQuery) return false;
-    if (isHelpImproveMode) return true;
-    return !!selected || customApproved || suggestions.length > 0;
-  }, [hasEnoughQuery, selected, customApproved, suggestions.length, isHelpImproveMode]);
-
   const helperLine = useMemo(() => {
     if (!hasEnoughQuery) return "Start typing a bottle name to search.";
-    if (selected) return "Tap Continue to review and confirm.";
-    if (isHelpImproveMode)
-      return "Add any optional details, then tap Submit & review to start your tasting.";
-    if (customApproved) return "Custom selected — tap Continue to start your tasting.";
+    if (selected) return "Tap Continue to open the whiskey profile.";
     if (suggestions.length > 0) return "Tap a result, or press Continue to open the top match.";
-    return "No matches. Use a custom entry to keep logging.";
-  }, [hasEnoughQuery, selected, customApproved, suggestions.length, isHelpImproveMode]);
+    return "No matches. Tap Add custom entry to log it anyway.";
+  }, [hasEnoughQuery, selected, suggestions.length]);
 
-  function resetContributionFields() {
-    setContribute(false);
-    setShowContribForm(false);
-    setDistillery("");
-    setCategory("");
-    setAge("");
-    setProof("");
-    setCountry("");
-    setRegion("");
-    setSubmittingCandidate(false);
+  const canContinue = useMemo(() => {
+    if (!hasEnoughQuery) return false;
+    return !!selected || suggestions.length > 0;
+  }, [hasEnoughQuery, selected, suggestions.length]);
+
+  function onType(text: string) {
+    setQuery(text);
+    setSelected(null);
   }
 
   const clearQuery = withTick(() => {
     setQuery("");
     setSelected(null);
-    setCustomApproved(false);
     setSuggestions([]);
-    setCustomModalOpen(false);
-    resetContributionFields();
     setTimeout(() => inputRef.current?.focus?.(), 50);
   });
-
-  function onType(text: string) {
-    setQuery(text);
-    setSelected(null);
-    setCustomApproved(false);
-    resetContributionFields();
-    setCustomModalOpen(false);
-  }
 
   function goToWhiskeyProfile(id: string) {
     const safeId = String(id ?? "").trim();
@@ -349,109 +267,37 @@ export default function LogTab() {
     router.push(`/whiskey/${encodeURIComponent(safeId)}?intent=log`);
   }
 
+  function goToCustomTasting(name: string) {
+    const n = String(name ?? "").trim();
+    if (n.length < 2) return;
+
+    router.push(`/log/cloud-tasting?whiskeyName=${encodeURIComponent(n)}&lockName=0` as any);
+  }
+
   const onPickSuggestion = withTick((s: Suggestion) => {
     setQuery(s.whiskeyName);
     setSelected(s);
-    setCustomApproved(false);
-    resetContributionFields();
-    setCustomModalOpen(false);
     goToWhiskeyProfile(s.whiskeyId);
   });
 
-  function goToCustomTasting(name: string, wantsToContribute: boolean) {
-    const base =
-      `/log/cloud-tasting?whiskeyName=${encodeURIComponent(name)}&lockName=0` +
-      (wantsToContribute ? `&contribute=1` : `&contribute=0`);
+  const onUseCustom = withTick(() => {
+    if (!hasEnoughQuery) return;
+    if (selected) return;
+    goToCustomTasting(query.trim());
+  });
 
-    if (!wantsToContribute) {
-      router.push(base as any);
+  const onContinue = withSuccess(() => {
+    if (!canContinue) return;
+
+    if (selected) {
+      goToWhiskeyProfile(selected.whiskeyId);
       return;
     }
 
-    const params: string[] = [];
-    if (distillery.trim()) params.push(`distillery=${toQueryParam(distillery)}`);
-    if (category.trim()) params.push(`category=${toQueryParam(category)}`);
-    if (age.trim()) params.push(`age=${toQueryParam(age)}`);
-    if (proof.trim()) params.push(`proof=${toQueryParam(proof)}`);
-    if (country.trim()) params.push(`country=${toQueryParam(country)}`);
-    if (region.trim()) params.push(`region=${toQueryParam(region)}`);
-
-    const finalPath = params.length > 0 ? `${base}&${params.join("&")}` : base;
-    router.push(finalPath as any);
-  }
-
-  const onUseCustom = withTick(() => {
-    if (selected) return;
-    const name = query.trim();
-    if (name.length < 2) return;
-    setCustomModalOpen(true);
-  });
-
-  const onModalCancel = withError(() => {
-    setCustomModalOpen(false);
-  });
-
-  const onModalJustLogIt = withSuccess(() => {
-    const name = query.trim();
-    if (name.length < 2) return;
-
-    setCustomModalOpen(false);
-    setSelected(null);
-    setCustomApproved(true);
-    resetContributionFields();
-
-    goToCustomTasting(name, false);
-  });
-
-  const onModalHelpImprove = withTick(() => {
-    const name = query.trim();
-    if (name.length < 2) return;
-
-    setCustomModalOpen(false);
-    setSelected(null);
-    setCustomApproved(true);
-    setContribute(true);
-    setShowContribForm(true);
-  });
-
-  async function submitWhiskeyCandidate(name: string) {
-    try {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth?.user?.id;
-
-      if (!userId) {
-        console.log("[LogTab] No authenticated user; skipping candidate submit.");
-        return;
-      }
-
-      const payload = {
-        created_by: userId,
-        name_raw: name,
-        name_normalized: normalizeName(name),
-        canonical_slug: slugify(name),
-        whiskey_type: category.trim() || null,
-        distillery: distillery.trim() || null,
-        proof: parseNumericOrNull(proof),
-        age: parseNumericOrNull(age),
-        status: "pending",
-      };
-
-      const { error } = await supabase.from("whiskey_candidates").insert(payload);
-
-      if (error) console.log("[LogTab] whiskey_candidates insert failed:", error.message);
-    } catch (e: any) {
-      console.log("[LogTab] submitWhiskeyCandidate threw:", e?.message ?? e);
+    if (suggestions.length > 0) {
+      goToWhiskeyProfile(suggestions[0].whiskeyId);
+      return;
     }
-  }
-
-  const onSubmitAndReview = withSuccess(async () => {
-    const name = query.trim();
-    if (name.length < 2) return;
-    if (submittingCandidate) return;
-
-    setSubmittingCandidate(true);
-    await submitWhiskeyCandidate(name);
-    goToCustomTasting(name, true);
   });
 
   async function fetchSuggestions(term: string) {
@@ -566,220 +412,15 @@ export default function LogTab() {
     };
   }, [query]);
 
-  const onContinue = withSuccess(() => {
-    if (!hasEnoughQuery) return;
-
-    if (selected) {
-      goToWhiskeyProfile(selected.whiskeyId);
-      return;
-    }
-
-    if (suggestions.length > 0) {
-      goToWhiskeyProfile(suggestions[0].whiskeyId);
-      return;
-    }
-
-    setCustomModalOpen(true);
-  });
-
-  const onSkipContrib = withTick(() => {
-    setShowContribForm(false);
-    setContribute(false);
-  });
-
-  /* ------------------- Recent Tastings ------------------- */
-
-  const [recentLoading, setRecentLoading] = useState(false);
-  const [recentError, setRecentError] = useState("");
-  const [recentRows, setRecentRows] = useState<RecentTastingRow[]>([]);
-
-  const fetchRecent = useCallback(async () => {
-    setRecentLoading(true);
-    setRecentError("");
-
-    try {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth?.user?.id;
-
-      if (!userId) {
-        setRecentRows([]);
-        setRecentLoading(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("tastings")
-        .select("id, whiskey_id, whiskey_name, rating, created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      if (error) throw new Error(error.message);
-
-      const rows: RecentTastingRow[] = (data as any[]).map((r) => ({
-        id: String(r.id),
-        whiskeyId: r.whiskey_id ? String(r.whiskey_id) : null,
-        whiskeyName: String(r.whiskey_name ?? "Whiskey"),
-        rating: r.rating == null || !Number.isFinite(Number(r.rating)) ? null : Number(r.rating),
-        createdAt: r.created_at ? String(r.created_at) : null,
-      }));
-
-      setRecentRows(rows);
-    } catch (e: any) {
-      setRecentRows([]);
-      setRecentError(String(e?.message ?? e));
-    } finally {
-      setRecentLoading(false);
-    }
-  }, []);
-
-  function goTasting(row: RecentTastingRow) {
-    const id = String(row?.id ?? "").trim();
+  function goTasting(tastingId: string) {
+    const id = String(tastingId ?? "").trim();
     if (!id) return;
 
-    router.push(
-      `/log/cloud-tasting?tastingId=${encodeURIComponent(id)}&mode=edit&readonly=0` as any
-    );
+    router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(id)}&mode=edit&readonly=0` as any);
   }
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchRecent();
-    }, [fetchRecent])
-  );
-
-  /* ------------------- Render ------------------- */
-
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-{/* On-brand modal */}
-{customModalOpen ? (
-  <Modal
-  visible
-  transparent={false}
-  presentationStyle="fullScreen"
-  animationType="fade"
-  onRequestClose={onModalCancel}
->
-  <View
-    style={{
-      flex: 1,
-      backgroundColor: colors.background,
-      padding: spacing.xl,
-      justifyContent: "center",
-    }}
-  >
-    {/* Full-screen closer behind the card */}
-    <Pressable
-      onPress={onModalCancel}
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-      }}
-    />
-
-    <Pressable
-      onPress={() => {}}
-      style={{
-        backgroundColor: colors.surface,
-        borderRadius: radii.lg,
-        borderWidth: 1,
-        borderColor: colors.divider,
-        paddingVertical: spacing.lg,
-        paddingHorizontal: spacing.lg,
-        gap: spacing.md,
-        ...shadows.card,
-      }}
-    >
-
-      <Pressable
-        onPress={() => {}}
-        style={{
-          backgroundColor: colors.surface,
-          borderRadius: radii.lg,
-          borderWidth: 1,
-          borderColor: colors.divider,
-          paddingVertical: spacing.lg,
-          paddingHorizontal: spacing.lg,
-          gap: spacing.md,
-          ...shadows.card,
-        }}
-      >
-        <View style={{ gap: 6 }}>
-          <Text
-            style={[
-              type.sectionHeader,
-              { fontSize: 18, opacity: 0.96, letterSpacing: 0.2 },
-            ]}
-          >
-            Add a custom bottle?
-          </Text>
-
-          <Text style={[type.body, { opacity: 0.82, lineHeight: 18 }]}>
-            We didn’t find that bottle yet. If you’d like, you can add a couple
-            details to help keep the catalog clean — totally optional.
-          </Text>
-
-          <Text style={[type.microcopyItalic, { opacity: 0.78 }]}>
-            Even 1–2 fields helps a ton.
-          </Text>
-        </View>
-
-        <View style={{ gap: spacing.sm }}>
-          <Pressable
-            onPress={onModalHelpImprove}
-            style={({ pressed }) => ({
-              borderRadius: radii.md,
-              paddingVertical: spacing.lg,
-              alignItems: "center",
-              backgroundColor: colors.accent,
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <Text style={[type.button, { color: colors.background }]}>
-              Help improve
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={onModalJustLogIt}
-            style={({ pressed }) => ({
-              borderRadius: radii.md,
-              paddingVertical: spacing.lg,
-              alignItems: "center",
-              borderWidth: 1,
-              borderColor: colors.divider,
-              backgroundColor: colors.surface,
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <Text style={[type.button, { color: colors.textPrimary }]}>
-              Just log it
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={onModalCancel}
-            style={({ pressed }) => ({
-              paddingVertical: spacing.sm,
-              alignItems: "center",
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
-              Cancel
-            </Text>
-          </Pressable>
-        </View>
-      </Pressable>
-      </Pressable>
-    </View>
-  </Modal>
-) : null}
-
+    <View style={{ flex: 1, backgroundColor: "transparent" }}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -792,7 +433,7 @@ export default function LogTab() {
         keyboardDismissMode="on-drag"
         nestedScrollEnabled
       >
-        {/* Header (match Home/Discover) */}
+        {/* Header */}
         <View style={{ gap: spacing.xs }}>
           <Text style={[type.screenTitle, { fontSize: 34, lineHeight: 40 }]}>
             What are you drinking?
@@ -802,372 +443,22 @@ export default function LogTab() {
             Search the library, or add a custom bottle.
           </Text>
 
-          <Text style={[type.body, { opacity: 0.6, fontSize: 12 }]}>
-            You’ll confirm on the whiskey profile before logging.
-          </Text>
-
           <View style={{ height: 1, backgroundColor: colors.divider, marginTop: spacing.md }} />
         </View>
 
-        <Card title="Start typing to search">
-          {/* Field */}
-          <View style={{ position: "relative" }}>
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: colors.divider,
-                borderRadius: radii.md,
-                backgroundColor: colors.background,
-              }}
-            >
-              <TextInput
-                ref={inputRef}
-                value={query}
-                onChangeText={onType}
-                placeholder="Type a bottle name…"
-                placeholderTextColor={colors.textSecondary}
-                autoCorrect={false}
-                autoCapitalize="words"
-                returnKeyType="search"
-                selectionColor={colors.accent}
-                style={{
-                  paddingVertical: spacing.sm,
-                  paddingHorizontal: spacing.sm,
-                  paddingRight: 44,
-                  color: colors.textPrimary,
-                  backgroundColor: "transparent",
-                  fontFamily: type.body.fontFamily,
-                  fontSize: 16,
-                }}
-              />
-            </View>
-
-            {query.length > 0 ? (
-              <Pressable
-                onPress={clearQuery}
-                hitSlop={10}
-                style={({ pressed }) => ({
-                  position: "absolute",
-                  right: 10,
-                  top: "50%",
-                  transform: [{ translateY: -16 }],
-                  height: 32,
-                  width: 32,
-                  borderRadius: 16,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: colors.surface,
-                  borderWidth: 1,
-                  borderColor: colors.divider,
-                  opacity: pressed ? 0.75 : 1,
-                  ...shadows.card,
-                })}
-              >
-                <Text style={{ color: colors.textPrimary, fontSize: 18, lineHeight: 18 }}>×</Text>
-              </Pressable>
-            ) : null}
-          </View>
-
-          <Text style={[type.body, { opacity: 0.7, fontSize: 12, marginTop: spacing.sm }]}>
-            {helperLine}
-          </Text>
-
-          {loading ? (
-            <View style={{ marginTop: spacing.xs, flexDirection: "row", gap: 10, alignItems: "center" }}>
-              <ActivityIndicator />
-              <Text style={[type.body, { opacity: 0.65, fontSize: 12 }]}>Searching…</Text>
-            </View>
-          ) : null}
-
-          {/* Suggestions */}
-          {suggestions.length > 0 ? (
-            <ScrollView
-              style={{
-                marginTop: spacing.md,
-                maxHeight: 160,
-                borderWidth: 1,
-                borderColor: colors.divider,
-                borderRadius: radii.md,
-                overflow: "hidden",
-                backgroundColor: colors.background,
-              }}
-              contentContainerStyle={{ paddingVertical: 2 }}
-              nestedScrollEnabled
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator
-            >
-              {suggestions.map((s, idx) => {
-                const isLast = idx === suggestions.length - 1;
-                return (
-                  <Pressable
-                    key={`${s.whiskeyId}:${s.whiskeyName}`}
-                    onPress={() => onPickSuggestion(s)}
-                    style={({ pressed }) => ({
-                      paddingVertical: 12,
-                      paddingHorizontal: 12,
-                      borderBottomWidth: isLast ? 0 : 1,
-                      borderBottomColor: colors.divider,
-                      opacity: pressed ? 0.75 : 1,
-                      backgroundColor: pressed ? colors.highlight : colors.surface,
-                      gap: 6,
-                      borderRadius: radii.md,
-                      marginHorizontal: 6,
-                      marginVertical: 4,
-                      ...shadows.card,
-                    })}
-                  >
-                    <Text style={[type.body, { fontWeight: "800" }]} numberOfLines={2}>
-                      {s.whiskeyName}
-                    </Text>
-
-                    <Text style={[type.microcopyItalic, { opacity: 0.75, fontSize: 12 }]} numberOfLines={1}>
-                      Tap to view profile
-                      {typeof s.bhhScore === "number" ? ` • BHH ${Math.round(s.bhhScore)}` : ""}
-                      {idx === 0 ? " • Top match" : ""}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          ) : hasEnoughQuery && !loading ? (
-            <Text style={[type.body, { opacity: 0.65, fontSize: 12, marginTop: spacing.sm }]}>
-              No matches found. You can use a custom entry.
-            </Text>
-          ) : null}
-        </Card>
-
-          {/* Contribution form */}
-          {customApproved && showContribForm ? (
-            <View
-              style={{
-                marginTop: spacing.lg,
-                borderWidth: 1,
-                borderColor: colors.divider,
-                borderRadius: radii.md,
-                padding: spacing.md,
-                backgroundColor: colors.background,
-                gap: spacing.sm,
-              }}
-            >
-              <Text style={[type.sectionHeader, { fontSize: 14 }]}>Help us improve the catalog</Text>
-              <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
-                Totally optional — even 1–2 fields helps keep the library clean.
-              </Text>
-
-              <TextInput
-                value={distillery}
-                onChangeText={setDistillery}
-                placeholder="Distillery / Brand (optional)"
-                placeholderTextColor={colors.textSecondary}
-                autoCorrect={false}
-                autoCapitalize="words"
-                style={{
-                  borderWidth: 1,
-                  borderColor: colors.divider,
-                  borderRadius: radii.md,
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  color: colors.textPrimary,
-                  backgroundColor: colors.surface,
-                  fontFamily: type.body.fontFamily,
-                  fontSize: 14,
-                }}
-              />
-
-              <TextInput
-                value={category}
-                onChangeText={setCategory}
-                placeholder="Type (Bourbon, Rye, Scotch…) (optional)"
-                placeholderTextColor={colors.textSecondary}
-                autoCorrect={false}
-                autoCapitalize="words"
-                style={{
-                  borderWidth: 1,
-                  borderColor: colors.divider,
-                  borderRadius: radii.md,
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  color: colors.textPrimary,
-                  backgroundColor: colors.surface,
-                  fontFamily: type.body.fontFamily,
-                  fontSize: 14,
-                }}
-              />
-
-              <View style={{ flexDirection: "row", gap: spacing.sm }}>
-                <TextInput
-                  value={age}
-                  onChangeText={setAge}
-                  placeholder="Age (e.g., 10)"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="numeric"
-                  style={{
-                    flex: 1,
-                    borderWidth: 1,
-                    borderColor: colors.divider,
-                    borderRadius: radii.md,
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    color: colors.textPrimary,
-                    backgroundColor: colors.surface,
-                    fontFamily: type.body.fontFamily,
-                    fontSize: 14,
-                  }}
-                />
-                <TextInput
-                  value={proof}
-                  onChangeText={setProof}
-                  placeholder="Proof (e.g., 92)"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="numeric"
-                  style={{
-                    flex: 1,
-                    borderWidth: 1,
-                    borderColor: colors.divider,
-                    borderRadius: radii.md,
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    color: colors.textPrimary,
-                    backgroundColor: colors.surface,
-                    fontFamily: type.body.fontFamily,
-                    fontSize: 14,
-                  }}
-                />
-              </View>
-
-              <View style={{ flexDirection: "row", gap: spacing.sm }}>
-                <TextInput
-                  value={country}
-                  onChangeText={setCountry}
-                  placeholder="Country (optional)"
-                  placeholderTextColor={colors.textSecondary}
-                  autoCorrect={false}
-                  autoCapitalize="words"
-                  style={{
-                    flex: 1,
-                    borderWidth: 1,
-                    borderColor: colors.divider,
-                    borderRadius: radii.md,
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    color: colors.textPrimary,
-                    backgroundColor: colors.surface,
-                    fontFamily: type.body.fontFamily,
-                    fontSize: 14,
-                  }}
-                />
-                <TextInput
-                  value={region}
-                  onChangeText={setRegion}
-                  placeholder="Region (optional)"
-                  placeholderTextColor={colors.textSecondary}
-                  autoCorrect={false}
-                  autoCapitalize="words"
-                  style={{
-                    flex: 1,
-                    borderWidth: 1,
-                    borderColor: colors.divider,
-                    borderRadius: radii.md,
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    color: colors.textPrimary,
-                    backgroundColor: colors.surface,
-                    fontFamily: type.body.fontFamily,
-                    fontSize: 14,
-                  }}
-                />
-              </View>
-
-              <Pressable
-                onPress={onSkipContrib}
-                style={({ pressed }) => ({
-                  marginTop: spacing.xs,
-                  alignSelf: "flex-start",
-                  opacity: pressed ? 0.75 : 1,
-                })}
-              >
-                <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>Skip this</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-{/* Actions */}
-{isHelpImproveMode ? (
-  <View style={{ marginTop: spacing.sm }}>
-    <Pressable
-      onPress={onSubmitAndReview}
-      disabled={!hasEnoughQuery || submittingCandidate}
-      style={({ pressed }) => ({
-        width: "100%",
-        borderRadius: radii.md,
-
-        // ✅ smaller buttons (was spacing.lg)
-        paddingVertical: 14,
-
-        alignItems: "center",
-        backgroundColor: colors.accent,
-
-        // ✅ a little less “cardy” than before
-        ...shadows.card,
-        opacity: !hasEnoughQuery || submittingCandidate ? 0.55 : pressed ? 0.92 : 1,
-      })}
-    >
-      {submittingCandidate ? (
-        <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
-          <ActivityIndicator />
-          <Text style={[type.button, { color: colors.background }]}>Submitting…</Text>
-        </View>
-      ) : (
-        <Text style={[type.button, { color: colors.background }]}>Submit & review</Text>
-      )}
-    </Pressable>
-  </View>
-) : (
-  <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }}>
-    <Pressable
-      onPress={onUseCustom}
-      disabled={!!selected || !hasEnoughQuery}
-      style={({ pressed }) => ({
-        flex: 0.44,
-        borderRadius: radii.md,
-
-        // ✅ smaller buttons (was spacing.lg)
-        paddingVertical: 14,
-
-        alignItems: "center",
-        borderWidth: 1,
-        borderColor: colors.divider,
-        backgroundColor: colors.surface,
-
-        // ✅ keep depth but slightly calmer
-        ...shadows.card,
-        opacity: !!selected || !hasEnoughQuery ? 0.45 : pressed ? 0.92 : 1,
-      })}
-    >
-      <Text style={[type.button, { color: colors.textPrimary }]}>Custom</Text>
-    </Pressable>
-
-    <Pressable
-      onPress={onContinue}
-      disabled={!hasEnoughQuery}
-      style={({ pressed }) => ({
-        flex: 0.56,
-        borderRadius: radii.md,
-
-        // ✅ smaller buttons (was spacing.lg)
-        paddingVertical: 14,
-
-        alignItems: "center",
-        backgroundColor: canProceed ? colors.accent : colors.divider,
-
-        ...shadows.card,
-        opacity: pressed ? 0.92 : 1,
-      })}
-    >
-      <Text style={[type.button, { color: colors.background }]}>Continue</Text>
-    </Pressable>
-  </View>
-)}
+        <SearchSection
+          query={query}
+          onChangeQuery={onType}
+          onClear={clearQuery}
+          suggestions={suggestions}
+          loading={loading}
+          helperLine={helperLine}
+          hasEnoughQuery={hasEnoughQuery}
+          canContinue={canContinue}
+          onPick={onPickSuggestion}
+          onCustom={onUseCustom}
+          onContinue={onContinue}
+        />
 
         <SoftDivider />
 
@@ -1178,27 +469,33 @@ export default function LogTab() {
             <SmallLink
               label="View All"
               onPress={withTick(() => router.push("/tasting/all" as any))}
-              disabled={recentRows.length === 0}
+              disabled={recent.rows.length === 0}
             />
           }
         >
-          {recentLoading ? (
+          {recent.loading ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <ActivityIndicator />
               <Text style={[type.body, { opacity: 0.7 }]}>Loading…</Text>
             </View>
           ) : null}
 
-          {recentError ? <Text style={[type.body, { opacity: 0.8 }]}>Error: {recentError}</Text> : null}
+          {recent.error ? (
+            <Text style={[type.body, { opacity: 0.8 }]}>Error: {recent.error}</Text>
+          ) : null}
 
-          {!recentLoading && recentRows.length === 0 ? (
+          {!recent.loading && recent.rows.length === 0 ? (
             <Text style={[type.body, { opacity: 0.72 }]}>
               Not seeing anything yet? Sign in and log your first tasting.
             </Text>
           ) : (
             <View style={{ gap: spacing.sm }}>
-              {recentRows.map((r) => (
-                <RecentRow key={r.id} row={r} onPress={withTick(() => goTasting(r))} />
+              {recent.rows.map((r) => (
+                <RecentRow
+                  key={r.id}
+                  row={{ id: r.id, whiskeyName: r.whiskeyName, rating: r.rating, createdAt: r.createdAt }}
+                  onPress={withTick(() => goTasting(r.id))}
+                />
               ))}
             </View>
           )}

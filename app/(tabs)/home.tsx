@@ -15,6 +15,13 @@ import { useHomeStats } from "../../src/home/hooks/useHomeStats";
 import { pluralize } from "../../src/home/utils/pluralize";
 
 /**
+ * Goal: let the leather/background texture show through while keeping a premium,
+ * high-contrast surface system.
+ *
+ * We do that by using translucent "glass espresso" surfaces instead of
+ * fully-opaque colors.surface/colors.surfaceRaised.
+ */
+/**
  * Local “warm shadow” override:
  * - Keeps your global shadows.card baseline
  * - Adds warmer tone + softer spread (more premium, less “plugin”)
@@ -50,18 +57,16 @@ function ActionBodyCard({
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({
-        backgroundColor: colors.surfaceRaised, // ✅ slight lift tint vs other surfaces
+        backgroundColor: colors.glassSurface,
         borderRadius: radii.lg,
         borderWidth: 1,
-        borderColor: colors.divider, // ✅ calm outline
+        borderColor: pressed ? colors.glassBorderStrong : colors.glassBorder,
 
-        // ✅ Whoop-ish profile: wider/shorter card
         paddingVertical: 13,
         paddingHorizontal: spacing.lg,
 
         ...warmCardShadow,
 
-        // ✅ subtle press feedback (no scale to avoid any weirdness)
         opacity: pressed ? 0.94 : 1,
       })}
     >
@@ -72,9 +77,10 @@ function ActionBodyCard({
             style={[
               type.microcopyItalic,
               {
-                fontSize: 15.5, // ✅ micro smaller
+                fontSize: 15.5,
                 lineHeight: 22,
-                opacity: 0.84, // ✅ consistent whisper
+                opacity: 0.86,
+                color: colors.textPrimary,
               },
             ]}
           >
@@ -86,19 +92,17 @@ function ActionBodyCard({
         {rightHint ? (
           <View
             style={{
-              width: 108, // ✅ fixed width so Continue/Browse align
+              width: 108,
               paddingVertical: 7,
               borderRadius: 999,
               alignItems: "center",
 
-              // ✅ calmer than “tan button”, still on-brand
-              backgroundColor: colors.accentFaint,
+              backgroundColor: colors.glassSunken,
               borderWidth: 1,
-              borderColor: colors.borderSubtle,
+              borderColor: colors.glassBorder,
 
-              // ✅ tiny lift so it reads like an intentional control
               shadowColor: colors.shadowWarm ?? colors.shadow,
-              shadowOpacity: 0.25,
+              shadowOpacity: 0.22,
               shadowRadius: 10,
               shadowOffset: { width: 0, height: 6 },
               elevation: 4,
@@ -108,7 +112,7 @@ function ActionBodyCard({
               style={[
                 type.caption,
                 {
-                  color: colors.textSecondary, // ✅ less shouty than textPrimary
+                  color: colors.textSecondary,
                   opacity: 0.95,
                   letterSpacing: 0.25,
                 },
@@ -139,23 +143,30 @@ function SubtleNotice({
       onPress={onPress}
       style={({ pressed }) => ({
         borderRadius: radii.lg,
-
-        // ✅ slightly tighter so it doesn’t “anchor” the page too hard
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.lg,
 
         borderWidth: 1,
-
-        // ✅ tint shift so it’s not identical to action cards
-        backgroundColor: colors.surface,
-        borderColor: colors.divider,
+        backgroundColor: colors.glassSurface,
+        borderColor: pressed ? colors.glassBorderStrong : colors.glassBorder,
 
         ...warmCardShadow,
         opacity: pressed ? 0.94 : 1,
         gap: 10,
       })}
     >
-      <Text style={[type.body, { fontWeight: "700" }]}>{title}</Text>
+      <Text
+  style={[
+    type.sectionHeader,
+    {
+      fontSize: 18,
+      lineHeight: 22,
+      opacity: 0.82,
+    },
+  ]}
+>
+  {title}
+</Text>
 
       <Text
         style={[
@@ -163,7 +174,8 @@ function SubtleNotice({
           {
             fontSize: 15,
             lineHeight: 21,
-            opacity: 0.80, // ✅ matches the page’s whisper layer
+            opacity: 0.82,
+            color: colors.textPrimary,
           },
         ]}
       >
@@ -259,7 +271,7 @@ export default function HomeTab() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
+      style={{ flex: 1, backgroundColor: "transparent" }}
       contentContainerStyle={{
         paddingHorizontal: spacing.lg,
         paddingTop: spacing.xl + spacing.lg,
@@ -270,43 +282,59 @@ export default function HomeTab() {
       <View style={{ gap: spacing.md }}>
         {/* Brand header */}
         <View style={{ gap: spacing.xs }}>
-          <Text style={[type.screenTitle, { fontSize: 38, lineHeight: 42 }]}>Neat Notes</Text>
+          <Text style={[type.screenTitle, { fontSize: 38, lineHeight: 42, color: colors.textPrimary }]}>
+            Neat Notes
+          </Text>
 
-          <Text style={[type.microcopyItalic, { fontSize: 18, lineHeight: 24, opacity: 0.92 }]}>
+          <Text
+            style={[
+              type.microcopyItalic,
+              { fontSize: 20, lineHeight: 24, opacity: 0.92, color: colors.textPrimary },
+            ]}
+          >
             Understand your palate
           </Text>
 
-          <View style={{ height: 1, backgroundColor: colors.divider, marginTop: spacing.md }} />
+          <View style={{ height: 1, backgroundColor: colors.glassDivider, marginTop: spacing.md }} />
         </View>
 
         {/* Greeting + dynamic guidance */}
         <View style={{ gap: spacing.xs }}>
           {firstName ? (
-            <Text style={[type.body, { fontSize: 18, fontWeight: "600", opacity: 0.92 }]}>
+            <Text
+  style={[
+    type.sectionHeader,
+    { fontSize: 30, lineHeight: 24, opacity: 0.92 }
+  ]}
+>
               {firstName},
             </Text>
           ) : null}
 
-          <Text style={[type.sectionHeader, { fontSize: 22, lineHeight: 26 }]}>
+          <Text style={[type.sectionHeader, { fontSize: 20, lineHeight: 26, color: colors.textPrimary }]}>
             {dynamic.headline}
           </Text>
 
-          <Text style={[type.microcopyItalic, { fontSize: 16, lineHeight: 22, opacity: 0.9 }]}>
+          <Text
+            style={[
+              type.microcopyItalic,
+              { fontSize: 18, lineHeight: 22, opacity: 0.80, color: colors.textPrimary },
+            ]}
+          >
             {dynamic.subline}
           </Text>
 
-          {/* ✅ Divider: fades at edges, brighter center (no gradient asset needed) */}
+          {/* Divider: keep it subtle against texture */}
           <View style={{ marginTop: spacing.sm }}>
-            
             <View
               style={{
                 height: 2,
                 marginTop: 8,
                 alignSelf: "center",
                 width: "92%",
-                backgroundColor: colors.accentFaint,
+                backgroundColor: "rgba(190, 150, 99, 0.14)",
                 borderRadius: 999,
-                opacity: 0.35, // outer haze
+                opacity: 0.55,
               }}
             />
             <View
@@ -315,9 +343,9 @@ export default function HomeTab() {
                 marginTop: -2,
                 alignSelf: "center",
                 width: "44%",
-                backgroundColor: colors.accent,
+                backgroundColor: "rgba(190, 150, 99, 0.38)",
                 borderRadius: 999,
-                opacity: 0.55, // center sharpen
+                opacity: 0.65,
               }}
             />
           </View>
@@ -326,7 +354,9 @@ export default function HomeTab() {
         {/* SIGN IN (if not authed) */}
         {!isAuthed ? (
           <View style={{ gap: spacing.xs }}>
-            <Text style={[type.sectionHeader, { fontSize: 21, lineHeight: 25 }]}>Sign in</Text>
+            <Text style={[type.sectionHeader, { fontSize: 21, lineHeight: 25, color: colors.textPrimary }]}>
+              Sign in
+            </Text>
             <ActionBodyCard
               subtitle="Create an account to sync tastings across devices."
               rightHint="Continue"
@@ -337,32 +367,58 @@ export default function HomeTab() {
 
         {/* LOG */}
         <View style={{ gap: spacing.xs + 3 }}>
-          <Text style={[type.sectionHeader, { fontSize: 21, lineHeight: 25 }]}>{logCopy.title}</Text>
+          <Text style={[type.sectionHeader, { fontSize: 20, lineHeight: 25, color: colors.textPrimary }]}>
+            {logCopy.title}
+          </Text>
           <ActionBodyCard subtitle={logCopy.subtitle} rightHint={logCopy.hint} onPress={goLog} />
         </View>
 
         {/* DISCOVER */}
         <View style={{ gap: spacing.xs + 3 }}>
-          <Text style={[type.sectionHeader, { fontSize: 21, lineHeight: 25 }]}>
+          <Text style={[type.sectionHeader, { fontSize: 20, lineHeight: 25, color: colors.textPrimary }]}>
             {discoverCopy.title}
           </Text>
-          <ActionBodyCard
-            subtitle={discoverCopy.subtitle}
-            rightHint={discoverCopy.hint}
-            onPress={goDiscover}
-          />
+          <ActionBodyCard subtitle={discoverCopy.subtitle} rightHint={discoverCopy.hint} onPress={goDiscover} />
+       
+        </View>
+          {/* Divider: keep it subtle against texture */}
+          <View style={{ marginTop: spacing.sm }}>
+            <View
+              style={{
+                height: 2,
+                marginTop: 8,
+                alignSelf: "center",
+                width: "92%",
+                backgroundColor: "rgba(190, 150, 99, 0.14)",
+                borderRadius: 999,
+                opacity: 0.55,
+              }}
+            />
+            <View
+              style={{
+                height: 2,
+                marginTop: -2,
+                alignSelf: "center",
+                width: "44%",
+                backgroundColor: "rgba(190, 150, 99, 0.38)",
+                borderRadius: 999,
+                opacity: 0.65,
+              }}
+            />
+          </View>
         </View>
 
         {/* Beta notice */}
-        {isAuthed ? (
-          <SubtleNotice
-            title="Founding Tester (Beta)"
-            subtitle="Your tastings are private. If something feels off, send feedback — it helps us harden the app."
-            cta="Account & feedback"
-            onPress={goAccountSettings}
-          />
-        ) : null}
-      </View>
+       {isAuthed ? (
+  <View style={{ marginTop: spacing.md + 4 }}>
+    <SubtleNotice
+      title="Founding Tester (Beta)"
+      subtitle="Your tastings are private. If something feels off, send feedback — it helps us harden the app."
+      cta="Account & feedback"
+      onPress={goAccountSettings}
+    />
+  </View>
+) : null}
     </ScrollView>
   );
 }
