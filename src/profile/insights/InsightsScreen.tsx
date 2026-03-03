@@ -7,9 +7,6 @@ import { colors } from "../../../lib/theme";
 import { Section } from "./components/Section";
 
 import ClarityDeepDive from "./sections/ClarityDeepDive";
-import DepthBehavior from "./sections/DepthBehavior";
-import FavorVsAvoid from "./sections/FavorVsAvoid";
-import FlavorBias from "./sections/FlavorBias";
 import TasteProfileRadar from "./sections/TasteProfileRadar";
 import WhiskeyRange from "./sections/WhiskeyRange";
 
@@ -37,30 +34,6 @@ export default function InsightsScreen() {
         subtitle="A visual summary of your defining flavor tendencies."
       >
         <TasteProfileRadar />
-      </Section>
-
-      {/* 3️⃣ Flavor Bias */}
-      <Section
-        title="Flavor Bias"
-        subtitle="Which flavor categories dominate your logs."
-      >
-        <FlavorBias />
-      </Section>
-
-      {/* 4️⃣ Depth Behavior */}
-      <Section
-        title="Depth Behavior"
-        subtitle="How deeply you explore flavor layers."
-      >
-        <DepthBehavior />
-      </Section>
-
-      {/* 5️⃣ Favor vs Avoid */}
-      <Section
-        title="What You Lean Toward"
-        subtitle="Patterns in what you consistently favor or reject."
-      >
-        <FavorVsAvoid />
       </Section>
 
       {/* 6️⃣ Whiskey Range */}

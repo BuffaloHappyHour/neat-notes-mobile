@@ -10,19 +10,24 @@ import { colors } from "../../lib/theme";
 type Props = {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  /**
+   * When true, uses tighter padding for dense sections.
+   */
+  tight?: boolean;
 };
 
-export function Card({ children, style }: Props) {
+export function Card({ children, style, tight }: Props) {
   return (
     <View
       style={[
         {
-          backgroundColor: colors.surface,
-          borderRadius: radii.lg,
-          padding: spacing.lg,
+          backgroundColor: colors.glassSurface ?? colors.surface,
+          borderRadius: radii.xxl ?? radii.xl ?? radii.lg,
+          padding: tight ? spacing.md : spacing.lg,
           borderWidth: 1,
-          borderColor: colors.divider,
+          borderColor: colors.glassBorder ?? colors.borderSubtle ?? colors.divider,
           ...shadows.card,
+          overflow: "hidden",
         },
         style,
       ]}

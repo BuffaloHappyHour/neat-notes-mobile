@@ -1,11 +1,11 @@
 // src/log/components/refine/components/RefineBrowseBody.tsx
 import React from "react";
 import {
-    ActivityIndicator,
-    Pressable,
-    ScrollView,
-    Text,
-    View,
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
 } from "react-native";
 
 import { radii } from "../../../../../lib/radii";
@@ -13,6 +13,30 @@ import { spacing } from "../../../../../lib/spacing";
 import { colors } from "../../../../../lib/theme";
 import { type } from "../../../../../lib/typography";
 import { FlavorNode, SectionGroupHeaderProps } from "../types";
+
+function SectionIntro(props: { title: string; subtitle?: string }) {
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={[type.sectionHeader, { fontSize: 26 }]}>{props.title}</Text>
+
+      {props.subtitle ? (
+        <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>{props.subtitle}</Text>
+      ) : null}
+
+      {/* Home-style tan underline */}
+      <View
+        style={{
+          width: 120,
+          height: 4,
+          borderRadius: 999,
+          backgroundColor: colors.accent,
+          opacity: 0.55,
+          marginTop: 2,
+        }}
+      />
+    </View>
+  );
+}
 
 export function RefineBrowseBody(props: {
   locked: boolean;
@@ -75,8 +99,8 @@ export function RefineBrowseBody(props: {
     return (
       <View style={{ paddingVertical: spacing.xl, alignItems: "center" }}>
         <ActivityIndicator />
-        <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.7 }]}>
-          Loading notes…
+        <Text style={[type.microcopyItalic, { marginTop: spacing.sm, opacity: 0.75 }]}>
+          Loading refined notes…
         </Text>
       </View>
     );
@@ -85,17 +109,17 @@ export function RefineBrowseBody(props: {
   if (nodesError) {
     return (
       <View style={{ gap: spacing.sm }}>
-        <Text style={[type.body, { opacity: 0.85 }]}>
-          Couldn’t load refined notes.
-        </Text>
+        <SectionIntro title="Refine notes" subtitle="We couldn’t load the note list." />
+
         <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>{nodesError}</Text>
 
         <Pressable
           disabled={locked}
           onPress={() => fetchFlavorNodes()}
           style={({ pressed }) => ({
-            paddingVertical: 11,
-            paddingHorizontal: 12,
+            marginTop: spacing.sm,
+            paddingVertical: 12,
+            paddingHorizontal: 14,
             borderRadius: radii.md,
             borderWidth: 1,
             borderColor: colors.divider,
@@ -116,17 +140,20 @@ export function RefineBrowseBody(props: {
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ paddingBottom: spacing.xl * 2 + 90 }}
     >
+      {/* Intro (matches today’s pattern) */}
+      <View style={{ marginBottom: spacing.lg }}>
+        <SectionIntro
+          title="Refine notes"
+          subtitle="Choose more specific flavors to sharpen your palate profile."
+        />
+      </View>
+
       {refineSearch ? (
         <View style={{ gap: 10 }}>
           {visibleNodes.map((n) => renderNodeRow(n, true))}
           {!visibleNodes.length ? (
             <View style={{ gap: 6, alignItems: "center", paddingTop: spacing.md }}>
-              <Text
-                style={[
-                  type.microcopyItalic,
-                  { opacity: 0.75, textAlign: "center" },
-                ]}
-              >
+              <Text style={[type.microcopyItalic, { opacity: 0.75, textAlign: "center" }]}>
                 No matches.
               </Text>
             </View>
@@ -138,12 +165,7 @@ export function RefineBrowseBody(props: {
             <View style={{ gap: 10 }}>
               {visibleNodes.map((n) => renderNodeRow(n, true))}
               {!visibleNodes.length ? (
-                <Text
-                  style={[
-                    type.microcopyItalic,
-                    { opacity: 0.75, textAlign: "center" },
-                  ]}
-                >
+                <Text style={[type.microcopyItalic, { opacity: 0.75, textAlign: "center" }]}>
                   Nothing here yet.
                 </Text>
               ) : null}
@@ -168,9 +190,7 @@ export function RefineBrowseBody(props: {
                           onBrowse={() => setRefinePath(() => [rootId])}
                         />
                         {list.map((n) => (
-                          <React.Fragment key={n.id}>
-                            {renderNodeRow(n, true)}
-                          </React.Fragment>
+                          <React.Fragment key={n.id}>{renderNodeRow(n, true)}</React.Fragment>
                         ))}
                       </View>
                     );
@@ -208,17 +228,10 @@ export function RefineBrowseBody(props: {
                           />
                           {list.length ? (
                             list.map((n) => (
-                              <React.Fragment key={n.id}>
-                                {renderNodeRow(n, true)}
-                              </React.Fragment>
+                              <React.Fragment key={n.id}>{renderNodeRow(n, true)}</React.Fragment>
                             ))
                           ) : (
-                            <Text
-                              style={[
-                                type.microcopyItalic,
-                                { opacity: 0.7, textAlign: "center" },
-                              ]}
-                            >
+                            <Text style={[type.microcopyItalic, { opacity: 0.7, textAlign: "center" }]}>
                               Nothing here yet.
                             </Text>
                           )}

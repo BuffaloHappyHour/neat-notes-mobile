@@ -31,7 +31,7 @@ type Props = {
   selectedNodeIds: string[];
   selectedCountText: string;
   selectedNodeLabelsPreview: string;
-  scopedRootIds: string[]; // kept for compatibility (not used in this component right now)
+  scopedRootIds: string[]; // kept for compatibility (not used here right now)
 };
 
 const REACTIONS: { key: Reaction; label: string }[] = [
@@ -39,6 +39,16 @@ const REACTIONS: { key: Reaction; label: string }[] = [
   { key: "NEUTRAL", label: "Neutral" },
   { key: "NOT_FOR_ME", label: "Not for me" },
 ];
+
+function SectionIntro({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={[type.sectionHeader, { fontSize: 26 }]}>{title}</Text>
+
+      {subtitle ? <Text style={[type.sectionHeader, { opacity: 0.9 }]}>{subtitle}</Text> : null}
+    </View>
+  );
+}
 
 function ReactionColumn({
   title,
@@ -55,14 +65,14 @@ function ReactionColumn({
     <View style={{ flex: 1, alignItems: "center" }}>
       <Text style={[type.body, { fontWeight: "900", opacity: 0.95 }]}>{title}</Text>
 
-      {/* subtle header divider (adds hierarchy without a nested card) */}
+      {/* subtle header divider */}
       <View
         style={{
           marginTop: spacing.xs,
           height: 1,
           width: "70%",
           backgroundColor: colors.divider,
-          opacity: 0.65,
+          opacity: 0.7,
         }}
       />
 
@@ -76,7 +86,7 @@ function ReactionColumn({
               disabled={locked}
               onPress={() => onChange(r.key)}
               style={({ pressed }) => ({
-                paddingVertical: 14, // ✅ slightly taller = more premium + better tap target
+                paddingVertical: 14,
                 paddingHorizontal: 14,
                 borderRadius: radii.md,
                 borderWidth: active ? 2 : 1,
@@ -85,7 +95,7 @@ function ReactionColumn({
                 opacity: locked ? 0.6 : pressed ? 0.92 : 1,
                 alignItems: "center",
                 justifyContent: "center",
-                minHeight: 52, // ✅ consistent tap target
+                minHeight: 52,
               })}
             >
               <Text
@@ -129,42 +139,50 @@ export function QuickNotesSection({
   const hasRefined = selectedNodeIds.length > 0;
 
   const refineSub = useMemo(() => {
-    if (!hasRefined) return "Explore more specific flavors";
+    if (!hasRefined) return "Search for flavors that define your palate";
     if (selectedNodeLabelsPreview) return selectedNodeLabelsPreview;
     return selectedCountText;
   }, [hasRefined, selectedNodeLabelsPreview, selectedCountText]);
 
   return (
-    <View style={{ gap: spacing.lg }}>
+    <View style={{ gap: spacing.sm }}>
       {/* =======================
-          Card 1: Quick Reactions
-          ======================= */}
-      <Card>
-        <Text style={type.sectionHeader}>Quick Reactions</Text>
-        <Text style={[type.microcopyItalic, { marginTop: spacing.xs, opacity: 0.9 }]}>
-          How are you enjoying the first sips?
-        </Text>
+          Quick Reactions
+         ======================= */}
+      <SectionIntro title="Quick Reactions" />
+
+      <Card style={{ paddingTop: spacing.lg, paddingBottom: spacing.lg }}>
+        <View style={{ alignItems: "center" }}>
+          <Text style={[type.microcopyItalic, { fontSize: 18, lineHeight: 26, opacity: 0.7 }]}>
+            How are you enjoying your first sips?
+          </Text>
+        </View>
 
         {/* Accent underline */}
         <View
           style={{
-            width: 100,
+            width: 110,
             height: 4,
             borderRadius: 999,
             backgroundColor: colors.accent,
-            opacity: 0.9,
+            opacity: 0.7,
             alignSelf: "center",
             marginTop: spacing.sm,
           }}
         />
 
-        {/* Nose / Taste columns (no nested card; use dividers + spacing) */}
         <View style={{ marginTop: spacing.lg }}>
           <View style={{ flexDirection: "row", gap: spacing.lg, alignItems: "flex-start" }}>
             <ReactionColumn title="Nose" value={nose} onChange={setNose} locked={locked} />
 
-            {/* vertical divider */}
-            <View style={{ width: 1, backgroundColor: colors.divider, opacity: 0.7, alignSelf: "stretch" }} />
+            <View
+              style={{
+                width: 1,
+                backgroundColor: colors.divider,
+                opacity: 0.7,
+                alignSelf: "stretch",
+              }}
+            />
 
             <ReactionColumn title="Taste" value={taste} onChange={setTaste} locked={locked} />
           </View>
@@ -172,60 +190,74 @@ export function QuickNotesSection({
       </Card>
 
       {/* =======================
-          Card 2: Notes (deliberate)
-          ======================= */}
-      <Card>
-        <Text style={type.sectionHeader}>Notes</Text>
-        <Text style={[type.microcopyItalic, { marginTop: spacing.xs, opacity: 0.9 }]}>
-          Select everything you smell and taste
-        </Text>
+          Flavor Notes (with embedded Refine)
+         ======================= */}
+      <View style={{ gap: spacing.sm, marginTop: spacing.lg }}>
+        <SectionIntro title="Flavor Notes" />
 
-        {/* subtle accent for “sit down & think” vibe */}
-        <View
-          style={{
-            marginTop: spacing.sm,
-            width: 86,
-            height: 3,
-            borderRadius: 999,
-            backgroundColor: colors.accent,
-            opacity: 0.65,
-            alignSelf: "center",
-          }}
-        />
+        <Card style={{ paddingTop: spacing.md, paddingBottom: spacing.lg }}>
+          {/* Centered module title */}
+          <View style={{ alignItems: "center" }}>
+            <Text style={[type.microcopyItalic, { fontSize: 18, lineHeight: 26, opacity: 0.7 }]}>
+              Select everything you smell and taste
+            </Text>
 
-        <View style={{ marginTop: spacing.lg }}>
-          <NotesGrid tags={allTopLevelLabels} selected={flavorTags} onToggle={toggleFlavor} disabled={locked} />
-        </View>
-      </Card>
+            <View
+              style={{
+                width: 200,
+                height: 3,
+                borderRadius: 999,
+                backgroundColor: colors.accent,
+                opacity: 0.55,
+                marginTop: spacing.sm,
+              }}
+            />
+          </View>
 
-      {/* =======================
-          Card 3: Refine notes CTA
-          ======================= */}
-      <Pressable
-        disabled={locked}
-        onPress={openRefine}
-        style={({ pressed }) => ({
-          opacity: locked ? 0.6 : pressed ? 0.92 : 1,
-        })}
-      >
-        <Card>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <View style={{ flex: 1, paddingRight: spacing.md }}>
-              <Text style={[type.body, { fontWeight: "900", opacity: 0.96 }]}>Refine notes (optional)</Text>
+          {/* Pills */}
+          <View style={{ marginTop: spacing.xs }}>
+            <NotesGrid tags={allTopLevelLabels} selected={flavorTags} onToggle={toggleFlavor} disabled={locked} />
+          </View>
 
-              <Text style={[type.microcopyItalic, { marginTop: spacing.xs, opacity: 0.85 }]}>{refineSub}</Text>
+          {/* Embedded Refine CTA */}
+          <View style={{ marginTop: spacing.lg }}>
+            <View style={{ height: 1, backgroundColor: colors.divider, opacity: 0.8 }} />
 
-              {additionalNotesLine ? (
-                <Text style={[type.microcopyItalic, { marginTop: spacing.xs, opacity: 0.75 }]}>
-                  {additionalNotesLine}
-                </Text>
-              ) : null}
-            </View>
+            <Pressable
+              disabled={locked}
+              onPress={openRefine}
+              style={({ pressed }) => ({
+                marginTop: spacing.md,
+                paddingVertical: spacing.sm,
+                paddingHorizontal: spacing.md,
+                borderRadius: radii.md,
+                borderWidth: 1,
+                borderColor: !hasRefined ? colors.accent : colors.divider, // ✅ pops until they refine
+                backgroundColor: pressed ? colors.highlight : "rgba(255,255,255,0.03)",
+                opacity: locked ? 0.6 : 1,
+              })}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <View style={{ flex: 1, paddingRight: spacing.md }}>
+                  <Text style={[type.body, { fontWeight: "900", opacity: 0.85 }]}>
+                    Refine further {hasRefined ? `(${selectedNodeIds.length})` : "(recommended)"}
+                  </Text>
 
-            <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+                  <Text style={[type.microcopyItalic, { marginTop: spacing.xs, opacity: 0.85 }]}>{refineSub}</Text>
+
+                  {additionalNotesLine ? (
+                    <Text style={[type.microcopyItalic, { marginTop: spacing.xs, opacity: 0.75 }]}>
+                      {additionalNotesLine}
+                    </Text>
+                  ) : null}
+                </View>
+
+                <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+              </View>
+            </Pressable>
           </View>
         </Card>
-      </Pressable>
+      </View>
     </View>
   );
 }

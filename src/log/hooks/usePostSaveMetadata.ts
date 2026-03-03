@@ -6,19 +6,26 @@ import { hapticError, hapticSuccess } from "../../../lib/haptics";
 import { supabase } from "../../../lib/supabase";
 
 import {
-    cleanText,
-    isMissingLike,
-    isNullOrOther,
-    isUuid,
-    nullIfOther,
-    parseNumericOrNull,
-    safeText,
-    uniqStringsKeepOrder,
+  cleanText,
+  isMissingLike,
+  isNullOrOther,
+  isUuid,
+  nullIfOther,
+  parseNumericOrNull,
+  safeText,
+  uniqStringsKeepOrder,
 } from "../utils/text";
 
 type WhiskeyRow = {
+  name?: string | null;
   distillery: string | null;
+
+  // legacy display (may exist)
   whiskey_type: string | null;
+
+  // ✅ canonical
+  whiskey_type_id?: string | null;
+
   proof: number | null;
   age: number | null;
   category: string | null;
@@ -31,7 +38,11 @@ function computeMissingKeysFromWhiskeyRow(w: WhiskeyRow | null) {
   if (!w) return missing;
 
   if (!safeText(w.distillery)) missing.push("distillery");
-  if (isNullOrOther(w.whiskey_type)) missing.push("whiskey_type");
+
+  // Prefer canonical whiskey_type_id if present, fall back to legacy whiskey_type
+  const hasTypeId = !!safeText((w as any).whiskey_type_id);
+  if (!hasTypeId && isNullOrOther(w.whiskey_type)) missing.push("whiskey_type");
+
   if (w.proof == null) missing.push("proof");
   if (w.age == null) missing.push("age");
 
@@ -54,6 +65,9 @@ export function usePostSaveMetadata() {
   const [metaLoading, setMetaLoading] = useState(false);
   const [metaSaving, setMetaSaving] = useState(false);
 
+  // ✅ NEW: differentiate Custom vs UUID whiskey
+  const [metaIsCustom, setMetaIsCustom] = useState(false);
+
   const [postSaveTargetWhiskeyId, setPostSaveTargetWhiskeyId] = useState<string | null>(null);
   const [pendingNavigateTo, setPendingNavigateTo] = useState<Href | null>(null);
 
@@ -63,84 +77,153 @@ export function usePostSaveMetadata() {
   const [taxRegions, setTaxRegions] = useState<string[]>([]);
   const [taxSubRegions, setTaxSubRegions] = useState<string[]>([]);
 
+  // ✅ NEW: type options for canonical selection
+  const [whiskeyTypeOptions, setWhiskeyTypeOptions] = useState<{ id: string; name: string }[]>([]);
+
   // Form values (only for modal)
+  const [fName, setFName] = useState("");
   const [fDistillery, setFDistillery] = useState("");
-  const [fType, setFType] = useState<string | null>(null);
+
+  // ✅ canonical
+  const [fTypeId, setFTypeId] = useState<string | null>(null);
+
   const [fProof, setFProof] = useState("");
   const [fAge, setFAge] = useState("");
   const [fCategory, setFCategory] = useState<string | null>(null);
   const [fRegion, setFRegion] = useState<string | null>(null);
   const [fSubRegion, setFSubRegion] = useState<string | null>(null);
 
-  const fetchTaxonomyForModal = useCallback(async (category: string | null, region: string | null) => {
-    setMetaLoading(true);
-    try {
-      const { data: cData, error: cErr } = await supabase
-        .from("whiskey_categories")
-        .select("category")
-        .order("category", { ascending: true });
+  const fetchTaxonomyForModal = useCallback(
+    async (category: string | null, region: string | null) => {
+      setMetaLoading(true);
+      try {
+        // ✅ whiskey types
+        const { data: tData, error: tErr } = await supabase
+          .from("whiskey_types")
+          .select("id, name")
+          .order("name", { ascending: true });
 
-      if (cErr) throw new Error(cErr.message);
+        if (tErr) throw new Error(tErr.message);
 
-      const cats = (Array.isArray(cData) ? cData : [])
-        .map((r: any) => safeText(r.category))
-        .filter(Boolean);
+        const types = (Array.isArray(tData) ? tData : [])
+          .map((r: any) => ({ id: safeText(r.id), name: safeText(r.name) }))
+          .filter((x) => x.id && x.name);
 
-      setTaxCategories(cats);
+        setWhiskeyTypeOptions(types);
 
-      if (category) {
-        const { data: rData, error: rErr } = await supabase
-          .from("whiskey_regions")
-          .select("region")
-          .eq("category", category)
-          .order("region", { ascending: true });
+        // categories
+        const { data: cData, error: cErr } = await supabase
+          .from("whiskey_categories")
+          .select("category")
+          .order("category", { ascending: true });
 
-        if (rErr) throw new Error(rErr.message);
+        if (cErr) throw new Error(cErr.message);
 
-        const regs = (Array.isArray(rData) ? rData : [])
-          .map((r: any) => safeText(r.region))
+        const cats = (Array.isArray(cData) ? cData : [])
+          .map((r: any) => safeText(r.category))
           .filter(Boolean);
 
-        setTaxRegions(regs);
+        setTaxCategories(cats);
 
-        if (region) {
-          const { data: sData, error: sErr } = await supabase
-            .from("whiskey_sub_regions")
-            .select("sub_region")
+        if (category) {
+          const { data: rData, error: rErr } = await supabase
+            .from("whiskey_regions")
+            .select("region")
             .eq("category", category)
-            .eq("region", region)
-            .order("sub_region", { ascending: true });
+            .order("region", { ascending: true });
 
-          if (sErr) throw new Error(sErr.message);
+          if (rErr) throw new Error(rErr.message);
 
-          const subs = (Array.isArray(sData) ? sData : [])
-            .map((r: any) => safeText(r.sub_region))
+          const regs = (Array.isArray(rData) ? rData : [])
+            .map((r: any) => safeText(r.region))
             .filter(Boolean);
 
-          setTaxSubRegions(subs);
+          setTaxRegions(regs);
+
+          if (region) {
+            const { data: sData, error: sErr } = await supabase
+              .from("whiskey_sub_regions")
+              .select("sub_region")
+              .eq("category", category)
+              .eq("region", region)
+              .order("sub_region", { ascending: true });
+
+            if (sErr) throw new Error(sErr.message);
+
+            const subs = (Array.isArray(sData) ? sData : [])
+              .map((r: any) => safeText(r.sub_region))
+              .filter(Boolean);
+
+            setTaxSubRegions(subs);
+          } else {
+            setTaxSubRegions([]);
+          }
         } else {
+          setTaxRegions([]);
           setTaxSubRegions([]);
         }
-      } else {
+      } catch {
+        setWhiskeyTypeOptions([]);
+        setTaxCategories([]);
         setTaxRegions([]);
         setTaxSubRegions([]);
+      } finally {
+        setMetaLoading(false);
       }
-    } catch {
-      setTaxCategories([]);
-      setTaxRegions([]);
-      setTaxSubRegions([]);
-    } finally {
-      setMetaLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   /**
+   * ✅ Updated signature:
+   * - For normal whiskeys (uuid): behaves like before (missing-fields prompt)
+   * - For custom: opens modal even though there is no uuid
+   *
    * Returns:
    * - navigateTo (Href) if no modal needed
    * - null if modal opened (navigation will happen after save/skip)
    */
   const maybeOpenPostSaveMetadata = useCallback(
-    async (whiskeyIdToCheck: string, navigateTo: Href): Promise<Href | null> => {
+    async (
+      whiskeyIdToCheck: string,
+      navigateTo: Href,
+      opts?: {
+        isCustom?: boolean;
+        // optional prefill from your custom entry flow
+        name?: string;
+        whiskeyTypeId?: string | null;
+        proof?: string;
+        distillery?: string;
+      }
+    ): Promise<Href | null> => {
+      const isCustom = !!opts?.isCustom;
+
+      // ✅ Custom path: always open modal (required fields enforced in UI)
+      if (isCustom) {
+        setMetaIsCustom(true);
+
+        // For custom we want to show at minimum these three required blocks
+        setMetaMissingKeys(["whiskey_type", "proof"]); // Name is handled via fName + isCustom in modal
+
+        setPostSaveTargetWhiskeyId(null); // no uuid
+        setPendingNavigateTo(navigateTo);
+
+        setFName(safeText(opts?.name ?? ""));
+        setFDistillery(safeText(opts?.distillery ?? ""));
+        setFTypeId(opts?.whiskeyTypeId ?? null);
+        setFProof(safeText(opts?.proof ?? ""));
+        setFAge("");
+        setFCategory(null);
+        setFRegion(null);
+        setFSubRegion(null);
+
+        await fetchTaxonomyForModal(null, null);
+
+        setMetaOpen(true);
+        return null;
+      }
+
+      // Normal behavior: if no uuid, do nothing
       if (!isUuid(whiskeyIdToCheck)) {
         return navigateTo;
       }
@@ -148,7 +231,7 @@ export function usePostSaveMetadata() {
       try {
         const { data, error } = await supabase
           .from("whiskeys")
-          .select("distillery, whiskey_type, proof, age, category, region, sub_region")
+          .select("name, distillery, whiskey_type, whiskey_type_id, proof, age, category, region, sub_region")
           .eq("id", whiskeyIdToCheck)
           .maybeSingle();
 
@@ -157,10 +240,11 @@ export function usePostSaveMetadata() {
         const row = (data as any) ?? null;
         const w: WhiskeyRow | null = row
           ? {
+              name: cleanText(row.name),
               distillery: cleanText(row.distillery),
               whiskey_type: cleanText(row.whiskey_type),
-              proof:
-                row.proof == null || !Number.isFinite(Number(row.proof)) ? null : Number(row.proof),
+              whiskey_type_id: cleanText(row.whiskey_type_id),
+              proof: row.proof == null || !Number.isFinite(Number(row.proof)) ? null : Number(row.proof),
               age: row.age == null || !Number.isFinite(Number(row.age)) ? null : Number(row.age),
               category: cleanText(row.category),
               region: cleanText(row.region),
@@ -175,12 +259,15 @@ export function usePostSaveMetadata() {
         }
 
         // Prep modal state
+        setMetaIsCustom(false);
         setMetaMissingKeys(missing);
         setPostSaveTargetWhiskeyId(whiskeyIdToCheck);
         setPendingNavigateTo(navigateTo);
 
+        // Name only used for Custom (but safe to keep filled)
+        setFName(safeText(w?.name ?? ""));
         setFDistillery(safeText(w?.distillery ?? ""));
-        setFType(w?.whiskey_type ?? null);
+        setFTypeId(safeText((w as any)?.whiskey_type_id ?? "") || null);
         setFProof(w?.proof == null ? "" : String(w?.proof));
         setFAge(w?.age == null ? "" : String(w?.age));
         setFCategory(w?.category ?? null);
@@ -200,16 +287,38 @@ export function usePostSaveMetadata() {
 
   const finishPostSaveFlow = useCallback((): Href | null => {
     const to = pendingNavigateTo;
+
     setMetaOpen(false);
+    setMetaIsCustom(false);
+
     setPostSaveTargetWhiskeyId(null);
     setPendingNavigateTo(null);
     setMetaMissingKeys([]);
+
     return to ?? null;
   }, [pendingNavigateTo]);
 
   const saveMetadataFromModal = useCallback(async (): Promise<Href | null> => {
     if (metaSaving) return null;
 
+    // ✅ Custom: no whiskey_id to update — just close after validation (modal enforces required)
+    if (metaIsCustom) {
+      setMetaSaving(true);
+      try {
+        // TODO (optional): submit a “catalog suggestion” record here.
+        // Example:
+        // await supabase.from("whiskey_suggestions").insert({ name: fName, whiskey_type_id: fTypeId, proof: parseNumericOrNull(fProof), distillery: fDistillery, ... })
+        await hapticSuccess();
+        return finishPostSaveFlow();
+      } catch {
+        await hapticError();
+        return null;
+      } finally {
+        setMetaSaving(false);
+      }
+    }
+
+    // Normal: must have uuid
     if (!postSaveTargetWhiskeyId || !isUuid(postSaveTargetWhiskeyId)) {
       return finishPostSaveFlow();
     }
@@ -228,7 +337,13 @@ export function usePostSaveMetadata() {
       const { error } = await supabase.rpc("user_fill_whiskey_missing_fields", {
         p_whiskey_id: postSaveTargetWhiskeyId,
         p_distillery: dist,
-        p_whiskey_type: nullIfOther(fType as any),
+
+        // ✅ canonical now
+        p_whiskey_type_id: fTypeId,
+
+        // legacy stays null (server can keep back-compat if it wants)
+        p_whiskey_type: null,
+
         p_proof: proof,
         p_age: age,
         p_category: cat,
@@ -248,15 +363,17 @@ export function usePostSaveMetadata() {
     }
   }, [
     metaSaving,
+    metaIsCustom,
     postSaveTargetWhiskeyId,
     finishPostSaveFlow,
+    fName,
     fDistillery,
+    fTypeId,
     fProof,
     fAge,
     fCategory,
     fRegion,
     fSubRegion,
-    fType,
   ]);
 
   const categoryOptions = useMemo(() => withOtherOption(taxCategories), [taxCategories]);
@@ -305,11 +422,41 @@ export function usePostSaveMetadata() {
     [metaMissingKeys, fSubRegion, fCategory, fRegion]
   );
 
+  // canonical label for modal
+  const selectedWhiskeyTypeName = useMemo(() => {
+    if (!fTypeId) return null;
+    const hit = (whiskeyTypeOptions || []).find((x) => safeText(x.id) === safeText(fTypeId));
+    return hit?.name ?? null;
+  }, [fTypeId, whiskeyTypeOptions]);
+
+  // handy modal handlers (clear dependent fields)
+  const onCategoryChange = useCallback(
+    async (v: string) => {
+      setFCategory(v);
+      setFRegion(null);
+      setFSubRegion(null);
+      await fetchTaxonomyForModal(v, null);
+    },
+    [fetchTaxonomyForModal]
+  );
+
+  const onRegionChange = useCallback(
+    async (v: string) => {
+      setFRegion(v);
+      setFSubRegion(null);
+      await fetchTaxonomyForModal(fCategory ?? null, v);
+    },
+    [fetchTaxonomyForModal, fCategory]
+  );
+
   return {
     // visibility
     metaOpen,
     metaLoading,
     metaSaving,
+
+    // ✅ NEW
+    metaIsCustom,
 
     // navigation
     maybeOpenPostSaveMetadata,
@@ -320,10 +467,18 @@ export function usePostSaveMetadata() {
     metaMissingKeys,
 
     // form values
+    fName,
+    setFName,
+
     fDistillery,
     setFDistillery,
-    fType,
-    setFType,
+
+    // ✅ canonical
+    fTypeId,
+    setFTypeId,
+    whiskeyTypeOptions,
+    selectedWhiskeyTypeName,
+
     fProof,
     setFProof,
     fAge,
@@ -346,7 +501,11 @@ export function usePostSaveMetadata() {
     showRegionBlock,
     showSubRegionBlock,
 
-    // taxonomy refetch helper (needed when changing category/region)
+    // ✅ modal handlers (use these in MetadataModal props now)
+    onCategoryChange,
+    onRegionChange,
+
+    // taxonomy refetch helper (still useful)
     fetchTaxonomyForModal,
   };
 }

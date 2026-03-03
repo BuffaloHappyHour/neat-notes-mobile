@@ -76,7 +76,6 @@ export function trackTastingSaved(input: {
   has_notes: boolean;
   notes_len: number;
   has_flavor_tags: boolean;
-  has_dislike_tags: boolean;
   source_type: string;
 }) {
   return insertEvent({
@@ -90,7 +89,6 @@ export function trackTastingSaved(input: {
       has_notes: input.has_notes,
       notes_len: input.notes_len,
       has_flavor_tags: input.has_flavor_tags,
-      has_dislike_tags: input.has_dislike_tags,
       source_type: input.source_type,
     },
   });

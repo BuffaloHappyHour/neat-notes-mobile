@@ -1,169 +1,121 @@
-// src/log/components/tasting/BottleDetailsCard.tsx
 import { Ionicons } from "@expo/vector-icons";
-import React, { useMemo, useRef, useState } from "react";
-import {
-    Animated,
-    LayoutAnimation,
-    Platform,
-    Pressable,
-    Text,
-    UIManager,
-    View,
-} from "react-native";
+import React, { useMemo, useState } from "react";
+import { Pressable, Text, View } from "react-native";
 
 import { spacing } from "../../../../lib/spacing";
 import { colors } from "../../../../lib/theme";
 import { type } from "../../../../lib/typography";
 
-// Enable LayoutAnimation on Android
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-type DetailRow = { label: string; value: string };
-
-type Props = {
-  title?: string;
-  subtitle?: string;
-  detailsLabel?: string;
-  rows: DetailRow[];
-  defaultOpen?: boolean;
-
-  /**
-   * Optional: if you ever want to hide the top divider in certain contexts.
-   * Defaults to true.
-   */
-  showTopDivider?: boolean;
-};
+type Row = { label: string; value: string };
 
 export function BottleDetailsCard({
-  title,
-  subtitle,
   detailsLabel = "Bottle details",
   rows,
   defaultOpen = false,
-  showTopDivider = false,
-}: Props) {
-  const [open, setOpen] = useState(defaultOpen);
+}: {
+  detailsLabel?: string;
+  rows: Row[];
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(!!defaultOpen);
 
-  const visibleRows = useMemo(
-    () => rows.filter((r) => String(r.value ?? "").trim()),
+  const safeRows = useMemo(
+    () =>
+      (Array.isArray(rows) ? rows : [])
+        .map((r) => ({
+          label: String(r?.label ?? "").trim(),
+          value: String(r?.value ?? "").trim(),
+        }))
+        .filter((r) => r.label && r.value),
     [rows]
   );
 
-  // Animated chevron rotation (0 = closed, 1 = open)
-  const rot = useRef(new Animated.Value(defaultOpen ? 1 : 0)).current;
-
-  const rotate = rot.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "180deg"],
-  });
-
-  function toggle() {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-
-    setOpen((prev) => {
-      const next = !prev;
-      Animated.timing(rot, {
-        toValue: next ? 1 : 0,
-        duration: 180,
-        useNativeDriver: true,
-      }).start();
-      return next;
-    });
-  }
-
-  if (!visibleRows.length) return null;
+  if (!safeRows.length) return null;
 
   return (
-    <View style={{ gap: spacing.sm }}>
-      {/* Optional divider ABOVE the section (matches your render vibe) */}
-      {showTopDivider ? (
-        <View
-          style={{
-            height: 1,
-            backgroundColor: colors.divider,
-            opacity: 0.9,
-            marginTop: spacing.xs,
-          }}
-        />
-      ) : null}
-
-      {/* Optional title/subtitle (rarely used since whiskey name is the hero) */}
-      {title ? <Text style={type.sectionHeader}>{title}</Text> : null}
-      {subtitle ? (
-        <Text style={[type.microcopyItalic, { marginTop: spacing.xs, opacity: 0.82 }]}>
-          {subtitle}
-        </Text>
-      ) : null}
-
-      {/* Header row (NO inner slab, NO gold nub) */}
+    <View
+      style={{
+        alignSelf: "center",
+        width: "92%",
+        maxWidth: 560,
+        marginTop: spacing.sm,
+      }}
+    >
       <Pressable
-        onPress={toggle}
+        onPress={() => setOpen((v) => !v)}
         style={({ pressed }) => ({
           flexDirection: "row",
           alignItems: "center",
-          gap: spacing.sm,
-          paddingVertical: spacing.sm + 2,
-          opacity: pressed ? 0.92 : 1,
+          justifyContent: "space-between",
+          paddingVertical: spacing.sm,
+          opacity: pressed ? 0.85 : 1,
         })}
-        hitSlop={10}
       >
-        <Animated.View style={{ transform: [{ rotate }] }}>
-          <Ionicons name="chevron-down" size={18} color={colors.accent} />
-        </Animated.View>
-
-        <Text style={[type.body, { fontWeight: "900", opacity: 0.96 }]}>
-          {detailsLabel}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          {/* ✅ tan caret */}
+          <Ionicons
+            name={open ? "chevron-up" : "chevron-down"}
+            size={16}
+            color={colors.accent}
+          />
+          <Text style={[type.body, { color: colors.textPrimary, fontWeight: "800" }]}>
+            {detailsLabel}
+          </Text>
+        </View>
       </Pressable>
 
-      {/* Divider under header when open */}
       {open ? (
-        <View
-          style={{
-            height: 1,
-            backgroundColor: colors.divider,
-            opacity: 0.75,
-            marginTop: 2,
-          }}
-        />
-      ) : null}
+  <View
+    style={{
+      paddingTop: spacing.xs,
+      paddingBottom: spacing.xs,
+      paddingHorizontal: spacing.md,
+    }}
+  >
+    {safeRows.map((r, idx) => (
+      <View
+        key={`${r.label}-${idx}`}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingVertical: 6,
+        }}
+      >
+        <Text
+          style={[
+            type.microcopyItalic,
+            {
+              color: colors.textSecondary,
+              width: 110,
+              paddingRight: 10,
+            },
+          ]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {r.label}
+        </Text>
 
-      {/* Expanded content */}
-      {open ? (
-        <View style={{ gap: spacing.xs + 2, paddingTop: spacing.xs }}>
-          {visibleRows.map((r) => (
-            <View
-              key={r.label}
-              style={{
-                flexDirection: "row",
-                alignItems: "baseline",
-                justifyContent: "space-between",
-                gap: spacing.md,
-              }}
-            >
-              <Text style={[type.microcopyItalic, { opacity: 0.7 }]}>{r.label}</Text>
+        <Text
+          style={[
+            type.body,
+            {
+              color: colors.textPrimary,
+              flex: 1,
+              textAlign: "right",
+              fontWeight: "700",
+            },
+          ]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {r.value}
+        </Text>
+      </View>
+    ))}
+  </View>
+) : null}
 
-              <Text
-                style={[
-                  type.body,
-                  {
-                    opacity: 0.96,
-                    flexShrink: 1,
-                    textAlign: "right",
-                    fontWeight: "800",
-                  },
-                ]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {r.value}
-              </Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
     </View>
   );
 }

@@ -16,10 +16,8 @@ import {
 import { Card } from "../../components/ui/Card";
 import { RefineModal } from "../../src/log/components/refine/RefineModal";
 import { BottleDetailsCard } from "../../src/log/components/tasting/BottleDetailsCard";
-import { PersonalNotesSection } from "../../src/log/components/tasting/PersonalNotesSection";
 import { QuickNotesSection } from "../../src/log/components/tasting/QuickNotesSection";
 import RatingSection from "../../src/log/components/tasting/RatingSection";
-import { NotesGrid } from "../../src/log/components/ui/NotesGrid";
 import { Pill } from "../../src/log/components/ui/Pill";
 import { type Reaction } from "../../src/log/components/ui/ReactionList";
 import { SectionGroupHeader } from "../../src/log/components/ui/SectionGroupHeader";
@@ -40,8 +38,7 @@ import {
   cleanText,
   isUuid,
   normalizeKey,
-  safeText,
-  uniqStringsKeepOrder
+  safeText
 } from "../../src/log/utils/text";
 
 // ✅ ANALYTICS
@@ -59,7 +56,6 @@ type CloudTastingRow = {
   source_type: string | null;
   bar_name: string | null;
   flavor_tags?: string[] | null;
-  dislike_tags?: string[] | null;
   personal_notes?: string | null;
 };
 
@@ -85,6 +81,31 @@ type WhiskeyMeta = {
 
 // ====== SECTION: Controlled Select (NO TYPING) ======
 
+function GlassCard({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: any;
+}) {
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: colors.glassSurface ?? colors.surface,
+          borderRadius: radii.xxl ?? radii.xl,
+          borderWidth: 1,
+          borderColor: colors.glassBorder ?? colors.borderSubtle ?? colors.divider,
+          overflow: "hidden",
+          padding: spacing.md,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
 function ControlledSelect({
   label,
   value,
@@ -249,26 +270,7 @@ export default function CloudTastingScreen() {
 
   const [metaMissingKeys, setMetaMissingKeys] = useState<string[]>([]);
 
-  const FALLBACK_DISLIKE_TAGS = useMemo(
-    () => [
-      "Too Sweet",
-      "Too Oaky",
-      "Too Spicy",
-      "Too Smoky",
-      "Too Fruity",
-      "Too Floral",
-      "Too Nutty",
-      "Too Grainy",
-      "Too Herbal",
-      "Too Peaty",
-      "Too Hot (proof)",
-    ],
-    []
-  );
-
   const [flavorTags, setFlavorTags] = useState<string[]>([]);
-  const [dislikeTags, setDislikeTags] = useState<string[]>([]);
-  const [noDislikes, setNoDislikes] = useState(true);
 
   const [sourceType, setSourceType] = useState<"purchased" | "bar">("purchased");
   const [barName, setBarName] = useState("");
@@ -281,7 +283,6 @@ export default function CloudTastingScreen() {
   const engine = useFlavorNodesEngine({
     flavorTags,
     setFlavorTags,
-    fallbackDislikeTags: FALLBACK_DISLIKE_TAGS,
     initialSelectedNodeIds: [],
   });
 
@@ -307,7 +308,7 @@ export default function CloudTastingScreen() {
     topLevelNodes,
     rootLabelById,
     ALL_TOP_LEVEL_LABELS,
-    DISLIKE_TAGS,
+  
 
     scopedRootIds,
     visibleNodes,
@@ -401,12 +402,6 @@ export default function CloudTastingScreen() {
     setAddFamilyOpen(false);
   }
 
-  // ====== SECTION: Dislikes ======
-
-  function setNoDislikesActive() {
-    setNoDislikes(true);
-    setDislikeTags([]);
-  }
 
   function toggleFlavor(tag: string) {
     const t = safeText(tag);
@@ -419,25 +414,6 @@ export default function CloudTastingScreen() {
       return next.filter((x) => !isFinishLabel(x) && normalizeKey(x) !== "dislikes");
     });
   }
-
-  function toggleDislike(tag: string) {
-    const t = safeText(tag);
-    if (!t) return;
-
-    // selecting any dislike disables "no dislikes"
-    setNoDislikes(false);
-
-    setDislikeTags((prev) => {
-      const has = prev.includes(t);
-      const next = has ? prev.filter((x) => x !== t) : [...prev, t];
-      return uniqStringsKeepOrder(next);
-    });
-  }
-
-  // If user clears all dislikes manually, treat as "No dislikes"
-  useEffect(() => {
-    if (dislikeTags.length === 0) setNoDislikes(true);
-  }, [dislikeTags.length]);
 
   // ====== SECTION: Load existing tasting ======
 
@@ -464,8 +440,6 @@ export default function CloudTastingScreen() {
         setTaste(loaded.tasteReaction as any);
 
         setFlavorTags(loaded.flavorTags);
-        setDislikeTags(loaded.dislikeTags);
-        setNoDislikes(loaded.dislikeTags.length === 0);
 
         setPersonalNotes(loaded.personalNotes);
         setSourceType(loaded.sourceType);
@@ -630,76 +604,95 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
 
   // ====== SECTION: Save/Upsert Logic ======
 
-  function onEdit() {
-    setLocked(false);
-  }
-
   async function onSave() {
-    if (saving) return;
+  if (saving) return;
 
-    setSaving(true);
-    try {
-      const result = await saveCloudTasting({
-        isExisting,
-        tastingId,
+  setSaving(true);
+  try {
+    const result = await saveCloudTasting({
+      isExisting,
+      tastingId,
 
-        name,
-        rating,
-        nose,
-        taste,
-        personalNotes,
+      name,
+      rating,
+      nose,
+      taste,
+      personalNotes,
 
-        whiskeyId,
-        flavorTags,
-        dislikeTags,
-        noDislikes,
-        selectedNodeIds,
-        getTopLevelLabelForNode,
-        isFinishLabel,
-        sentimentById,
-        sourceType,
-        barName,
+      whiskeyId,
+      flavorTags,
+      selectedNodeIds,
+      getTopLevelLabelForNode,
+      isFinishLabel,
+      sentimentById,
+      sourceType,
+      barName,
 
-        lockName,
+      lockName,
 
-        replaceTastingFlavorNodes,
-      });
+      replaceTastingFlavorNodes,
+    });
 
-      setLocked(true);
+    setLocked(true);
 
-      // post-save gating
-      if (result.whiskeyId) {
-        const to = await postSaveMeta.maybeOpenPostSaveMetadata(
-          result.whiskeyId,
-          `/whiskey/${encodeURIComponent(result.whiskeyId)}`
-        );
-        if (to) router.replace(to);
-      } else {
-        router.replace("/profile");
+    // ============================
+    // Post-save gating logic
+    // ============================
+
+    if (result.whiskeyId) {
+      // ✅ Normal whiskey (UUID exists)
+      const to = await postSaveMeta.maybeOpenPostSaveMetadata(
+        result.whiskeyId,
+        `/whiskey/${encodeURIComponent(result.whiskeyId)}`
+      );
+
+      if (to) {
+        router.replace(to);
       }
-    } catch (e: any) {
-      const msg = String(e?.message ?? e ?? "Save failed");
-      const isOffline = !!e?.isOffline;
 
-      if (isOffline) {
-        Alert.alert(
-          "Not saved",
-          "You appear to be offline or your connection dropped. This tasting was not saved.\n\nReconnect and tap Retry.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Retry", onPress: () => onSave() },
-          ]
-        );
-      } else {
-        Alert.alert("Save failed", msg);
+    } else {
+      // ✅ Custom whiskey (no UUID)
+      const to = await postSaveMeta.maybeOpenPostSaveMetadata(
+        "CUSTOM",              // dummy id (hook handles custom mode)
+        "/log",                // safe fallback destination after Save/Skip
+        {
+          isCustom: true,
+          name: name,
+          proof: "",           // pass if you collect proof earlier
+          whiskeyTypeId: null, // pass if available
+          distillery: "",
+        }
+      );
+
+      if (to) {
+        router.replace(to);
       }
-    } finally {
-      setSaving(false);
     }
+
+  } catch (e: any) {
+    const msg = String(e?.message ?? e ?? "Save failed");
+    const isOffline = !!e?.isOffline;
+
+    if (isOffline) {
+      Alert.alert(
+        "Not saved",
+        "You appear to be offline or your connection dropped. This tasting was not saved.\n\nReconnect and tap Retry.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Retry", onPress: () => onSave() },
+        ]
+      );
+    } else {
+      Alert.alert("Save failed", msg);
+    }
+  } finally {
+    setSaving(false);
   }
-
+}
   // ====== SECTION: Render ======
-
+function onEdit() {
+  setLocked(false);
+}
   return (
     <>
       <Stack.Screen
@@ -739,12 +732,12 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
       />
 
       <ScrollView
-        style={{ flex: 1, backgroundColor: colors.background }}
+        style={{ flex: 1, backgroundColor: "transparent" }}
         contentContainerStyle={{ paddingBottom: spacing.xl * 3 }}
         keyboardShouldPersistTaps="handled"
         scrollEnabled={!isSliding}
       >
-        <View style={{ padding: spacing.xl, gap: spacing.lg }}>
+        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl * 2, gap: spacing.lg }}>
           {loading ? (
             <View style={{ paddingVertical: spacing.xl, alignItems: "center" }}>
               <ActivityIndicator />
@@ -816,8 +809,52 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
     defaultOpen={false}
   />
 ) : null}
+<View style={{ marginVertical: spacing.sm }}>
+  <View
+    style={{
+      height: 2,
+      marginTop: 4,
+      borderRadius: 999,
+      overflow: "hidden",
+      opacity: 0.95,
+    }}
+  >
+    <View
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: "25%",
+        backgroundColor: colors.divider,
+        opacity: 0.65,
+      }}
+    />
+    <View
+      style={{
+        position: "absolute",
+        left: "25%",
+        top: 0,
+        bottom: 0,
+        width: "50%",
+        backgroundColor: colors.accent,
+        opacity: 0.12,
+      }}
+    />
+    <View
+      style={{
+        position: "absolute",
+        right: 0,
+        top: 0,
+        bottom: 0,
+        width: "25%",
+        backgroundColor: colors.divider,
+        opacity: 0.65,
+      }}
+    />
+  </View>
+</View>
 
-<View style={{ height: 1, backgroundColor: colors.divider, opacity: 0.9 }} />
           {/* Rating (extracted) */}
           <RatingSection
             locked={locked}
@@ -825,7 +862,51 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
             setRating={setRating}
             onSlidingChange={(s: boolean) => setIsSliding(s)}
           />
-
+<View style={{ marginVertical: spacing.sm }}>
+  <View
+    style={{
+      height: 2,
+      marginTop: 4,
+      borderRadius: 999,
+      overflow: "hidden",
+      opacity: 0.95,
+    }}
+  >
+    <View
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: "25%",
+        backgroundColor: colors.divider,
+        opacity: 0.65,
+      }}
+    />
+    <View
+      style={{
+        position: "absolute",
+        left: "25%",
+        top: 0,
+        bottom: 0,
+        width: "50%",
+        backgroundColor: colors.accent,
+        opacity: 0.12,
+      }}
+    />
+    <View
+      style={{
+        position: "absolute",
+        right: 0,
+        top: 0,
+        bottom: 0,
+        width: "25%",
+        backgroundColor: colors.divider,
+        opacity: 0.65,
+      }}
+    />
+  </View>
+</View>
           <QuickNotesSection
             locked={locked}
             nose={nose}
@@ -842,40 +923,9 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
             selectedNodeLabelsPreview={selectedNodeLabelsPreview}
             scopedRootIds={scopedRootIds}
           />
-<View style={{ height: 1, backgroundColor: colors.divider, opacity: 0.9 }} />
-          {/* Dislikes (always visible) */}
-          <Card>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={type.sectionHeader}>Anything you disliked?</Text>
-
-              <Pill
-                label="No dislikes"
-                active={noDislikes || dislikeTags.length === 0}
-                disabled={locked}
-                onPress={() => setNoDislikesActive()}
-              />
-            </View>
-
-            <Text style={[type.microcopyItalic, { marginTop: spacing.xs, opacity: 0.85 }]}>
-              Optional. Even if you liked the pour overall, this helps us learn your preferences.
-            </Text>
-
-            <NotesGrid
-              tags={DISLIKE_TAGS}
-              selected={dislikeTags}
-              onToggle={toggleDislike}
-              disabled={locked}
-            />
-          </Card>
-
-          <PersonalNotesSection
-            locked={locked}
-            personalNotes={personalNotes}
-            setPersonalNotes={setPersonalNotes}
-          />
-<View style={{ height: 1, backgroundColor: colors.divider, opacity: 0.9 }} />
+      
           {/* Source */}
-          <Card>
+          <Card tight>
             <Text style={type.sectionHeader}>Where did you have this bottle?</Text>
 
             <View style={{ flexDirection: "row", gap: spacing.md, marginTop: spacing.md }}>

@@ -1,18 +1,9 @@
 // src/log/services/tastingSave.service.ts
-import {
-  trackTastingSaved,
-  trackTastingSaveFailed,
-} from "../../../lib/analytics";
+import { trackTastingSaved, trackTastingSaveFailed } from "../../../lib/analytics";
 import { hapticError, hapticSuccess } from "../../../lib/haptics";
 import { supabase } from "../../../lib/supabase";
 
-import {
-  clamp100,
-  isUuid,
-  normalizeKey,
-  safeText,
-  uniqStringsKeepOrder,
-} from "../utils/text";
+import { clamp100, isUuid, normalizeKey, safeText, uniqStringsKeepOrder } from "../utils/text";
 
 import {
   deletePublicMirrorBySourceTastingId,
@@ -23,7 +14,7 @@ import { maybeCreateWhiskeyCandidate } from "./whiskeyCandidates.service";
 
 export type Reaction = "ENJOYED" | "NEUTRAL" | "NOT_FOR_ME" | null;
 
-// ✅ New: sentiment for refined notes (stored on tasting_flavor_selections_v2.sentiment)
+// ✅ sentiment for refined notes (stored on tasting_flavor_selections_v2.sentiment)
 export type ReviewSentiment = "LIKE" | "NEUTRAL" | "DISLIKE";
 
 function reactionLabel(v: Reaction) {
@@ -54,13 +45,11 @@ export async function saveCloudTasting(params: {
   // whiskey + tags
   whiskeyId: string | null;
   flavorTags: string[];
-  dislikeTags: string[];
-  noDislikes: boolean;
   selectedNodeIds: string[];
   getTopLevelLabelForNode: (nodeId: string) => string | null | undefined;
   isFinishLabel: (label: string) => boolean;
 
-  // ✅ New (optional for now): refined-note sentiment map
+  // refined-note sentiment map (optional)
   sentimentById?: Record<string, ReviewSentiment>;
 
   // source
@@ -73,7 +62,7 @@ export async function saveCloudTasting(params: {
   // refined nodes writer (legacy)
   replaceTastingFlavorNodes: (tastingId: string, selectedNodeIds: string[]) => Promise<void>;
 
-  // ✅ refined nodes writer (new): writes sentiment column too
+  // refined nodes writer (new): writes sentiment column too
   replaceTastingFlavorNodesWithSentiment?: (
     tastingId: string,
     selectedNodeIds: string[],
@@ -92,8 +81,6 @@ export async function saveCloudTasting(params: {
 
     whiskeyId,
     flavorTags,
-    dislikeTags,
-    noDislikes,
     selectedNodeIds,
     getTopLevelLabelForNode,
     isFinishLabel,
@@ -137,6 +124,7 @@ export async function saveCloudTasting(params: {
     (t) => !isFinishLabel(t) && normalizeKey(t) !== "dislikes"
   );
 
+  // ✅ dislikes removed entirely from writes
   const payload: any = {
     whiskey_name: safeName,
     whiskey_id: safeWhiskeyId,
@@ -144,7 +132,6 @@ export async function saveCloudTasting(params: {
     nose_reaction: reactionLabel(nose) || null,
     taste_reaction: reactionLabel(taste) || null,
     flavor_tags: mergedFlavorTags.length ? mergedFlavorTags : null,
-    dislike_tags: noDislikes ? null : dislikeTags.length ? dislikeTags : null,
     source_type: sourceType,
     bar_name: sourceType === "bar" ? String(barName ?? "").trim() : null,
     personal_notes: personalOrNull,
@@ -175,20 +162,20 @@ export async function saveCloudTasting(params: {
       return;
     }
 
-    // Sharing is on, but public_tastings requires whiskey_id (NOT NULL).
+    // public_tastings requires whiskey_id (NOT NULL).
     // If we don't have a whiskeyId, skip mirror + delete any previous mirror row.
     if (!safeWhiskeyId) {
       await deletePublicMirrorBySourceTastingId(sourceTastingId);
       return;
     }
 
-    // We have a valid whiskeyId -> safe to upsert
     await upsertPublicMirror({
       sourceTastingId,
       whiskeyId: safeWhiskeyId,
       rating: Number(rating),
       flavorTags: mergedFlavorTags.length ? mergedFlavorTags : null,
-      dislikeTags: noDislikes ? null : dislikeTags.length ? dislikeTags : null,
+      // dislikes removed from mirror payload
+      dislikeTags: null,
       personalNotes: personalOrNull,
       selectedNodeIds,
     });
@@ -242,7 +229,7 @@ export async function saveCloudTasting(params: {
         has_notes: !!personalOrNull,
         notes_len: personalOrNull ? personalOrNull.length : 0,
         has_flavor_tags: mergedFlavorTags.length > 0,
-        has_dislike_tags: !noDislikes && dislikeTags.length > 0,
+        // dislikes removed
         source_type: sourceType,
       });
 
@@ -284,7 +271,7 @@ export async function saveCloudTasting(params: {
       has_notes: !!personalOrNull,
       notes_len: personalOrNull ? personalOrNull.length : 0,
       has_flavor_tags: mergedFlavorTags.length > 0,
-      has_dislike_tags: !noDislikes && dislikeTags.length > 0,
+      // dislikes removed
       source_type: sourceType,
     });
 

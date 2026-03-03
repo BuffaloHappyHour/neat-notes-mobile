@@ -1,6 +1,7 @@
 // src/log/components/refine/RefineModal.tsx
 import React, { useMemo, useState } from "react";
 import { Alert, Modal, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { spacing } from "../../../../lib/spacing";
 import { colors } from "../../../../lib/theme";
@@ -62,7 +63,6 @@ export function RefineModal(props: RefineModalProps) {
     selectedNodeIds,
     setSelectedNodeIds,
 
-    // ✅ optional (we’ll safely fall back if missing)
     sentimentById: sentimentByIdFromProps,
     setSentimentById: setSentimentByIdFromProps,
   } = props as any;
@@ -70,45 +70,35 @@ export function RefineModal(props: RefineModalProps) {
   const [mode, setMode] = useState<"BROWSE" | "REVIEW">("BROWSE");
   const [optionsOpen, setOptionsOpen] = useState(false);
 
-  // ✅ Local fallback so we never crash even if props are missing at runtime
   const [localSentiments, setLocalSentiments] = useState<Record<string, ReviewSentiment>>({});
   const sentimentById: Record<string, ReviewSentiment> = sentimentByIdFromProps ?? localSentiments;
-  const setSentimentById: React.Dispatch<
-    React.SetStateAction<Record<string, ReviewSentiment>>
-  > = setSentimentByIdFromProps ?? setLocalSentiments;
+  const setSentimentById: React.Dispatch<React.SetStateAction<Record<string, ReviewSentiment>>> =
+    setSentimentByIdFromProps ?? setLocalSentiments;
 
   const isSearching = !!refineSearch?.trim();
   const isDeep = refinePath.length > 0;
-
   const showAddFamilyBlock = scopedRootIds.length > 0;
 
   const selectedNodesForReview = useMemo(() => {
-    const list = selectedNodeIds
-      .map((id: string) => byId.get(id))
-      .filter(Boolean);
-    return list;
+    return selectedNodeIds.map((id: string) => byId.get(id)).filter(Boolean);
   }, [selectedNodeIds, byId]);
 
   const confirmClearAll = () => {
     if (locked) return;
     if (selectedNodeIds.length === 0) return;
 
-    Alert.alert(
-      "Clear refined notes?",
-      "This will remove all refined notes you selected for this tasting.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear",
-          style: "destructive",
-          onPress: () => {
-            setSelectedNodeIds([]);
-            setSentimentById({});
-            setMode("BROWSE");
-          },
+    Alert.alert("Clear refined notes?", "This will remove all refined notes you selected for this tasting.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear",
+        style: "destructive",
+        onPress: () => {
+          setSelectedNodeIds([]);
+          setSentimentById({});
+          setMode("BROWSE");
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleBottomBack = () => {
@@ -140,7 +130,6 @@ export function RefineModal(props: RefineModalProps) {
       return;
     }
 
-    // REVIEW -> Apply (later: persist sentiment)
     closeRefine();
   };
 
@@ -158,8 +147,6 @@ export function RefineModal(props: RefineModalProps) {
     return "Back";
   }, [mode, isSearching]);
 
-  // Browse: "Review" (doesn’t exit)
-  // Review: "Apply" (calmer than "Finish")
   const doneLabel = useMemo(() => (mode === "BROWSE" ? "Review" : "Apply"), [mode]);
 
   const setSentiment = (id: string, s: ReviewSentiment) => {
@@ -172,13 +159,9 @@ export function RefineModal(props: RefineModalProps) {
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
-      onRequestClose={() => closeRefine()}
-    >
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => closeRefine()}>
+      {/* ✅ TOP safe-area only; bottom is handled by RefineBottomNav */}
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
         <RefineHeader
           mode={mode}
           locked={locked}
@@ -204,13 +187,7 @@ export function RefineModal(props: RefineModalProps) {
           addFamilyLabel={addFamilyLabel}
         />
 
-        <View
-          style={{
-            flex: 1,
-            paddingHorizontal: spacing.lg,
-            paddingTop: spacing.md,
-          }}
-        >
+        <View style={{ flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md }}>
           {mode === "REVIEW" ? (
             <RefineReviewBody
               locked={locked}
@@ -254,7 +231,7 @@ export function RefineModal(props: RefineModalProps) {
           onBack={handleBottomBack}
           onDone={handleBottomDone}
         />
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

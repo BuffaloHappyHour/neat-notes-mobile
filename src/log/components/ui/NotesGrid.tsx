@@ -20,20 +20,22 @@ export function NotesGrid({
   disabled?: boolean;
   columns?: 2 | 3;
 }) {
-  const GAP = 10;
+  // Slightly roomier grid + more premium breathing
+  const GAP = 12;
 
-  // These percentages are tuned for RN flexWrap + gap.
-  // (RN doesn't "true-grid" measure gaps like CSS grid, so we pick stable values.)
+  // Tuned for RN flexWrap + gap.
   const basis = useMemo(() => {
-    return columns === 3 ? "30%" : "45%";
+    // 2-col: slightly wider to reduce cramped feel w/ 2px active borders
+    return columns === 3 ? "30%" : "47%";
   }, [columns]);
 
-  const pillMinHeight = columns === 3 ? 40 : 46;
-  const pillPadV = columns === 3 ? 8 : 8;
-  const labelFontSize = columns === 3 ? 12 : 13;
+  // Make 2-col pills match the "presence" of Nose/Taste buttons
+  const pillMinHeight = columns === 3 ? 40 : 52;
+  const pillPadV = columns === 3 ? 8 : 12;
+  const labelFontSize = columns === 3 ? 12 : 14;
 
   return (
-    <View style={{ gap: spacing.sm }}>
+    <View style={{ marginTop: spacing.md, gap: spacing.md }}>
       <View
         style={{
           flexDirection: "row",
@@ -57,12 +59,12 @@ export function NotesGrid({
                 maxWidth: basis,
 
                 paddingVertical: pillPadV,
-                paddingHorizontal: 12,
+                paddingHorizontal: 14,
                 borderRadius: radii.md,
-                borderWidth: active ? 2 : 1,
+                borderWidth: active ? 2 : 1.5,
                 borderColor: active ? colors.accent : colors.divider,
                 backgroundColor: active ? colors.highlight : "transparent",
-                opacity: disabled ? 0.6 : pressed ? 0.92 : 1,
+                opacity: disabled ? 0.6 : pressed ? 0.95 : 1,
 
                 alignItems: "center",
                 justifyContent: "center",

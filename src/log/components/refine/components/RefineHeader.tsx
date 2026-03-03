@@ -334,11 +334,7 @@ export function RefineHeader(props: {
             </View>
           ) : null}
         </>
-      ) : (
-        <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
-          Mark each note as liked or disliked (optional). This helps your palate learn.
-        </Text>
-      )}
+      ) : null}
     </View>
   );
 }
