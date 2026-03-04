@@ -79,10 +79,6 @@ function LoggedTabBarButton(props: any) {
 }
 
 export default function TabsLayout() {
-  const pathname = usePathname();
-
-  // Log lifecycle: app resumes (this correlates with "works after reinstall, breaks after reopen")
-
   const screenOptions = useMemo(
     () => ({
       headerShown: false,
@@ -95,14 +91,20 @@ export default function TabsLayout() {
         fontFamily: type?.body?.fontFamily,
       },
 
+      // Force tab bar to own the bottom hit-test region on iOS
       tabBarStyle: {
+        position: "absolute" as const,
+        left: 0,
+        right: 0,
+        bottom: 0,
+
         backgroundColor: "transparent",
         borderTopColor: "rgba(255,255,255,0.10)",
         borderTopWidth: Platform.OS === "ios" ? 0.5 : 1,
 
         // keep above overlays
-        elevation: 8,
-        zIndex: 999,
+        elevation: 100,
+        zIndex: 1000,
       },
 
       tabBarButton: (props: any) => <LoggedTabBarButton {...props} />,
