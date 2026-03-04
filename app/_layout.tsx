@@ -5,6 +5,7 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useMemo } from "react";
 import { ImageBackground, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
   CormorantGaramond_400Regular,
@@ -61,21 +62,16 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={{ flex: 1 }}>
+      <SafeAreaProvider>
         <ThemeProvider value={navTheme}>
-          {/* Background layer: cannot receive touches */}
-          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            <ImageBackground
-              source={require("../assets/backgrounds/Background.png")}
-              style={styles.bg}
-              resizeMode="cover"
-            >
-              <View pointerEvents="none" style={styles.tint} />
-            </ImageBackground>
-          </View>
+          <ImageBackground
+            source={require("../assets/backgrounds/Background.png")}
+            style={styles.bg}
+            resizeMode="cover"
+          >
+            {/* subtle wash */}
+            <View pointerEvents="none" style={styles.tint} />
 
-          {/* Navigation layer: always above background */}
-          <View style={StyleSheet.absoluteFill}>
             <Stack
               screenOptions={{
                 headerStyle: { backgroundColor: "transparent" },
@@ -86,9 +82,9 @@ export default function RootLayout() {
             >
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             </Stack>
-          </View>
+          </ImageBackground>
         </ThemeProvider>
-      </View>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

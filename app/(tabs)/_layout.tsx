@@ -13,8 +13,6 @@ function LoggedTabBarButton(props: any) {
   const selected = !!accessibilityState?.selected;
 
   const pathname = usePathname();
-
-  // Keep latest pathname for async checks
   const pathnameRef = useRef<string>(pathname ?? "unknown");
   pathnameRef.current = pathname ?? "unknown";
 
@@ -91,20 +89,14 @@ export default function TabsLayout() {
         fontFamily: type?.body?.fontFamily,
       },
 
-      // Force tab bar to own the bottom hit-test region on iOS
       tabBarStyle: {
-        position: "absolute" as const,
-        left: 0,
-        right: 0,
-        bottom: 0,
-
         backgroundColor: "transparent",
         borderTopColor: "rgba(255,255,255,0.10)",
         borderTopWidth: Platform.OS === "ios" ? 0.5 : 1,
 
-        // keep above overlays
-        elevation: 100,
-        zIndex: 1000,
+        // Keep above *RN* overlays (won't beat native Modal, but harmless)
+        zIndex: 10,
+        elevation: 10,
       },
 
       tabBarButton: (props: any) => <LoggedTabBarButton {...props} />,
