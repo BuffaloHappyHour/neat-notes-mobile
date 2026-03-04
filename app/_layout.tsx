@@ -5,6 +5,7 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useMemo } from "react";
 import { ImageBackground, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { logClientEvent } from "../lib/clientLog";
 
 import {
   CormorantGaramond_400Regular,
@@ -25,7 +26,6 @@ import { colors } from "../lib/theme";
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  // Load BOTH families (Cormorant + Montserrat)
   const [cormorantLoaded] = useCormorantFonts({
     CormorantGaramond_400Regular,
     CormorantGaramond_400Regular_Italic,
@@ -44,7 +44,6 @@ export default function RootLayout() {
       ...DarkTheme,
       colors: {
         ...DarkTheme.colors,
-        // ✅ removes the white layer so ImageBackground shows
         background: "transparent",
         card: "transparent",
         border: "transparent",
@@ -63,27 +62,41 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={navTheme}>
-        <ImageBackground
-          source={require("../assets/backgrounds/Background.png")}
-          style={styles.bg}
-          resizeMode="cover"
-        >
-          {/* subtle dark wash so text/cards feel grounded */}
-          <View style={styles.tint} />
-
-          <Stack
-            screenOptions={{
-              headerStyle: { backgroundColor: "transparent" },
-              headerShadowVisible: false,
-              headerTintColor: colors.textPrimary as any,
-              contentStyle: { backgroundColor: "transparent" },
-            }}
-          >
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          </Stack>
-        </ImageBackground>
-      </ThemeProvider>
+      <View style={{ flex: 1 }}>
+        <ThemeProvider value={navTheme}>
+          <ImageBackground
+            source={require("../assets/backgrounds/Background.png")}
+            style={styles.bg}
+            resizeMode="cover"
+          >{/* DEBUG: touch canary strip at bottom */}
+          <View pointerEvents="none" style={styles.tint} />
+<View
+  style={{
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 90,
+    zIndex: 2000,
+  }}
+  onStartShouldSetResponder={() => true}
+  onResponderGrant={() => {
+    void logClientEvent("canary_touch", { screen: "root", detail: { ts: Date.now() } });
+  }}
+/>
+            <Stack
+              screenOptions={{
+                headerStyle: { backgroundColor: "transparent" },
+                headerShadowVisible: false,
+                headerTintColor: colors.textPrimary as any,
+                contentStyle: { backgroundColor: "transparent" },
+              }}
+            >
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            </Stack>
+          </ImageBackground>
+        </ThemeProvider>
+      </View>
     </GestureHandlerRootView>
   );
 }
