@@ -5,7 +5,6 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useMemo } from "react";
 import { ImageBackground, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { logClientEvent } from "../lib/clientLog";
 
 import {
   CormorantGaramond_400Regular,
@@ -64,26 +63,19 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1 }}>
         <ThemeProvider value={navTheme}>
-          <ImageBackground
-            source={require("../assets/backgrounds/Background.png")}
-            style={styles.bg}
-            resizeMode="cover"
-          >{/* DEBUG: touch canary strip at bottom */}
-          <View pointerEvents="none" style={styles.tint} />
-<View
-  style={{
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 90,
-    zIndex: 2000,
-  }}
-  onStartShouldSetResponder={() => true}
-  onResponderGrant={() => {
-    void logClientEvent("canary_touch", { screen: "root", detail: { ts: Date.now() } });
-  }}
-/>
+          {/* Background layer: cannot receive touches */}
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <ImageBackground
+              source={require("../assets/backgrounds/Background.png")}
+              style={styles.bg}
+              resizeMode="cover"
+            >
+              <View pointerEvents="none" style={styles.tint} />
+            </ImageBackground>
+          </View>
+
+          {/* Navigation layer: always above background */}
+          <View style={StyleSheet.absoluteFill}>
             <Stack
               screenOptions={{
                 headerStyle: { backgroundColor: "transparent" },
@@ -94,7 +86,7 @@ export default function RootLayout() {
             >
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             </Stack>
-          </ImageBackground>
+          </View>
         </ThemeProvider>
       </View>
     </GestureHandlerRootView>
