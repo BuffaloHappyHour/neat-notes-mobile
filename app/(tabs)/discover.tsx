@@ -38,6 +38,10 @@ export default function DiscoverTab() {
 
   const d = useDiscover();
 
+  // ✅ Only mount modal tree when something is actually open.
+  // This prevents any invisible full-screen modal/backdrop from existing when closed.
+  const anyModalOpen = !!(d.seeAllOpen || d.filterOpen || d.typePickerOpen);
+
   function goWhiskey(id: string) {
     router.push(`/whiskey/${encodeURIComponent(id)}`);
   }
@@ -48,12 +52,21 @@ export default function DiscoverTab() {
 
   const onRefresh = useMemo(
     () =>
-      logPressWrap("discover", "pull_to_refresh", withTick(() => d.refresh({ silent: true }))),
+      logPressWrap(
+        "discover",
+        "pull_to_refresh",
+        withTick(() => d.refresh({ silent: true }))
+      ),
     [d]
   );
 
   const onOpenFilters = useMemo(
-    () => logPressWrap("discover", "open_filters", withTick(() => d.setFilterOpen(true))),
+    () =>
+      logPressWrap(
+        "discover",
+        "open_filters",
+        withTick(() => d.setFilterOpen(true))
+      ),
     [d]
   );
 
@@ -189,41 +202,45 @@ export default function DiscoverTab() {
         </View>
       </ScrollView>
 
-      <DiscoverModals
-        sheetMaxHeight={sheetMaxHeight}
-        sheetPaddingBottom={sheetPaddingBottom}
-        windowH={windowH}
-        seeAllOpen={d.seeAllOpen}
-        setSeeAllOpen={d.setSeeAllOpen}
-        seeAllTitle={d.seeAllTitle}
-        seeAllRows={d.seeAllRows}
-        seeAllLoading={d.seeAllLoading}
-        seeAllError={d.seeAllError}
-        onPressSeeAllRow={(r) => {
-          // log the click BEFORE we close (so we see it even if UI glitches)
-          logPressWrap("discover", "see_all_open_whiskey", () => {}, {
-            whiskeyId: r.whiskeyId,
-            from: d.seeAllTitle,
-          })();
-          d.setSeeAllOpen(false);
-          goWhiskey(r.whiskeyId);
-        }}
-        filterOpen={d.filterOpen}
-        setFilterOpen={d.setFilterOpen}
-        typePickerOpen={d.typePickerOpen}
-        setTypePickerOpen={d.setTypePickerOpen}
-        selectedType={d.selectedType}
-        setSelectedType={d.setSelectedType}
-        allTypes={d.allTypes}
-        minProofText={d.minProofText}
-        setMinProofText={d.setMinProofText}
-        maxProofText={d.maxProofText}
-        setMaxProofText={d.setMaxProofText}
-        resetFilters={d.resetFilters}
-        normalizeProofBoundsAndCloseFilters={d.normalizeProofBoundsAndCloseFilters}
-        withTick={withTick}
-        withSuccess={withSuccess}
-      />
+      {/* ✅ Only mount modals when open */}
+      {anyModalOpen ? (
+        <DiscoverModals
+          sheetMaxHeight={sheetMaxHeight}
+          sheetPaddingBottom={sheetPaddingBottom}
+          windowH={windowH}
+          seeAllOpen={d.seeAllOpen}
+          setSeeAllOpen={d.setSeeAllOpen}
+          seeAllTitle={d.seeAllTitle}
+          seeAllRows={d.seeAllRows}
+          seeAllLoading={d.seeAllLoading}
+          seeAllError={d.seeAllError}
+          onPressSeeAllRow={(r) => {
+            logPressWrap("discover", "see_all_open_whiskey", () => {}, {
+              whiskeyId: r.whiskeyId,
+              from: d.seeAllTitle,
+            })();
+            d.setSeeAllOpen(false);
+            goWhiskey(r.whiskeyId);
+          }}
+          filterOpen={d.filterOpen}
+          setFilterOpen={d.setFilterOpen}
+          typePickerOpen={d.typePickerOpen}
+          setTypePickerOpen={d.setTypePickerOpen}
+          selectedType={d.selectedType}
+          setSelectedType={d.setSelectedType}
+          allTypes={d.allTypes}
+          minProofText={d.minProofText}
+          setMinProofText={d.setMinProofText}
+          maxProofText={d.maxProofText}
+          setMaxProofText={d.setMaxProofText}
+          resetFilters={d.resetFilters}
+          normalizeProofBoundsAndCloseFilters={
+            d.normalizeProofBoundsAndCloseFilters
+          }
+          withTick={withTick}
+          withSuccess={withSuccess}
+        />
+      ) : null}
     </View>
   );
 }
