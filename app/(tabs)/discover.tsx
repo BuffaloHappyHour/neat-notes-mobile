@@ -1,6 +1,6 @@
 // app/(tabs)/discover.tsx
 import { router } from "expo-router";
-import React, { useMemo, useRef } from "react";
+import React, { useMemo } from "react";
 import {
   RefreshControl,
   ScrollView,
@@ -10,8 +10,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// ✅ HAPTICS
 import { withSuccess, withTick } from "../../lib/hapticsPress";
+import { logPressWrap } from "../../lib/pressLog";
 import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
@@ -38,31 +38,46 @@ export default function DiscoverTab() {
 
   const d = useDiscover();
 
-  // ✅ Prevent that “dead” flash: only show empty text AFTER we’ve loaded once.
-  const hasEverLoadedRef = useRef(false);
-  if (!hasEverLoadedRef.current && !d.loading && !d.refreshing && !d.statusError) {
-    // once initial load finishes successfully
-    hasEverLoadedRef.current = true;
-  }
-
-  const showSkeletons = useMemo(() => {
-    // If we haven’t loaded once yet, show skeletons instead of “No data”.
-    if (!hasEverLoadedRef.current) return true;
-
-    // If we HAVE loaded once, keep showing cached rows while refreshing.
-    // (SectionRow will only skeleton if rows.length===0 and loading===true)
-    return false;
-  }, []);
-
   function goWhiskey(id: string) {
     router.push(`/whiskey/${encodeURIComponent(id)}`);
   }
 
   const emptyMessage = useMemo(() => {
-    // ✅ Never show “No results” while we’re still loading the first time.
-    if (!hasEverLoadedRef.current) return "";
     return d.libraryEmpty ? "No results." : "No matches for your filters.";
   }, [d.libraryEmpty]);
+
+  const onRefresh = useMemo(
+    () =>
+      logPressWrap("discover", "pull_to_refresh", withTick(() => d.refresh({ silent: true }))),
+    [d]
+  );
+
+  const onOpenFilters = useMemo(
+    () => logPressWrap("discover", "open_filters", withTick(() => d.setFilterOpen(true))),
+    [d]
+  );
+
+  const onSeeAll = useMemo(
+    () => (key: SectionKey) =>
+      logPressWrap(
+        "discover",
+        "see_all",
+        withTick(() => d.openSeeAll(key)),
+        { key }
+      )(),
+    [d]
+  );
+
+  const onPressRow = useMemo(
+    () => (whiskeyId: string, section: string) =>
+      logPressWrap(
+        "discover",
+        "open_whiskey",
+        withTick(() => goWhiskey(whiskeyId)),
+        { whiskeyId, section }
+      )(),
+    []
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: "transparent" }}>
@@ -80,7 +95,7 @@ export default function DiscoverTab() {
         refreshControl={
           <RefreshControl
             refreshing={d.refreshing}
-            onRefresh={withTick(() => d.refresh({ silent: true }))}
+            onRefresh={onRefresh}
             tintColor={colors.accent}
           />
         }
@@ -103,14 +118,15 @@ export default function DiscoverTab() {
           <View
             style={{
               height: 1,
-              backgroundColor: colors.divider,
+              backgroundColor: colors.glassDivider ?? colors.divider,
               marginTop: spacing.md,
+              opacity: 0.55,
             }}
           />
         </View>
 
         <DiscoverHeaderCard
-          onOpenFilters={withTick(() => d.setFilterOpen(true))}
+          onOpenFilters={onOpenFilters}
           filterBadgeActive={!!d.filterBadge}
           filterBadgeText={d.filterBadge}
           loading={d.loading}
@@ -122,9 +138,8 @@ export default function DiscoverTab() {
           title="Trending"
           subtitle="Most tasted in the last 7 days (community)."
           rows={d.trending}
-          loading={showSkeletons && (d.loading || d.refreshing)}
-          onSeeAll={withTick(() => d.openSeeAll("TRENDING" as SectionKey))}
-          onPressRow={(r) => withTick(() => goWhiskey(r.whiskeyId))()}
+          onSeeAll={() => onSeeAll("TRENDING" as SectionKey)}
+          onPressRow={(r) => onPressRow(r.whiskeyId, "TRENDING")}
           emptyMessage={emptyMessage}
         />
 
@@ -134,9 +149,8 @@ export default function DiscoverTab() {
           title="Recently Reviewed"
           subtitle="Latest community tastings (anonymous)."
           rows={d.recent}
-          loading={showSkeletons && (d.loading || d.refreshing)}
-          onSeeAll={withTick(() => d.openSeeAll("RECENT" as SectionKey))}
-          onPressRow={(r) => withTick(() => goWhiskey(r.whiskeyId))()}
+          onSeeAll={() => onSeeAll("RECENT" as SectionKey)}
+          onPressRow={(r) => onPressRow(r.whiskeyId, "RECENT")}
           emptyMessage={emptyMessage}
         />
 
@@ -146,9 +160,8 @@ export default function DiscoverTab() {
           title="Highest Rated"
           subtitle="Top community averages (min review threshold)."
           rows={d.highest}
-          loading={showSkeletons && (d.loading || d.refreshing)}
-          onSeeAll={withTick(() => d.openSeeAll("HIGHEST" as SectionKey))}
-          onPressRow={(r) => withTick(() => goWhiskey(r.whiskeyId))()}
+          onSeeAll={() => onSeeAll("HIGHEST" as SectionKey)}
+          onPressRow={(r) => onPressRow(r.whiskeyId, "HIGHEST")}
           emptyMessage={emptyMessage}
         />
 
@@ -158,9 +171,8 @@ export default function DiscoverTab() {
           title="Newest Additions"
           subtitle="Fresh additions to the library."
           rows={d.newest}
-          loading={showSkeletons && (d.loading || d.refreshing)}
-          onSeeAll={withTick(() => d.openSeeAll("NEWEST" as SectionKey))}
-          onPressRow={(r) => withTick(() => goWhiskey(r.whiskeyId))()}
+          onSeeAll={() => onSeeAll("NEWEST" as SectionKey)}
+          onPressRow={(r) => onPressRow(r.whiskeyId, "NEWEST")}
           emptyMessage={emptyMessage}
         />
 
@@ -169,7 +181,7 @@ export default function DiscoverTab() {
           <Text
             style={[
               type.caption,
-              { opacity: 0.7, fontSize: 12, textAlign: "center" },
+              { opacity: 0.65, fontSize: 12, textAlign: "center" },
             ]}
           >
             Powered by anonymous community tastings and Buffalo Happy Hour reviews
@@ -188,6 +200,11 @@ export default function DiscoverTab() {
         seeAllLoading={d.seeAllLoading}
         seeAllError={d.seeAllError}
         onPressSeeAllRow={(r) => {
+          // log the click BEFORE we close (so we see it even if UI glitches)
+          logPressWrap("discover", "see_all_open_whiskey", () => {}, {
+            whiskeyId: r.whiskeyId,
+            from: d.seeAllTitle,
+          })();
           d.setSeeAllOpen(false);
           goWhiskey(r.whiskeyId);
         }}

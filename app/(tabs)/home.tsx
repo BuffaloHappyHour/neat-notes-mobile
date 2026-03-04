@@ -1,6 +1,6 @@
 // app/(tabs)/home.tsx
 import { router } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { radii } from "../../lib/radii";
@@ -9,18 +9,12 @@ import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
+import { logClientEvent } from "../../lib/clientLog";
 import { withTick } from "../../lib/hapticsPress";
 
 import { useHomeStats } from "../../src/home/hooks/useHomeStats";
 import { pluralize } from "../../src/home/utils/pluralize";
 
-/**
- * Goal: let the leather/background texture show through while keeping a premium,
- * high-contrast surface system.
- *
- * We do that by using translucent "glass espresso" surfaces instead of
- * fully-opaque colors.surface/colors.surfaceRaised.
- */
 /**
  * Local “warm shadow” override:
  * - Keeps your global shadows.card baseline
@@ -29,21 +23,13 @@ import { pluralize } from "../../src/home/utils/pluralize";
  */
 const warmCardShadow = {
   ...shadows.card,
-  // iOS shadow tuning
   shadowColor: colors.shadowWarm ?? colors.shadow,
   shadowOpacity: 0.55,
   shadowRadius: 18,
   shadowOffset: { width: 0, height: 10 },
-  // Android tuning
   elevation: 10,
 };
 
-/**
- * Premium action card:
- * - Title lives outside (header)
- * - Card is tappable
- * - Inside card: subtext + a single "hint pill"
- */
 function ActionBodyCard({
   subtitle,
   onPress,
@@ -61,17 +47,13 @@ function ActionBodyCard({
         borderRadius: radii.lg,
         borderWidth: 1,
         borderColor: pressed ? colors.glassBorderStrong : colors.glassBorder,
-
         paddingVertical: 13,
         paddingHorizontal: spacing.lg,
-
         ...warmCardShadow,
-
         opacity: pressed ? 0.94 : 1,
       })}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg }}>
-        {/* Left: subtitle */}
         <View style={{ flex: 1 }}>
           <Text
             style={[
@@ -88,7 +70,6 @@ function ActionBodyCard({
           </Text>
         </View>
 
-        {/* Right: hint pill */}
         {rightHint ? (
           <View
             style={{
@@ -96,11 +77,9 @@ function ActionBodyCard({
               paddingVertical: 7,
               borderRadius: 999,
               alignItems: "center",
-
               backgroundColor: colors.glassSunken,
               borderWidth: 1,
               borderColor: colors.glassBorder,
-
               shadowColor: colors.shadowWarm ?? colors.shadow,
               shadowOpacity: 0.22,
               shadowRadius: 10,
@@ -145,28 +124,27 @@ function SubtleNotice({
         borderRadius: radii.lg,
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.lg,
-
         borderWidth: 1,
         backgroundColor: colors.glassSurface,
         borderColor: pressed ? colors.glassBorderStrong : colors.glassBorder,
-
         ...warmCardShadow,
         opacity: pressed ? 0.94 : 1,
         gap: 10,
       })}
     >
       <Text
-  style={[
-    type.sectionHeader,
-    {
-      fontSize: 18,
-      lineHeight: 22,
-      opacity: 0.82,
-    },
-  ]}
->
-  {title}
-</Text>
+        style={[
+          type.sectionHeader,
+          {
+            fontSize: 18,
+            lineHeight: 22,
+            opacity: 0.72, // ✅ dim title as requested
+            color: colors.textPrimary,
+          },
+        ]}
+      >
+        {title}
+      </Text>
 
       <Text
         style={[
@@ -191,6 +169,25 @@ function SubtleNotice({
 
 export default function HomeTab() {
   const { isAuthed, firstName, tastingCount, statsLoading } = useHomeStats();
+
+  // --- logging helpers (fire-and-forget) ---
+  const logPress = (action: string, href?: string) => {
+    void logClientEvent("press", {
+      screen: "home",
+      detail: {
+        action,
+        href: href ?? null,
+        ts: Date.now(),
+      },
+    });
+  };
+
+  useEffect(() => {
+    void logClientEvent("screen_view", {
+      screen: "home",
+      detail: { ts: Date.now() },
+    });
+  }, []);
 
   const dynamic = useMemo(() => {
     if (!isAuthed) {
@@ -264,10 +261,41 @@ export default function HomeTab() {
     };
   }, []);
 
-  const goSignIn = useMemo(() => withTick(() => router.push("/sign-in")), []);
-  const goAccountSettings = useMemo(() => withTick(() => router.push("/account-settings")), []);
-  const goLog = useMemo(() => withTick(() => router.push("/(tabs)/log")), []);
-  const goDiscover = useMemo(() => withTick(() => router.push("/(tabs)/discover")), []);
+  const goSignIn = useMemo(
+    () =>
+      withTick(() => {
+        logPress("home_sign_in", "/sign-in");
+        router.push("/sign-in");
+      }),
+    []
+  );
+
+  const goAccountSettings = useMemo(
+    () =>
+      withTick(() => {
+        logPress("home_account_feedback", "/account-settings");
+        router.push("/account-settings");
+      }),
+    []
+  );
+
+  const goLog = useMemo(
+    () =>
+      withTick(() => {
+        logPress("home_log_cta", "/(tabs)/log");
+        router.push("/(tabs)/log");
+      }),
+    []
+  );
+
+  const goDiscover = useMemo(
+    () =>
+      withTick(() => {
+        logPress("home_discover_cta", "/(tabs)/discover");
+        router.push("/(tabs)/discover");
+      }),
+    []
+  );
 
   return (
     <ScrollView
@@ -301,12 +329,7 @@ export default function HomeTab() {
         {/* Greeting + dynamic guidance */}
         <View style={{ gap: spacing.xs }}>
           {firstName ? (
-            <Text
-  style={[
-    type.sectionHeader,
-    { fontSize: 30, lineHeight: 24, opacity: 0.92 }
-  ]}
->
+            <Text style={[type.sectionHeader, { fontSize: 30, lineHeight: 24, opacity: 0.92 }]}>
               {firstName},
             </Text>
           ) : null}
@@ -318,13 +341,13 @@ export default function HomeTab() {
           <Text
             style={[
               type.microcopyItalic,
-              { fontSize: 18, lineHeight: 22, opacity: 0.80, color: colors.textPrimary },
+              { fontSize: 18, lineHeight: 22, opacity: 0.8, color: colors.textPrimary },
             ]}
           >
             {dynamic.subline}
           </Text>
 
-          {/* Divider: keep it subtle against texture */}
+          {/* Divider */}
           <View style={{ marginTop: spacing.sm }}>
             <View
               style={{
@@ -379,46 +402,46 @@ export default function HomeTab() {
             {discoverCopy.title}
           </Text>
           <ActionBodyCard subtitle={discoverCopy.subtitle} rightHint={discoverCopy.hint} onPress={goDiscover} />
-       
         </View>
-          {/* Divider: keep it subtle against texture */}
-          <View style={{ marginTop: spacing.sm }}>
-            <View
-              style={{
-                height: 2,
-                marginTop: 8,
-                alignSelf: "center",
-                width: "92%",
-                backgroundColor: "rgba(190, 150, 99, 0.14)",
-                borderRadius: 999,
-                opacity: 0.55,
-              }}
-            />
-            <View
-              style={{
-                height: 2,
-                marginTop: -2,
-                alignSelf: "center",
-                width: "44%",
-                backgroundColor: "rgba(190, 150, 99, 0.38)",
-                borderRadius: 999,
-                opacity: 0.65,
-              }}
-            />
-          </View>
+
+        {/* Divider between Discover and Beta */}
+        <View style={{ marginTop: spacing.sm }}>
+          <View
+            style={{
+              height: 2,
+              marginTop: 8,
+              alignSelf: "center",
+              width: "92%",
+              backgroundColor: "rgba(190, 150, 99, 0.14)",
+              borderRadius: 999,
+              opacity: 0.55,
+            }}
+          />
+          <View
+            style={{
+              height: 2,
+              marginTop: -2,
+              alignSelf: "center",
+              width: "44%",
+              backgroundColor: "rgba(190, 150, 99, 0.38)",
+              borderRadius: 999,
+              opacity: 0.65,
+            }}
+          />
         </View>
 
         {/* Beta notice */}
-       {isAuthed ? (
-  <View style={{ marginTop: spacing.md + 4 }}>
-    <SubtleNotice
-      title="Founding Tester (Beta)"
-      subtitle="Your tastings are private. If something feels off, send feedback — it helps us harden the app."
-      cta="Account & feedback"
-      onPress={goAccountSettings}
-    />
-  </View>
-) : null}
+        {isAuthed ? (
+          <View style={{ marginTop: spacing.md + 4 }}>
+            <SubtleNotice
+              title="Founding Tester (Beta)"
+              subtitle="Your tastings are private. If something feels off, send feedback — it helps us harden the app."
+              cta="Account & feedback"
+              onPress={goAccountSettings}
+            />
+          </View>
+        ) : null}
+      </View>
     </ScrollView>
   );
 }
