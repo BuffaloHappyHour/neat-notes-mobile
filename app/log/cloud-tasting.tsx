@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { Card } from "../../components/ui/Card";
+import { MetadataModal } from "../../src/log/components/metadata/MetadataModal";
 import { RefineModal } from "../../src/log/components/refine/RefineModal";
 import { BottleDetailsCard } from "../../src/log/components/tasting/BottleDetailsCard";
 import { QuickNotesSection } from "../../src/log/components/tasting/QuickNotesSection";
@@ -663,9 +664,9 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
           distillery: "",
         }
       );
-
       if (to) {
         router.replace(to);
+        
       }
     }
 
@@ -1043,6 +1044,44 @@ function onEdit() {
         setSelectedNodeIds={setSelectedNodeIds}
         sentimentById={sentimentById}
         setSentimentById={setSentimentById}
+      />
+            <MetadataModal
+        visible={postSaveMeta.metaOpen}
+        loading={postSaveMeta.metaLoading}
+        saving={postSaveMeta.metaSaving}
+        isCustom={postSaveMeta.metaIsCustom}
+        metaMissingKeys={postSaveMeta.metaMissingKeys}
+        onSave={postSaveMeta.saveMetadataFromModal}
+        onSkip={postSaveMeta.finishPostSaveFlow}
+        fName={postSaveMeta.fName}
+        setFName={postSaveMeta.setFName}
+        fDistillery={postSaveMeta.fDistillery}
+        setFDistillery={postSaveMeta.setFDistillery}
+        fTypeId={postSaveMeta.fTypeId}
+        setFTypeId={postSaveMeta.setFTypeId}
+        whiskeyTypeOptions={postSaveMeta.whiskeyTypeOptions}
+        selectedWhiskeyTypeName={postSaveMeta.selectedWhiskeyTypeName}
+        fProof={postSaveMeta.fProof}
+        setFProof={postSaveMeta.setFProof}
+        fAge={postSaveMeta.fAge}
+        setFAge={postSaveMeta.setFAge}
+        fCategory={postSaveMeta.fCategory}
+        setFCategory={postSaveMeta.setFCategory}
+        fRegion={postSaveMeta.fRegion}
+        setFRegion={postSaveMeta.setFRegion}
+        fSubRegion={postSaveMeta.fSubRegion}
+        setFSubRegion={postSaveMeta.setFSubRegion}
+        categoryOptions={postSaveMeta.categoryOptions}
+        regionOptions={postSaveMeta.regionOptions}
+        subRegionOptions={postSaveMeta.subRegionOptions}
+        canEditCategory={postSaveMeta.canEditCategory}
+        canEditRegion={postSaveMeta.canEditRegion}
+        canEditSubRegion={postSaveMeta.canEditSubRegion}
+        showCategoryBlock={postSaveMeta.showCategoryBlock}
+        showRegionBlock={postSaveMeta.showRegionBlock}
+        showSubRegionBlock={postSaveMeta.showSubRegionBlock}
+        onCategoryChange={postSaveMeta.onCategoryChange}
+        onRegionChange={postSaveMeta.onRegionChange}
       />
     </>
   );

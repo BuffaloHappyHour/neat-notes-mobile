@@ -3,7 +3,7 @@ import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack, router, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -123,7 +123,6 @@ return (
   <SafeAreaProvider>
     <ThemeProvider value={navTheme}>
       {/* DEBUG: remove ImageBackground to eliminate any layering issues */}
-      <View style={[styles.bg, { backgroundColor: "#000" }]}>
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: "transparent" },
@@ -135,7 +134,7 @@ return (
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />
         </Stack>
-      </View>
+      
     </ThemeProvider>
   </SafeAreaProvider>
 );

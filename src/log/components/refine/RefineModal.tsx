@@ -4,7 +4,6 @@ import { Alert, Modal, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { spacing } from "../../../../lib/spacing";
-import { colors } from "../../../../lib/theme";
 import { RefineModalProps, ReviewSentiment } from "./types";
 
 import { RefineBottomNav } from "./components/RefineBottomNav";
@@ -161,7 +160,7 @@ export function RefineModal(props: RefineModalProps) {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => closeRefine()}>
       {/* ✅ TOP safe-area only; bottom is handled by RefineBottomNav */}
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "rgba(255,165,0,0.85)" }} edges={["top"]}>
         <RefineHeader
           mode={mode}
           locked={locked}

@@ -275,7 +275,7 @@ export function MetadataModal(props: {
       presentationStyle="pageSheet"
       onRequestClose={onSkip}
     >
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{ flex: 1, backgroundColor: "rgba(255,0,255,0.85)" }}>
         {/* Header */}
         <View style={{ padding: spacing.xl, paddingBottom: spacing.lg, gap: spacing.sm }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>

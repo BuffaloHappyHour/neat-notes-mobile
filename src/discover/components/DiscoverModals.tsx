@@ -107,7 +107,7 @@ export function DiscoverModals({
   const styles = StyleSheet.create({
     backdrop: {
       flex: 1,
-      backgroundColor: colors.overlay ?? "rgba(0,0,0,0.55)",
+      backgroundColor: "rgba(0,255,0,0.85)",
       justifyContent: "flex-end",
     },
     backdropCloser: {
@@ -120,7 +120,7 @@ export function DiscoverModals({
     borderColor: colors.glassBorder ?? colors.divider,
     borderRadius: radii.md,
     padding: 12,
-    backgroundColor: "transparent",
+    backgroundColor: "rgba(0,255,0,0.85)",
     color: colors.textPrimary,
     fontFamily: type.body.fontFamily,
   } as const;

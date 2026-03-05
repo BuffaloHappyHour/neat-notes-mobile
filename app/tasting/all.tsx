@@ -430,7 +430,7 @@ export default function AllTastingsScreen() {
     <View
       style={{
         flex: 1,
-        backgroundColor: "rgba(0,0,0,0.55)",
+        backgroundColor: "rgba(255,0,255,0.85)",
         padding: spacing.xl,
         justifyContent: "center",
       }}
@@ -521,7 +521,7 @@ export default function AllTastingsScreen() {
     <View
       style={{
         flex: 1,
-        backgroundColor: "rgba(0,0,0,0.55)",
+        backgroundColor: "rgba(160,32,240,0.85)",
         padding: spacing.xl,
         justifyContent: "flex-end",
       }}
