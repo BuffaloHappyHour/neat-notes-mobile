@@ -1,4 +1,3 @@
-// src/profile/components/YourStatsCard.tsx
 import { router } from "expo-router";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
@@ -89,16 +88,14 @@ export function YourStatsCard({
           style={{
             marginTop: spacing.sm,
 
-            // distinct “feature” container
             borderWidth: 1,
             borderColor: colors.divider,
             borderRadius: radii.lg,
-            overflow: "hidden",
 
-            // slightly different surface so it reads as special
+            // ✅ TEST PATCH: remove clipping to avoid iOS hit-testing weirdness
+            // overflow: "hidden",
+
             backgroundColor: colors.surfaceSunken ?? colors.surface,
-
-            // subtle accent rail = “this matters”
             position: "relative",
           }}
         >
@@ -138,7 +135,7 @@ export function YourStatsCard({
                   alignItems: "center",
                   paddingVertical: 11,
                   paddingHorizontal: spacing.md,
-                  paddingLeft: spacing.md + 6, // space away from accent rail
+                  paddingLeft: spacing.md + 6,
                   borderBottomWidth: isLast ? 0 : 1,
                   borderBottomColor: colors.divider,
                   backgroundColor: pressed ? (colors.accentFaint ?? colors.highlight) : "transparent",
@@ -164,7 +161,10 @@ export function YourStatsCard({
                 </View>
 
                 {/* Name */}
-                <Text style={[type.body, { flex: 1, color: colors.textPrimary, fontWeight: "900" }]} numberOfLines={1}>
+                <Text
+                  style={[type.body, { flex: 1, color: colors.textPrimary, fontWeight: "900" }]}
+                  numberOfLines={1}
+                >
                   {nm}
                 </Text>
 

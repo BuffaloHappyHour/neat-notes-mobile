@@ -1,10 +1,9 @@
 // app/_layout.tsx
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
-import { Stack } from "expo-router";
+import { Stack, router, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ImageBackground, StyleSheet, View } from "react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -20,12 +19,15 @@ import {
   useFonts as useMontserratFonts,
 } from "@expo-google-fonts/montserrat";
 
+import { supabase } from "../lib/supabase";
 import { colors } from "../lib/theme";
 
-// Keep splash until fonts are loaded
+// Keep splash until fonts + auth are loaded
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
+  const pathname = usePathname();
+
   const [cormorantLoaded] = useCormorantFonts({
     CormorantGaramond_400Regular,
     CormorantGaramond_400Regular_Italic,
@@ -38,6 +40,9 @@ export default function RootLayout() {
   });
 
   const fontsLoaded = cormorantLoaded && montserratLoaded;
+
+  const [authReady, setAuthReady] = useState(false);
+  const [isAuthed, setIsAuthed] = useState<boolean>(false);
 
   const navTheme = useMemo(() => {
     return {
@@ -54,38 +59,90 @@ export default function RootLayout() {
     };
   }, []);
 
-  React.useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
-  }, [fontsLoaded]);
+  // 1) Hydrate auth state + subscribe (NO navigation here)
+  useEffect(() => {
+    let alive = true;
 
-  if (!fontsLoaded) return null;
+    async function hydrate() {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!alive) return;
+
+        setIsAuthed(!!data.session?.user);
+        setAuthReady(true);
+      } catch {
+        if (!alive) return;
+        setIsAuthed(false);
+        setAuthReady(true);
+      }
+    }
+
+    hydrate();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!alive) return;
+      setIsAuthed(!!session?.user);
+    });
+
+    return () => {
+      alive = false;
+      sub?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
+  // 2) After the navigator is mounted (fonts + auth ready), enforce the correct side
+  useEffect(() => {
+    if (!fontsLoaded || !authReady) return;
+
+    const path = String(pathname ?? "");
+
+    if (isAuthed) {
+      if (!path.startsWith("/(tabs)")) {
+        router.replace("/(tabs)/home");
+      }
+    } else {
+      // If they’re anywhere in tabs while signed out, send to sign-in
+      if (path.startsWith("/(tabs)")) {
+        router.replace("/sign-in");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fontsLoaded, authReady, isAuthed]);
+
+  // Hide splash only when both are ready
+  useEffect(() => {
+    if (fontsLoaded && authReady) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded, authReady]);
+
+  // Don’t render app UI until ready (keeps splash up)
+  if (!fontsLoaded || !authReady) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <ThemeProvider value={navTheme}>
-          <ImageBackground
-            source={require("../assets/backgrounds/Background.png")}
-            style={styles.bg}
-            resizeMode="cover"
-          >
-            {/* subtle wash */}
-            <View pointerEvents="none" style={styles.tint} />
+    <SafeAreaProvider>
+      <ThemeProvider value={navTheme}>
+        <ImageBackground
+          source={require("../assets/backgrounds/Background.png")}
+          style={styles.bg}
+          resizeMode="cover"
+        >
+          <View pointerEvents="none" style={styles.tint} />
 
-            <Stack
-              screenOptions={{
-                headerStyle: { backgroundColor: "transparent" },
-                headerShadowVisible: false,
-                headerTintColor: colors.textPrimary as any,
-                contentStyle: { backgroundColor: "transparent" },
-              }}
-            >
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            </Stack>
-          </ImageBackground>
-        </ThemeProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: "transparent" },
+              headerShadowVisible: false,
+              headerTintColor: colors.textPrimary as any,
+              contentStyle: { backgroundColor: "transparent" },
+            }}
+          >
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+          </Stack>
+        </ImageBackground>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
 

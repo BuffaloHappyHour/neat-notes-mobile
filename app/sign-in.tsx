@@ -2,7 +2,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
-import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -234,9 +233,7 @@ export default function SignInScreen() {
     }
   };
 
-  async function loadSessionOnce() {
-    setLoading(true);
-
+  async function refreshScreenStateFromSession() {
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
 
@@ -244,7 +241,6 @@ export default function SignInScreen() {
       setMode("signin");
       setAuthedEmail("");
       setNameSaved("");
-      setLoading(false);
       return;
     }
 
@@ -258,12 +254,32 @@ export default function SignInScreen() {
     } catch {
       setNameSaved("");
     }
-
-    setLoading(false);
   }
 
   useEffect(() => {
-    loadSessionOnce();
+    let alive = true;
+
+    (async () => {
+      setLoading(true);
+      try {
+        await refreshScreenStateFromSession();
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    // Keep UI in sync if auth state changes while this screen is mounted
+    const { data: sub } = supabase.auth.onAuthStateChange(async () => {
+      if (!alive) return;
+      try {
+        await refreshScreenStateFromSession();
+      } catch {}
+    });
+
+    return () => {
+      alive = false;
+      sub?.subscription?.unsubscribe?.();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -327,11 +343,11 @@ export default function SignInScreen() {
       return Alert.alert("Sign in failed", error.message);
     }
 
+    // Clear local form state; RootLayout will route to tabs.
     setPassword("");
     setJustSignedUpEmail("");
 
-    await loadSessionOnce();
-
+    // Optional: apply name if they entered one (best-effort)
     const nm = nameInput.trim();
     if (nm) {
       try {
@@ -340,7 +356,8 @@ export default function SignInScreen() {
       } catch {}
     }
 
-    router.replace("/(tabs)/home");
+    // Bring this screen into "signedIn" mode immediately (before RootLayout redirects)
+    await refreshScreenStateFromSession();
   };
 
   const createAccountOneTap = async () => {
@@ -355,17 +372,14 @@ export default function SignInScreen() {
 
     setBusy(true);
 
-    // ✅ IMPORTANT: Force Supabase email confirmation links to return to the APP
-    // (instead of falling back to Site URL / Vercel)
+    // Force Supabase email confirmation links to return to the APP
     const emailRedirectTo = buildAuthCallbackUrl();
     console.log("SIGNUP emailRedirectTo =", emailRedirectTo);
 
     const { data, error } = await supabase.auth.signUp({
       email: em,
       password: pw,
-      options: {
-        emailRedirectTo,
-      },
+      options: { emailRedirectTo },
     });
 
     setBusy(false);
@@ -419,8 +433,7 @@ export default function SignInScreen() {
 
     setBusy(true);
 
-    // ✅ PATTERN B: send the user to your WEB reset page (Vercel).
-    // This must match Supabase Redirect URLs allowlist.
+    // Pattern B web reset page (must be in Supabase Redirect URLs allowlist)
     const redirectTo = "https://neatnotes-web.vercel.app/auth/reset";
     console.log("RESET redirectTo =", redirectTo);
 
@@ -484,13 +497,6 @@ export default function SignInScreen() {
             </Text>
 
             <ThemedButton
-              label="Go Home"
-              onPress={() => router.replace("/(tabs)/home")}
-              disabled={busy}
-              tone="primary"
-            />
-
-            <ThemedButton
               label={busy ? "Working…" : "Sign Out"}
               onPress={async () => {
                 if (busy) return;
@@ -498,7 +504,9 @@ export default function SignInScreen() {
                 const { error } = await supabase.auth.signOut();
                 setBusy(false);
                 if (error) return Alert.alert("Sign out failed", error.message);
-                await loadSessionOnce();
+
+                // RootLayout will route to /sign-in; we still update local UI immediately.
+                await refreshScreenStateFromSession();
               }}
               disabled={busy}
               tone="secondary"
@@ -625,7 +633,7 @@ export default function SignInScreen() {
           </Card>
         )}
 
-        {/* --- Compliance footer (visible to reviewers + users) --- */}
+        {/* --- Compliance footer --- */}
         <View
           style={{
             alignItems: "center",

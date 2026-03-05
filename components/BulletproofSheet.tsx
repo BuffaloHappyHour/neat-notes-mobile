@@ -1,11 +1,12 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
-    Modal,
-    Pressable,
-    ScrollView,
-    Text,
-    View,
-    type ViewStyle,
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  useWindowDimensions,
+  type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -14,11 +15,7 @@ type Props = {
   title?: string;
   onClose: () => void;
   children: React.ReactNode;
-
-  // Optional footer (Reset/Done buttons etc.)
   footer?: React.ReactNode;
-
-  // Optional style overrides
   containerStyle?: ViewStyle;
 };
 
@@ -31,47 +28,54 @@ export function BulletproofSheet({
   containerStyle,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { height: windowH } = useWindowDimensions();
 
-  // IMPORTANT:
-  // - "transparent" modal keeps us in control of backdrop & touch behavior.
-  // - We only render the backdrop when visible (so it cannot steal touches).
+  const maxSheetHeight = useMemo(() => {
+    // Leave breathing room at the top, respect safe areas.
+    return Math.max(320, Math.round(windowH - insets.top - 16));
+  }, [windowH, insets.top]);
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
+      statusBarTranslucent
       onRequestClose={onClose}
     >
-      {/* Backdrop: only exists while visible */}
-      <Pressable
-        onPress={onClose}
+      <View
         style={{
           flex: 1,
-          backgroundColor: "rgba(0,0,0,0.35)",
           justifyContent: "flex-end",
+          backgroundColor: "rgba(0,0,0,0.35)",
         }}
       >
-        {/* Stop touches from propagating into the backdrop */}
+        {/* Tap-catcher behind the sheet */}
         <Pressable
-          onPress={() => {}}
+          onPress={onClose}
           style={{
-            width: "100%",
-            // Key: height-safe on every iPhone model
-            maxHeight: Math.max(
-              320,
-              // leave room for top + bottom safe areas + a little breathing room
-              // (value is safe across Pro/Max + Display Zoom)
-              // NOTE: Modal measures screen; safe areas must be subtracted.
-              // We avoid Dimensions() calls here; layout will naturally constrain.
-              // maxHeight still works without explicit window height in most cases.
-              // We'll add an explicit window height version in your screen file if needed.
-              99999
-            ),
-            paddingBottom: insets.bottom,
-            borderTopLeftRadius: 18,
-            borderTopRightRadius: 18,
-            backgroundColor: "#111111",
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
           }}
+        />
+
+        {/* Sheet */}
+        <View
+          style={[
+            {
+              width: "100%",
+              maxHeight: maxSheetHeight,
+              paddingBottom: insets.bottom,
+              borderTopLeftRadius: 18,
+              borderTopRightRadius: 18,
+              backgroundColor: "#111111",
+              overflow: "hidden",
+            },
+            containerStyle,
+          ]}
         >
           {/* Header */}
           {(title || footer) && (
@@ -85,13 +89,7 @@ export function BulletproofSheet({
               }}
             >
               {!!title && (
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontWeight: "700",
-                    color: "white",
-                  }}
-                >
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "white" }}>
                   {title}
                 </Text>
               )}
@@ -100,7 +98,6 @@ export function BulletproofSheet({
 
           {/* Content */}
           <ScrollView
-            style={{ flexGrow: 0 }}
             contentContainerStyle={{
               paddingHorizontal: 16,
               paddingVertical: 14,
@@ -112,7 +109,7 @@ export function BulletproofSheet({
             {children}
           </ScrollView>
 
-          {/* Footer (sticky-ish) */}
+          {/* Footer */}
           {!!footer && (
             <View
               style={{
@@ -126,8 +123,8 @@ export function BulletproofSheet({
               {footer}
             </View>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

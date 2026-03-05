@@ -406,208 +406,190 @@ export default function AllTastingsScreen() {
         ) : null}
 
         {/* Sort modal */}
-        <Modal
-          visible={sortOpen}
-          transparent
-          presentationStyle="overFullScreen"
-          statusBarTranslucent
-          animationType="fade"
-          onRequestClose={() => setSortOpen(false)}
-        >
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0,0,0,0.55)",
-              padding: spacing.xl,
-              justifyContent: "center",
-            }}
-          >
-            <Pressable
-              onPress={() => setSortOpen(false)}
-              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-            />
+{sortOpen ? (
+  <Modal
+    visible
+    transparent
+    presentationStyle="overFullScreen"
+    statusBarTranslucent
+    animationType="fade"
+    onRequestClose={() => setSortOpen(false)}
+  >
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.55)",
+        padding: spacing.xl,
+        justifyContent: "center",
+      }}
+    >
+      <Pressable
+        onPress={() => setSortOpen(false)}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      />
 
+      <Pressable
+        onPress={() => {}}
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: radii.lg,
+          borderWidth: 1,
+          borderColor: colors.divider,
+          padding: spacing.lg,
+          gap: spacing.md,
+          ...shadows.card,
+        }}
+      >
+        <Text style={[type.sectionHeader, { fontSize: 16 }]}>Sort tastings</Text>
+
+        {([
+          { mode: "newest", label: "Newest → Oldest" },
+          { mode: "high", label: "Highest → Lowest" },
+          { mode: "low", label: "Lowest → Highest" },
+        ] as const).map((opt) => {
+          const active = sortMode === opt.mode;
+          return (
             <Pressable
-              onPress={() => {}}
-              style={{
-                backgroundColor: colors.surface,
-                borderRadius: radii.lg,
+              key={opt.mode}
+              onPress={() => {
+                setSortMode(opt.mode);
+                setSortOpen(false);
+              }}
+              style={({ pressed }) => ({
+                borderRadius: radii.md,
+                paddingVertical: spacing.md,
+                paddingHorizontal: spacing.md,
                 borderWidth: 1,
                 borderColor: colors.divider,
-                padding: spacing.lg,
-                gap: spacing.md,
-                ...shadows.card,
-              }}
+                backgroundColor: active ? colors.highlight : colors.surface,
+                opacity: pressed ? 0.9 : 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              })}
             >
-              <Text style={[type.sectionHeader, { fontSize: 16 }]}>
-                Sort tastings
+              <Text style={[type.body, { fontWeight: "900", color: colors.textPrimary }]}>
+                {opt.label}
               </Text>
 
-              {([
-                { mode: "newest", label: "Newest → Oldest" },
-                { mode: "high", label: "Highest → Lowest" },
-                { mode: "low", label: "Lowest → Highest" },
-              ] as const).map((opt) => {
-                const active = sortMode === opt.mode;
-                return (
-                  <Pressable
-                    key={opt.mode}
-                    onPress={() => {
-                      setSortMode(opt.mode);
-                      setSortOpen(false);
-                    }}
-                    style={({ pressed }) => ({
-                      borderRadius: radii.md,
-                      paddingVertical: spacing.md,
-                      paddingHorizontal: spacing.md,
-                      borderWidth: 1,
-                      borderColor: colors.divider,
-                      backgroundColor: active ? colors.highlight : colors.surface,
-                      opacity: pressed ? 0.9 : 1,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    })}
-                  >
-                    <Text
-                      style={[
-                        type.body,
-                        { fontWeight: "900", color: colors.textPrimary },
-                      ]}
-                    >
-                      {opt.label}
-                    </Text>
-                    {active ? (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={18}
-                        color={colors.textPrimary as any}
-                      />
-                    ) : (
-                      <Ionicons
-                        name="ellipse-outline"
-                        size={18}
-                        color={colors.textPrimary as any}
-                      />
-                    )}
-                  </Pressable>
-                );
-              })}
-
-              <Pressable
-                onPress={() => setSortOpen(false)}
-                style={({ pressed }) => ({
-                  paddingVertical: spacing.sm,
-                  alignItems: "center",
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Close</Text>
-              </Pressable>
+              {active ? (
+                <Ionicons name="checkmark-circle" size={18} color={colors.textPrimary as any} />
+              ) : (
+                <Ionicons name="ellipse-outline" size={18} color={colors.textPrimary as any} />
+              )}
             </Pressable>
-          </View>
-        </Modal>
+          );
+        })}
+
+        <Pressable
+          onPress={() => setSortOpen(false)}
+          style={({ pressed }) => ({
+            paddingVertical: spacing.sm,
+            alignItems: "center",
+            opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Close</Text>
+        </Pressable>
+      </Pressable>
+    </View>
+  </Modal>
+) : null}
 
         {/* Long-press actions modal */}
-        <Modal
-          visible={actionsOpen}
-          transparent
-          presentationStyle="overFullScreen"
-          statusBarTranslucent
-          animationType="fade"
-          onRequestClose={closeActions}
-        >
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0,0,0,0.55)",
-              padding: spacing.xl,
-              justifyContent: "flex-end",
+{actionsOpen ? (
+  <Modal
+    visible
+    transparent
+    presentationStyle="overFullScreen"
+    statusBarTranslucent
+    animationType="fade"
+    onRequestClose={closeActions}
+  >
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.55)",
+        padding: spacing.xl,
+        justifyContent: "flex-end",
+      }}
+    >
+      <Pressable
+        onPress={closeActions}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      />
+
+      <Pressable
+        onPress={() => {}}
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: radii.lg,
+          borderWidth: 1,
+          borderColor: colors.divider,
+          padding: spacing.lg,
+          gap: spacing.md,
+          ...shadows.card,
+        }}
+      >
+        <View style={{ gap: 6 }}>
+          <Text style={[type.sectionHeader, { fontSize: 16 }]}>Tasting options</Text>
+          <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
+            {(activeRow?.whiskey_name ?? "Whiskey").trim() || "Whiskey"}
+          </Text>
+        </View>
+
+        <View style={{ gap: spacing.sm }}>
+          <Pressable
+            onPress={() => {
+              if (!activeRow) return;
+              closeActions();
+              router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(activeRow.id)}`);
             }}
+            style={({ pressed }) => ({
+              borderRadius: radii.md,
+              paddingVertical: spacing.lg,
+              alignItems: "center",
+              backgroundColor: colors.accent,
+              opacity: pressed ? 0.9 : 1,
+            })}
           >
-            <Pressable
-              onPress={closeActions}
-              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-            />
+            <Text style={[type.button, { color: colors.background }]}>Edit</Text>
+          </Pressable>
 
-            <Pressable
-              onPress={() => {}}
-              style={{
-                backgroundColor: colors.surface,
-                borderRadius: radii.lg,
-                borderWidth: 1,
-                borderColor: colors.divider,
-                padding: spacing.lg,
-                gap: spacing.md,
-                ...shadows.card,
-              }}
-            >
-              <View style={{ gap: 6 }}>
-                <Text style={[type.sectionHeader, { fontSize: 16 }]}>
-                  Tasting options
-                </Text>
-                <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
-                  {(activeRow?.whiskey_name ?? "Whiskey").trim() || "Whiskey"}
-                </Text>
-              </View>
+          <Pressable
+            onPress={deleteActiveRow}
+            disabled={deleting}
+            style={({ pressed }) => ({
+              borderRadius: radii.md,
+              paddingVertical: spacing.lg,
+              alignItems: "center",
+              borderWidth: 1,
+              borderColor: colors.divider,
+              backgroundColor: colors.surface,
+              opacity: deleting ? 0.6 : pressed ? 0.9 : 1,
+            })}
+          >
+            <Text style={[type.button, { color: colors.accent }]}>
+              {deleting ? "Deleting…" : "Delete"}
+            </Text>
+          </Pressable>
 
-              <View style={{ gap: spacing.sm }}>
-                <Pressable
-                  onPress={() => {
-                    if (!activeRow) return;
-                    closeActions();
-                    router.push(
-                      `/log/cloud-tasting?tastingId=${encodeURIComponent(activeRow.id)}`
-                    );
-                  }}
-                  style={({ pressed }) => ({
-                    borderRadius: radii.md,
-                    paddingVertical: spacing.lg,
-                    alignItems: "center",
-                    backgroundColor: colors.accent,
-                    opacity: pressed ? 0.9 : 1,
-                  })}
-                >
-                  <Text style={[type.button, { color: colors.background }]}>
-                    Edit
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={deleteActiveRow}
-                  disabled={deleting}
-                  style={({ pressed }) => ({
-                    borderRadius: radii.md,
-                    paddingVertical: spacing.lg,
-                    alignItems: "center",
-                    borderWidth: 1,
-                    borderColor: colors.divider,
-                    backgroundColor: colors.surface,
-                    opacity: deleting ? 0.6 : pressed ? 0.9 : 1,
-                  })}
-                >
-                  <Text style={[type.button, { color: colors.accent }]}>
-                    {deleting ? "Deleting…" : "Delete"}
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={closeActions}
-                  disabled={deleting}
-                  style={({ pressed }) => ({
-                    paddingVertical: spacing.sm,
-                    alignItems: "center",
-                    opacity: deleting ? 0.6 : pressed ? 0.7 : 1,
-                  })}
-                >
-                  <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
-                    Cancel
-                  </Text>
-                </Pressable>
-              </View>
-            </Pressable>
-          </View>
-        </Modal>
+          <Pressable
+            onPress={closeActions}
+            disabled={deleting}
+            style={({ pressed }) => ({
+              paddingVertical: spacing.sm,
+              alignItems: "center",
+              opacity: deleting ? 0.6 : pressed ? 0.7 : 1,
+            })}
+          >
+            <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Cancel</Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    </View>
+  </Modal>
+) : null}
       </View>
     );
   }

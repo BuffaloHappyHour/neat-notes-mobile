@@ -35,7 +35,9 @@ function GlassCard({
           borderWidth: 1,
           borderColor: colors.glassBorder ?? colors.borderSubtle ?? colors.divider,
           ...shadows.card,
-          overflow: "hidden",
+
+          // ✅ TEST PATCH: remove clipping to avoid iOS hit-testing weirdness
+          // overflow: "hidden",
         },
         style,
       ]}
@@ -209,45 +211,36 @@ export default function ProfileTab() {
         ) : (
           <>
             {clarity ? (
-  <View style={{ marginTop: spacing.sm }}>
-    <PalateClarityCard
-      clarityIndex={clarity.clarityIndex}
-      tierLabel={clarity.meta.tierLabel}
-      confidenceLevel={clarity.meta.confidenceLevel}
-      totalTastings={clarity.meta.totalTastings}
-      daysSinceLastTasting={clarity.meta.daysSinceLastTasting}
-    />
-  </View>
-) : null}
+              <View style={{ marginTop: spacing.sm }}>
+                <PalateClarityCard
+                  clarityIndex={clarity.clarityIndex}
+                  tierLabel={clarity.meta.tierLabel}
+                  confidenceLevel={clarity.meta.confidenceLevel}
+                  totalTastings={clarity.meta.totalTastings}
+                  daysSinceLastTasting={clarity.meta.daysSinceLastTasting}
+                />
+              </View>
+            ) : null}
 
-{/* Quick stats (tastings + avg rating) */}
-<GlassCard>
-  <SectionHeader
-    title="Quick stats"
-    subtitle="A snapshot of your journal so far."
-  />
-  <Divider tight />
-  <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
-    <YourStatsCard
-      embedded
-      tastingsText={tastingsText}
-      avgText={avgText}
-      top5={[]}                // 👈 hides Top 5 for now
-      onLongPressRow={openActionsForRow}
-    />
-  </View>
-</GlassCard>
+            {/* Quick stats (tastings + avg rating) */}
+            <GlassCard>
+              <SectionHeader title="Quick stats" subtitle="A snapshot of your journal so far." />
+              <Divider tight />
+              <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
+                <YourStatsCard
+                  embedded
+                  tastingsText={tastingsText}
+                  avgText={avgText}
+                  top5={[]} // hides Top 5 for now
+                  onLongPressRow={openActionsForRow}
+                />
+              </View>
+            </GlassCard>
 
-<InsightsCTA
-  isPremium={false}
-  onPress={() => router.push("/insights" as any)}
-/>
+            <InsightsCTA isPremium={false} onPress={() => router.push("/insights" as any)} />
 
             <GlassCard>
-              <SectionHeader
-                title="Journal snapshot"
-                subtitle="A quick pulse of your journal so far."
-              />
+              <SectionHeader title="Journal snapshot" subtitle="A quick pulse of your journal so far." />
               <Divider />
               <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
                 <YourStatsCard
@@ -261,10 +254,7 @@ export default function ProfileTab() {
             </GlassCard>
 
             <GlassCard>
-              <SectionHeader
-                title="What you drink most"
-                subtitle="Your category mix, based on logged pours."
-              />
+              <SectionHeader title="What you drink most" subtitle="Your category mix, based on logged pours." />
               <Divider />
               <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
                 <CategoryMixCard embedded mixError={mixError} mix={mix} mixTotal={mixTotal} />
@@ -275,12 +265,7 @@ export default function ProfileTab() {
               <SectionHeader
                 title="Recent entries"
                 subtitle="A look back at your latest pours."
-                right={
-                  <CTAButton
-                    label="Insights"
-                    onPress={() => router.push("/insights" as any)}
-                  />
-                }
+                right={<CTAButton label="Insights" onPress={() => router.push("/insights" as any)} />}
               />
               <Divider />
               <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
