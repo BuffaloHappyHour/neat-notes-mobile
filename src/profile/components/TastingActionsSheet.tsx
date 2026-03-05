@@ -26,6 +26,7 @@ export function TastingActionsSheet({
   onDelete: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  if (!visible) return null;
 
   const styles = StyleSheet.create({
     backdrop: {

@@ -3,6 +3,7 @@ import { router, Stack } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   Modal,
   Pressable,
@@ -84,6 +85,7 @@ export default function AllTastingsScreen() {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState("");
 
+
   // Sticky header controls
   const [search, setSearch] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
@@ -93,6 +95,16 @@ export default function AllTastingsScreen() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [activeRow, setActiveRow] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+    useEffect(() => {
+  const sub = AppState.addEventListener("change", (s) => {
+    if (s === "active") {
+      setSortOpen(false);
+      setActionsOpen(false);
+    }
+  });
+  return () => sub.remove();
+}, []);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = !!opts?.silent;
@@ -408,7 +420,7 @@ export default function AllTastingsScreen() {
         {/* Sort modal */}
 {sortOpen ? (
   <Modal
-    visible
+    visible={sortOpen}
     transparent
     presentationStyle="overFullScreen"
     statusBarTranslucent
@@ -499,7 +511,7 @@ export default function AllTastingsScreen() {
         {/* Long-press actions modal */}
 {actionsOpen ? (
   <Modal
-    visible
+    visible={actionsOpen}
     transparent
     presentationStyle="overFullScreen"
     statusBarTranslucent

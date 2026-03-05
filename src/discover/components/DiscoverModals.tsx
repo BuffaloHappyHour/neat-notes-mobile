@@ -2,13 +2,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
+  AppState,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from "react-native";
 
 import { radii } from "../../../lib/radii";
@@ -123,6 +124,17 @@ export function DiscoverModals({
     color: colors.textPrimary,
     fontFamily: type.body.fontFamily,
   } as const;
+
+  React.useEffect(() => {
+  const sub = AppState.addEventListener("change", (s) => {
+    if (s === "active") {
+      setSeeAllOpen(false);
+      setFilterOpen(false);
+      setTypePickerOpen(false);
+    }
+  });
+  return () => sub.remove();
+}, [setSeeAllOpen, setFilterOpen, setTypePickerOpen]);
 
   return (
     <>
