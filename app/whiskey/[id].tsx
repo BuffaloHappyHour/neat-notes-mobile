@@ -1,5 +1,6 @@
+// app/whiskey/[id].tsx
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -15,6 +16,35 @@ import { spacing } from "../../lib/spacing";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
+
+import {
+  hapticError,
+  hapticTick,
+} from "../../lib/haptics";
+
+/* ---------- CACHE ---------- */
+
+// Simple in-memory cache so opening the same whiskey feels instant.
+type WhiskeyProfileCacheEntry = {
+  whiskeyId: string;
+  headerNameRaw: string;
+  details: {
+    distillery: string | null;
+    category: string | null;
+    region: string | null;
+    subRegion: string | null;
+    style: string | null;
+    proofLabel: string | null;
+    ageLabel: string | null;
+  };
+  bhh: { score: number | null; youtubeUrl: string | null };
+  community: { total: number; avg: number | null };
+  recent: TastingSupabaseRow[];
+  cachedAt: number;
+};
+
+// module-level cache (persists while app is running)
+const whiskeyProfileCache = new Map<string, WhiskeyProfileCacheEntry>();
 
 /* ---------- HELPERS ---------- */
 
@@ -34,11 +64,6 @@ function formatCreatedAt(v: string | number | null | undefined) {
   return d.toLocaleString();
 }
 
-/**
- * Title-case for whiskey names while preserving acronyms / short all-caps:
- * - Keeps ALL CAPS short words (<=4) like BIB, BHH, USA, BP
- * - Keeps numeric tokens like 12, 114, 12YR
- */
 function toDisplayTitleCase(input: string) {
   const s = String(input ?? "").trim();
   if (!s) return "";
@@ -49,13 +74,9 @@ function toDisplayTitleCase(input: string) {
     .map((w) => {
       if (!w) return w;
 
-      // keep "12", "114", "12YR"
       if (/^\d+([a-zA-Z]{0,3})$/.test(w)) return w;
-
-      // keep acronyms like "BIB", "BP"
       if (/^[A-Z0-9]+$/.test(w) && w.length <= 4) return w;
 
-      // preserve punctuation chunks
       const parts = w.split(/([-/'()])/g);
       return parts
         .map((p) => {
@@ -77,7 +98,6 @@ function toDisplayTitleCase(input: string) {
 function formatProof(v: any): string | null {
   if (v == null) return null;
 
-  // allow already-formatted strings
   if (typeof v === "string") {
     const s = v.trim();
     if (!s) return null;
@@ -90,26 +110,98 @@ function formatProof(v: any): string | null {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return null;
 
-  // likely proof
   if (n >= 50) return `${Math.round(n)} proof`;
-
-  // likely ABV
   if (n > 0 && n < 50) return `${Math.round(n * 2)} proof`;
 
   return null;
 }
 
+function formatAge(v: any): string | null {
+  if (v == null) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return `${Math.round(n)} year`;
+}
+
+function cleanText(v: any): string | null {
+  const s = String(v ?? "").trim();
+  return s ? s : null;
+}
+
+/* ---------- THEME TOKENS ---------- */
+
+// Use your new “glass” tokens if present, but make cards more opaque/clean.
+const surface =
+  (colors as any).glassRaised ?? (colors as any).surfaceRaised ?? colors.surface;
+const sunken = (colors as any).glassSunken ?? colors.highlight;
+
+const border = (colors as any).glassBorder ?? colors.divider;
+const divider = (colors as any).glassDivider ?? colors.divider;
+
 /* ---------- UI ATOMS ---------- */
 
-function Card({ children }: { children: React.ReactNode }) {
+function SectionDivider() {
+  return <View style={{ height: 1, backgroundColor: divider, opacity: 0.65 }} />;
+}
+
+function Row({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null | undefined;
+}) {
   return (
     <View
       style={{
-        backgroundColor: colors.surface,
-        borderRadius: radii.lg,
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "baseline",
+        gap: spacing.lg,
+        paddingVertical: 7, // tighter
+      }}
+    >
+      <Text style={[type.sectionHeader, { opacity: 0.7 }]}>{label}</Text>
+      <Text
+        style={[type.body, { fontWeight: "900", opacity: 0.96 }]}
+        numberOfLines={1}
+      >
+        {value ?? "—"}
+      </Text>
+    </View>
+  );
+}
+
+function PrimaryButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        paddingVertical: 14,
+        borderRadius: radii.md,
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: colors.accent,
+        borderWidth: 1,
+        borderColor: border,
+        opacity: pressed ? 0.85 : 1,
+      })}
+    >
+      <Text style={[type.button, { color: colors.background }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function FlatCard({ children }: { children: React.ReactNode }) {
+  return (
+    <View
+      style={{
+        flex: 1, // 👈 important for equal height
+        backgroundColor: surface,
+        borderRadius: (radii as any).xl ?? radii.lg,
         padding: spacing.lg,
         borderWidth: 1,
-        borderColor: colors.divider,
+        borderColor: border,
         ...shadows.card,
         gap: spacing.md,
       }}
@@ -119,69 +211,147 @@ function Card({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SoftButton({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        paddingVertical: spacing.md,
-        borderRadius: radii.md,
-        alignItems: "center",
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.divider,
-        opacity: pressed ? 0.9 : 1,
-      })}
-    >
-      <Text style={[type.button, { color: colors.textPrimary }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function PrimaryButton({
-  label,
-  onPress,
+function SummaryCard({
+  title,
+  bigValue,
+  bigLabel,
+  rightBadge,
+  footnote,
+  onFootnotePress,
 }: {
-  label: string;
-  onPress: () => void;
+  title: string;
+  bigValue: string;
+  bigLabel: string;
+  rightBadge?: string | null;
+  footnote?: string | null;
+  onFootnotePress?: (() => void) | undefined;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        paddingVertical: spacing.md,
-        borderRadius: radii.md,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: colors.accent,
-        borderWidth: 1,
-        borderColor: colors.divider,
-        opacity: pressed ? 0.9 : 1,
-      })}
-    >
-      <Text style={[type.button, { color: colors.background }]}>{label}</Text>
-    </Pressable>
+    <FlatCard>
+      <View
+        style={{
+          flex: 1,
+          gap: 10,
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        {/* Header */}
+        <View style={{ width: "100%", gap: 8, alignItems: "center" }}>
+          <Text
+            style={[type.sectionHeader, { fontSize: 16, textAlign: "center" }]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+
+          {rightBadge ? (
+            <View
+              style={{
+                paddingVertical: 5,
+                paddingHorizontal: 10,
+                borderRadius: 999,
+                backgroundColor: sunken,
+                borderWidth: 1,
+                borderColor: border,
+                maxWidth: "100%",
+              }}
+            >
+              <Text
+                style={[type.sectionHeader, { fontWeight: "800", opacity: 0.9 }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {rightBadge}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Short centered divider */}
+          <View
+            style={{
+              width: 70,
+              height: 1,
+              backgroundColor: divider,
+              opacity: 0.55,
+            }}
+          />
+        </View>
+
+        {/* Main stat */}
+        <View style={{ alignItems: "center", gap: 6 }}>
+          <Text style={[type.sectionHeader, { opacity: 0.72, textAlign: "center" }]}>
+            {bigLabel}
+          </Text>
+
+          <Text
+            style={[
+              type.screenTitle,
+              { fontSize: 40, lineHeight: 44, textAlign: "center" },
+            ]}
+          >
+            {bigValue}
+          </Text>
+        </View>
+
+        {/* Footnote pill (same size across both cards) */}
+        {footnote ? (
+          <Pressable
+            onPress={onFootnotePress}
+            disabled={!onFootnotePress}
+            hitSlop={10}
+            style={({ pressed }) => ({
+              width: "100%",
+              alignSelf: "center",
+              opacity: onFootnotePress ? (pressed ? 0.7 : 0.95) : 0.85,
+              paddingVertical: 10,
+              paddingHorizontal: 10,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: border,
+              backgroundColor: onFootnotePress ? sunken : "transparent",
+              alignItems: "center",
+              justifyContent: "center",
+            })}
+          >
+            <Text
+              style={[
+                type.sectionHeader,
+                { fontWeight: "700", textAlign: "center", opacity: 0.95 },
+              ]}
+              numberOfLines={1}
+            >
+              {footnote}
+            </Text>
+          </Pressable>
+        ) : (
+          <View style={{ height: 40 }} />
+        )}
+      </View>
+    </FlatCard>
   );
 }
 
-/* ---------- TYPES (Supabase) ---------- */
+/* ---------- TYPES ---------- */
 
 type WhiskeySupabaseRow = {
   id: string;
   display_name: string | null;
   distillery: string | null;
   whiskey_type: string | null;
+
+  category: string | null;
+  region: string | null;
+  sub_region: string | null;
+
   proof: number | null;
+  age: number | null;
   whiskey_canonical: string | null;
 };
 
 type BhhReviewSupabaseRow = {
-  whiskey_id?: string | null; // uuid
-  whiskey_canonical?: string | null; // legacy / optional
+  whiskey_id?: string | null;
   whiskey_name: string | null;
-  distillery?: string | null;
-  whiskey_type?: string | null;
-  proof?: number | string | null;
   rating_100?: number | null;
   youtube_url?: string | null;
   published_at?: string | null;
@@ -191,7 +361,6 @@ type TastingSupabaseRow = {
   id: string;
   user_id?: string | null;
   whiskey_id?: string | null;
-  whiskey_name?: string | null;
   rating?: number | null;
   created_at?: string | null;
 };
@@ -204,13 +373,13 @@ export default function WhiskeyDetailScreen() {
     name?: string | string[];
   }>();
 
-  const routeId = (asString(params.id) ?? "").trim(); // could be uuid or legacy canonical
+  const routeId = (asString(params.id) ?? "").trim();
   const typedName = (asString(params.name) ?? "").trim();
 
   const [loading, setLoading] = useState(true);
   const [statusError, setStatusError] = useState<string>("");
 
-  const [whiskeyId, setWhiskeyId] = useState<string>(""); // always uuid when we can resolve it
+  const [whiskeyId, setWhiskeyId] = useState<string>("");
 
   const [headerNameRaw, setHeaderNameRaw] = useState<string>("");
   const headerName = useMemo(() => {
@@ -224,73 +393,119 @@ export default function WhiskeyDetailScreen() {
 
   const [details, setDetails] = useState<{
     distillery: string | null;
-    whiskeyType: string | null;
+    category: string | null;
+    region: string | null;
+    subRegion: string | null;
+    style: string | null;
     proofLabel: string | null;
+    ageLabel: string | null;
   }>({
     distillery: null,
-    whiskeyType: null,
+    category: null,
+    region: null,
+    subRegion: null,
+    style: null,
     proofLabel: null,
+    ageLabel: null,
   });
 
-  const [bhh, setBhh] = useState<{
-    score: number | null;
-    youtubeUrl: string | null;
-  }>({ score: null, youtubeUrl: null });
+  const [bhh, setBhh] = useState<{ score: number | null; youtubeUrl: string | null }>({
+    score: null,
+    youtubeUrl: null,
+  });
 
-  const [community, setCommunity] = useState<{ total: number; avg: number | null }>(
-    {
-      total: 0,
-      avg: null,
-    }
-  );
+  const [community, setCommunity] = useState<{ total: number; avg: number | null }>({
+    total: 0,
+    avg: null,
+  });
 
   const [recent, setRecent] = useState<TastingSupabaseRow[]>([]);
 
-  function logThisWhiskey() {
-    // keep your existing log route + params
+  // dev strict-mode + navigation remount guard (once per routeId)
+  const fetchedOnceRef = useRef<Set<string>>(new Set());
+
+  const logThisWhiskey = async () => {
+    await hapticTick();
     router.push(
       `/log/cloud-tasting?whiskeyName=${encodeURIComponent(
         headerName
       )}&whiskeyId=${encodeURIComponent(whiskeyId || routeId)}&lockName=1`
     );
-  }
+  };
 
-  function editTasting(tastingId: string) {
+  const editTasting = async (tastingId: string) => {
+    await hapticTick();
     router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(tastingId)}`);
-  }
+  };
+
+  const openYouTube = async () => {
+    if (!bhh.youtubeUrl) return;
+    await hapticTick();
+    try {
+      await Linking.openURL(bhh.youtubeUrl);
+    } catch {
+      await hapticError();
+    }
+  };
+
+  const metaLine = useMemo(() => {
+    const parts: string[] = [];
+    if (details.style) parts.push(details.style);
+    if (details.region) parts.push(details.region);
+    return parts.join(" • ");
+  }, [details.region, details.style]);
 
   useEffect(() => {
     let alive = true;
 
+    // 1) Hydrate instantly from cache if we have it
+    const cached = routeId ? whiskeyProfileCache.get(routeId) : null;
+    if (cached) {
+      setWhiskeyId(cached.whiskeyId);
+      setHeaderNameRaw(cached.headerNameRaw);
+      setDetails(cached.details);
+      setBhh(cached.bhh);
+      setCommunity(cached.community);
+      setRecent(cached.recent);
+      setStatusError("");
+      setLoading(false);
+    }
+
+    // 2) Prevent duplicate fetches in dev StrictMode (and quick back/forth)
+    if (routeId && fetchedOnceRef.current.has(routeId) && cached) {
+      return () => {
+        alive = false;
+      };
+    }
+    if (routeId) fetchedOnceRef.current.add(routeId);
+
     (async () => {
-      setLoading(true);
+      // If we don't have cache, show loader; if we do, keep UI stable while refreshing quietly.
+      if (!cached) setLoading(true);
       setStatusError("");
 
       try {
         if (!routeId) throw new Error("Missing whiskey id.");
 
-        // -----------------------------
-        // 1) Resolve whiskey record FIRST (authoritative)
-        // -----------------------------
         let w: WhiskeySupabaseRow | null = null;
+
+        const whiskeySelect =
+          "id, display_name, distillery, whiskey_type, category, region, sub_region, proof, age, whiskey_canonical";
 
         if (isUuidLike(routeId)) {
           const { data, error } = await supabase
             .from("whiskeys")
-            .select("id, display_name, distillery, whiskey_type, proof, whiskey_canonical")
+            .select(whiskeySelect)
             .eq("id", routeId)
             .maybeSingle();
-
           if (error) throw new Error(error.message);
           w = (data as any) as WhiskeySupabaseRow | null;
         } else {
-          // legacy fallback: routeId might be whiskey_canonical
           const { data, error } = await supabase
             .from("whiskeys")
-            .select("id, display_name, distillery, whiskey_type, proof, whiskey_canonical")
+            .select(whiskeySelect)
             .eq("whiskey_canonical", routeId)
             .maybeSingle();
-
           if (error) throw new Error(error.message);
           w = (data as any) as WhiskeySupabaseRow | null;
         }
@@ -298,25 +513,28 @@ export default function WhiskeyDetailScreen() {
         if (!alive) return;
         if (!w?.id) throw new Error("Whiskey not found in whiskeys table.");
 
-        setWhiskeyId(String(w.id));
+        const nextWhiskeyId = String(w.id);
 
         const nameFromWhiskeys = w.display_name ? String(w.display_name).trim() : "";
-        setHeaderNameRaw(nameFromWhiskeys);
+        const nextHeaderNameRaw = nameFromWhiskeys;
 
-        setDetails({
-          distillery: w.distillery ? String(w.distillery).trim() || null : null,
-          whiskeyType: w.whiskey_type ? String(w.whiskey_type).trim() || null : null,
+        const nextDetails = {
+          distillery: cleanText(w.distillery),
+          category: cleanText(w.category),
+          region: cleanText(w.region),
+          subRegion: cleanText(w.sub_region),
+          style: cleanText(w.whiskey_type),
           proofLabel: formatProof(w.proof),
-        });
+          ageLabel: formatAge(w.age),
+        };
 
-        // -----------------------------
-        // 2) BHH (optional) by whiskey_id (uuid)
-        // -----------------------------
+        setWhiskeyId(nextWhiskeyId);
+        setHeaderNameRaw(nextHeaderNameRaw);
+        setDetails(nextDetails);
+
         const { data: bhhRows, error: bhhErr } = await supabase
           .from("bhh_reviews")
-          .select(
-            "whiskey_id, whiskey_canonical, whiskey_name, distillery, whiskey_type, proof, rating_100, youtube_url, published_at"
-          )
+          .select("whiskey_id, whiskey_name, rating_100, youtube_url, published_at")
           .eq("whiskey_id", w.id)
           .limit(1000);
 
@@ -325,11 +543,9 @@ export default function WhiskeyDetailScreen() {
 
         const rows = (((bhhRows as any) ?? []) as BhhReviewSupabaseRow[]) ?? [];
 
-        const bestByScore = [...rows].sort((a, b) => {
-          const as = Number(a.rating_100 ?? 0);
-          const bs = Number(b.rating_100 ?? 0);
-          return bs - as;
-        })[0];
+        const bestByScore = [...rows].sort(
+          (a, b) => Number(b.rating_100 ?? 0) - Number(a.rating_100 ?? 0)
+        )[0];
 
         const bestByDate = [...rows].sort((a, b) => {
           const ad = a.published_at ? Date.parse(a.published_at) : 0;
@@ -339,22 +555,16 @@ export default function WhiskeyDetailScreen() {
 
         const chosen = bestByScore ?? bestByDate ?? null;
 
-        // If whiskeys.display_name was empty (shouldn't be), allow BHH whiskey_name to fill it.
-        const nameFromBhh =
-          (chosen?.whiskey_name && String(chosen.whiskey_name).trim()) || "";
-        if (!nameFromWhiskeys && nameFromBhh) setHeaderNameRaw(nameFromBhh);
-
-        setBhh({
+        const nextBhh = {
           score:
             chosen?.rating_100 != null && Number.isFinite(Number(chosen.rating_100))
               ? Math.round(Number(chosen.rating_100))
               : null,
           youtubeUrl: chosen?.youtube_url ? String(chosen.youtube_url) : null,
-        });
+        };
 
-        // -----------------------------
-        // 3) Community snapshot from view (preferred)
-        // -----------------------------
+        setBhh(nextBhh);
+
         const { data: cs, error: csErr } = await supabase
           .from("whiskey_community_stats")
           .select("community_avg, community_count")
@@ -373,32 +583,43 @@ export default function WhiskeyDetailScreen() {
             ? null
             : Math.round(Number(cs.community_avg) * 10) / 10;
 
-        setCommunity({ total, avg });
+        const nextCommunity = { total, avg };
+        setCommunity(nextCommunity);
 
-        // -----------------------------
-        // 4) Your recent tastings for this whiskey (uuid)
-        // -----------------------------
+        let nextRecent: TastingSupabaseRow[] = [];
         const { data: sessionData } = await supabase.auth.getSession();
         const user = sessionData.session?.user;
 
         if (user?.id) {
           const { data: recentRows, error: recentErr } = await supabase
             .from("tastings")
-            .select("id, user_id, whiskey_id, whiskey_name, rating, created_at")
+            .select("id, user_id, whiskey_id, rating, created_at")
             .eq("user_id", user.id)
             .eq("whiskey_id", w.id)
             .order("created_at", { ascending: false })
             .limit(10);
 
           if (recentErr) throw new Error(recentErr.message);
-
-          setRecent(((recentRows as any) as TastingSupabaseRow[]) ?? []);
+          nextRecent = (((recentRows as any) as TastingSupabaseRow[]) ?? []) as TastingSupabaseRow[];
+          setRecent(nextRecent);
         } else {
           setRecent([]);
         }
+
+        // Cache computed snapshot (so next open is instant)
+        whiskeyProfileCache.set(routeId, {
+          whiskeyId: nextWhiskeyId,
+          headerNameRaw: nextHeaderNameRaw,
+          details: nextDetails,
+          bhh: nextBhh,
+          community: nextCommunity,
+          recent: nextRecent,
+          cachedAt: Date.now(),
+        });
       } catch (e: any) {
         console.log("Whiskey profile load failed:", e?.message ?? e);
         if (alive) setStatusError(String(e?.message ?? e));
+        await hapticError();
       } finally {
         if (alive) setLoading(false);
       }
@@ -407,14 +628,20 @@ export default function WhiskeyDetailScreen() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeId]);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
+    <ScrollView style={{ flex: 1, backgroundColor: "transparent" }}>
       <Stack.Screen options={{ title: "Whiskey Profile" }} />
 
-      <View style={{ padding: spacing.xl, gap: spacing.lg }}>
+      <View
+        style={{
+          paddingHorizontal: spacing.md,
+          paddingTop: spacing.md,
+          paddingBottom: spacing.xl,
+          gap: spacing.md,
+        }}
+      >
         {loading ? (
           <View style={{ paddingVertical: spacing.lg }}>
             <ActivityIndicator />
@@ -428,107 +655,145 @@ export default function WhiskeyDetailScreen() {
           <Text style={[type.body, { opacity: 0.75 }]}>Error: {statusError}</Text>
         ) : null}
 
-        {/* Whiskey Name + Details + Log a Tasting */}
-        <Card>
-          <Text style={type.screenTitle}>{headerName}</Text>
+        {/* HERO */}
+        <View style={{ alignItems: "center", paddingTop: 6 }}>
+          <Text style={[type.screenTitle, { textAlign: "center" }]}>
+            {headerName}
+          </Text>
 
           <View
             style={{
-              marginTop: spacing.md,
-              gap: 8,
-              paddingTop: spacing.md,
-              borderTopWidth: 1,
-              borderTopColor: colors.divider,
+              width: 220,
+              height: 4,
+              borderRadius: 999,
+              backgroundColor: colors.accent,
+              opacity: 0.65,
+              marginTop: 10,
             }}
-          >
-            <Text style={[type.body, { opacity: 0.8 }]}>
-              Distillery:{" "}
-              <Text style={{ fontWeight: "900" }}>{details.distillery ?? "—"}</Text>
+          />
+
+          {metaLine ? (
+            <Text
+              style={[
+                type.microcopyItalic,
+                { opacity: 0.74, marginTop: 10, textAlign: "center" },
+              ]}
+            >
+              {metaLine}
             </Text>
-
-            <Text style={[type.body, { opacity: 0.8 }]}>
-              Type:{" "}
-              <Text style={{ fontWeight: "900" }}>{details.whiskeyType ?? "—"}</Text>
-            </Text>
-
-            <Text style={[type.body, { opacity: 0.8 }]}>
-              Proof:{" "}
-              <Text style={{ fontWeight: "900" }}>{details.proofLabel ?? "—"}</Text>
-            </Text>
-          </View>
-
-          <View style={{ marginTop: spacing.lg }}>
-            <PrimaryButton label="Log a Tasting" onPress={logThisWhiskey} />
-          </View>
-        </Card>
-
-        {/* Community Snapshot */}
-        <Card>
-          <Text style={type.sectionHeader}>Community Snapshot</Text>
-
-          <Text style={[type.body, { opacity: 0.8 }]}>
-            Avg:{" "}
-            <Text style={{ fontWeight: "900" }}>
-              {community.avg != null ? community.avg : "—"}
-            </Text>
-            {"  •  "}
-            Total: <Text style={{ fontWeight: "900" }}>{community.total}</Text>
-          </Text>
-        </Card>
-
-        {/* Buffalo Happy Hour */}
-        <Card>
-          <Text style={type.sectionHeader}>Buffalo Happy Hour</Text>
-
-          <Text style={[type.body, { opacity: 0.8 }]}>
-            Score:{" "}
-            <Text style={{ fontWeight: "900" }}>{bhh.score ?? "—"}</Text>
-          </Text>
-
-          {bhh.youtubeUrl ? (
-            <SoftButton label="Watch on YouTube" onPress={() => Linking.openURL(bhh.youtubeUrl!)} />
           ) : null}
-        </Card>
+        </View>
+
+        {/* CTA */}
+        <View style={{ marginTop: 6 }}>
+          <PrimaryButton
+            label="Log a Tasting"
+            onPress={(logThisWhiskey)}
+          />
+        </View>
+
+        {/* Bottle details */}
+        <View style={{ gap: 2, marginTop: 4 }}>
+          <Text style={[type.sectionHeader, { fontSize: 20 }]}>
+            Bottle details
+          </Text>
+          <SectionDivider />
+          <Row label="Distillery" value={details.distillery} />
+          <Row label="Category" value={details.category} />
+          <Row label="Region" value={details.region} />
+          <Row label="Sub-Region" value={details.subRegion} />
+          <Row label="Style" value={details.style} />
+          <Row label="Proof" value={details.proofLabel} />
+          <Row label="Age" value={details.ageLabel} />
+        </View>
+
+        {/* Accent divider */}
+        <View style={{ marginTop: spacing.sm }}>
+          <View
+            style={{
+              height: 2,
+              marginTop: 8,
+              alignSelf: "center",
+              width: "92%",
+              backgroundColor: "rgba(190, 150, 99, 0.14)",
+              borderRadius: 999,
+              opacity: 0.55,
+            }}
+          />
+          <View
+            style={{
+              height: 2,
+              marginTop: -2,
+              alignSelf: "center",
+              width: "44%",
+              backgroundColor: "rgba(190, 150, 99, 0.38)",
+              borderRadius: 999,
+              opacity: 0.65,
+            }}
+          />
+        </View>
+
+        {/* Community + BHH */}
+        <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }}>
+          <View style={{ flex: 1 }}>
+            <SummaryCard
+              title="Community"
+              bigLabel="Average"
+              bigValue={community.avg != null ? String(community.avg) : "—"}
+              footnote={`Reviews: ${community.total}`}
+            />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <SummaryCard
+              title="Buffalo Happy Hour"
+              bigLabel="Score"
+              bigValue={bhh.score != null ? String(bhh.score) : "—"}
+              footnote={bhh.youtubeUrl ? "Watch Review" : "No video yet"}
+              onFootnotePress={bhh.youtubeUrl ? (openYouTube) : undefined}
+            />
+          </View>
+        </View>
 
         {/* Recent Tastings */}
-        <View style={{ gap: spacing.sm }}>
-          <Text style={type.sectionHeader}>Recent Tastings</Text>
+        <View style={{ gap: 8, marginTop: spacing.md }}>
+          <Text style={[type.sectionHeader, { fontSize: 20 }]}>Recent Tastings</Text>
 
           {recent.length === 0 ? (
             <Text style={[type.body, { opacity: 0.7 }]}>
               None yet — log your first tasting.
             </Text>
           ) : (
-            recent.map((t, idx) => (
-              <Pressable
-                key={`${t.id}:${idx}`}
-                onPress={() => editTasting(String(t.id))}
-                style={({ pressed }) => ({
-                  backgroundColor: colors.surface,
-                  borderRadius: radii.md,
-                  padding: spacing.lg,
-                  borderWidth: 1,
-                  borderColor: colors.divider,
-                  ...shadows.card,
-                  opacity: pressed ? 0.9 : 1,
-                  gap: 6,
-                })}
-              >
-                <Text style={[type.body, { fontWeight: "900" }]}>
-                  Rating: {t.rating ?? "—"}
-                </Text>
-
-                {t.created_at ? (
-                  <Text style={[type.body, { opacity: 0.65, fontSize: 12 }]}>
-                    {formatCreatedAt(t.created_at)}
+            <View style={{ gap: spacing.md }}>
+              {recent.map((t, idx) => (
+                <Pressable
+                  key={`${t.id}:${idx}`}
+                  onPress={(() => editTasting(String(t.id)))}
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed ? sunken : surface,
+                    borderRadius: radii.md,
+                    padding: spacing.lg,
+                    borderWidth: 1,
+                    borderColor: border,
+                    ...shadows.card,
+                    opacity: pressed ? 0.98 : 1,
+                    gap: 6,
+                  })}
+                >
+                  <Text style={[type.body, { fontWeight: "900" }]}>
+                    Rating: {t.rating ?? "—"}
                   </Text>
-                ) : null}
 
-                <Text style={[type.body, { opacity: 0.6, fontSize: 12 }]}>
-                  Tap to edit
-                </Text>
-              </Pressable>
-            ))
+                  {t.created_at ? (
+                    <Text style={[type.sectionHeader, { opacity: 0.72 }]}>
+                      {formatCreatedAt(t.created_at)}
+                    </Text>
+                  ) : null}
+
+                  <Text style={[type.sectionHeader, { opacity: 0.6 }]}>Tap to edit</Text>
+                </Pressable>
+              ))}
+            </View>
           )}
         </View>
       </View>
