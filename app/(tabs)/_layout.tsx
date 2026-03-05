@@ -90,13 +90,12 @@ export default function TabsLayout() {
       },
 
       tabBarStyle: {
-        backgroundColor: "transparent",
+        backgroundColor: "#ff0000",
         borderTopColor: "rgba(255,255,255,0.10)",
         borderTopWidth: Platform.OS === "ios" ? 0.5 : 1,
-
-        // Keep above *RN* overlays (won't beat native Modal, but harmless)
-        zIndex: 10,
-        elevation: 10,
+        height: 80,
+          zIndex: 9999,
+          elevation: 9999,
       },
 
       tabBarButton: (props: any) => <LoggedTabBarButton {...props} />,

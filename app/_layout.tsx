@@ -3,7 +3,7 @@ import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack, router, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useMemo, useState } from "react";
-import { ImageBackground, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -119,31 +119,26 @@ export default function RootLayout() {
   // Don’t render app UI until ready (keeps splash up)
   if (!fontsLoaded || !authReady) return null;
 
-  return (
-    <SafeAreaProvider>
-      <ThemeProvider value={navTheme}>
-        <ImageBackground
-          source={require("../assets/backgrounds/Background.png")}
-          style={styles.bg}
-          resizeMode="cover"
+return (
+  <SafeAreaProvider>
+    <ThemeProvider value={navTheme}>
+      {/* DEBUG: remove ImageBackground to eliminate any layering issues */}
+      <View style={[styles.bg, { backgroundColor: "#000" }]}>
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
+            headerTintColor: colors.textPrimary as any,
+            contentStyle: { backgroundColor: "transparent" },
+          }}
         >
-          <View pointerEvents="none" style={styles.tint} />
-
-          <Stack
-            screenOptions={{
-              headerStyle: { backgroundColor: "transparent" },
-              headerShadowVisible: false,
-              headerTintColor: colors.textPrimary as any,
-              contentStyle: { backgroundColor: "transparent" },
-            }}
-          >
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-          </Stack>
-        </ImageBackground>
-      </ThemeProvider>
-    </SafeAreaProvider>
-  );
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        </Stack>
+      </View>
+    </ThemeProvider>
+  </SafeAreaProvider>
+);
 }
 
 const styles = StyleSheet.create({
