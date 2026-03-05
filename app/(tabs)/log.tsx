@@ -2,7 +2,7 @@ import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Modal,
+  Alert,
   Pressable,
   ScrollView,
   Text,
@@ -94,9 +94,6 @@ export default function LogTab() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // On-brand modal for custom prompt
-  const [customModalOpen, setCustomModalOpen] = useState(false);
-
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput | null>(null);
 
@@ -132,7 +129,6 @@ export default function LogTab() {
     setSelected(null);
     setCustomApproved(false);
     setSuggestions([]);
-    setCustomModalOpen(false);
     resetContributionFields();
     setTimeout(() => inputRef.current?.focus?.(), 50);
   }
@@ -142,7 +138,6 @@ export default function LogTab() {
     setSelected(null);
     setCustomApproved(false);
     resetContributionFields();
-    setCustomModalOpen(false);
   }
 
   function goToWhiskeyProfile(id: string) {
@@ -160,7 +155,6 @@ export default function LogTab() {
     setSelected(s);
     setCustomApproved(false);
     resetContributionFields();
-    setCustomModalOpen(false);
     goToWhiskeyProfile(s.whiskeyId);
   }
 
@@ -182,46 +176,27 @@ export default function LogTab() {
     if (country.trim()) params.push(`country=${toQueryParam(country)}`);
     if (region.trim()) params.push(`region=${toQueryParam(region)}`);
 
-    const finalPath =
-  params.length > 0 ? `${base}&${params.join("&")}` : base;
-
-router.push(finalPath as any);
-
+    const finalPath = params.length > 0 ? `${base}&${params.join("&")}` : base;
+    router.push(finalPath as any);
   }
 
+  // ✅ MODALS REMOVED FOR DEBUG BUILD:
+  // Custom button directly begins a custom tasting flow (no overlays).
   function onUseCustom() {
     if (selected) return;
     const name = query.trim();
     if (name.length < 2) return;
-    setCustomModalOpen(true);
-  }
 
-  function onModalCancel() {
-    setCustomModalOpen(false);
-  }
-
-  function onModalJustLogIt() {
-    const name = query.trim();
-    if (name.length < 2) return;
-
-    setCustomModalOpen(false);
+    // Keep behavior deterministic: start custom tasting immediately.
     setSelected(null);
     setCustomApproved(true);
     resetContributionFields();
 
+    // Optionally notify this is a debug build behavior.
+    // Comment out if you don’t want the alert.
+    // Alert.alert("Debug build", "Custom modal disabled. Starting custom tasting.");
+
     goToCustomTasting(name, false);
-  }
-
-  function onModalHelpImprove() {
-    const name = query.trim();
-    if (name.length < 2) return;
-
-    setCustomModalOpen(false);
-    setSelected(null);
-    setCustomApproved(true);
-    setContribute(true);
-    setShowContribForm(true);
-    // Stay on screen; user will hit Continue after entering optional fields.
   }
 
   /**
@@ -347,87 +322,6 @@ router.push(finalPath as any);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* On-brand modal */}
-      <Modal
-        visible={customModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={onModalCancel}
-      >
-        <Pressable
-          onPress={onModalCancel}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.55)",
-            padding: spacing.xl,
-            justifyContent: "center",
-          }}
-        >
-          <Pressable
-            onPress={() => {}}
-            style={{
-              backgroundColor: colors.surface,
-              borderRadius: radii.lg,
-              borderWidth: 1,
-              borderColor: colors.divider,
-              padding: spacing.lg,
-              gap: spacing.md,
-              ...shadows.card,
-            }}
-          >
-            <View style={{ gap: 6 }}>
-              <Text style={[type.sectionHeader, { fontSize: 18 }]}>Add a custom bottle?</Text>
-              <Text style={[type.body, { opacity: 0.88, lineHeight: 20 }]}>
-                We didn’t find that bottle yet. If you’d like, you can add a couple details to help
-                keep the catalog clean — totally optional.
-              </Text>
-              <Text style={[type.microcopyItalic, { opacity: 0.78 }]}>Even 1–2 fields helps a ton.</Text>
-            </View>
-
-            <View style={{ gap: spacing.sm }}>
-              <Pressable
-                onPress={onModalHelpImprove}
-                style={({ pressed }) => ({
-                  borderRadius: radii.md,
-                  paddingVertical: spacing.lg,
-                  alignItems: "center",
-                  backgroundColor: colors.accent,
-                  opacity: pressed ? 0.9 : 1,
-                })}
-              >
-                <Text style={[type.button, { color: colors.background }]}>Help improve</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={onModalJustLogIt}
-                style={({ pressed }) => ({
-                  borderRadius: radii.md,
-                  paddingVertical: spacing.lg,
-                  alignItems: "center",
-                  borderWidth: 1,
-                  borderColor: colors.divider,
-                  backgroundColor: colors.surface,
-                  opacity: pressed ? 0.9 : 1,
-                })}
-              >
-                <Text style={[type.button, { color: colors.textPrimary }]}>Just log it</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={onModalCancel}
-                style={({ pressed }) => ({
-                  paddingVertical: spacing.sm,
-                  alignItems: "center",
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Cancel</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
       <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
         <View style={{ gap: spacing.xs }}>
           <Text style={type.screenTitle}>What are you drinking?</Text>
@@ -540,7 +434,8 @@ router.push(finalPath as any);
                   </Text>
 
                   <Text style={[type.microcopyItalic, { opacity: 0.75, fontSize: 12 }]}>
-                    Tap to view profile{typeof s.bhhScore === "number" ? ` • BHH ${Math.round(s.bhhScore)}` : ""}
+                    Tap to view profile
+                    {typeof s.bhhScore === "number" ? ` • BHH ${Math.round(s.bhhScore)}` : ""}
                     {idx === 0 ? " • Top match" : ""}
                   </Text>
                 </Pressable>
@@ -732,21 +627,24 @@ router.push(finalPath as any);
               onPress={() => {
                 if (!hasEnoughQuery) return;
 
-                // ✅ If they selected explicitly, open that whiskey profile.
                 if (selected) {
                   goToWhiskeyProfile(selected.whiskeyId);
                   return;
                 }
 
-                // ✅ If they did not tap a result but we have suggestions,
-                // open the top match’s whiskey profile.
                 if (suggestions.length > 0) {
                   goToWhiskeyProfile(suggestions[0].whiskeyId);
                   return;
                 }
 
-                // ✅ No library matches: move to custom modal (never "does nothing").
-                setCustomModalOpen(true);
+                // ✅ MODALS REMOVED: if no matches, just start custom tasting.
+                const name = query.trim();
+                if (name.length < 2) return;
+
+                setSelected(null);
+                setCustomApproved(true);
+                resetContributionFields();
+                goToCustomTasting(name, false);
               }}
               disabled={!hasEnoughQuery}
               style={({ pressed }) => ({

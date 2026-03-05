@@ -4,13 +4,11 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Pressable,
   ScrollView,
   Text,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fetchMyProfile } from "../../lib/cloudProfile";
 import { supabase } from "../../lib/supabase";
@@ -125,8 +123,6 @@ type TopRow = {
 };
 
 export default function ProfileTab() {
-  const insets = useSafeAreaInsets();
-
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -142,13 +138,6 @@ export default function ProfileTab() {
   const [top5, setTop5] = useState<TopRow[]>([]);
   const [recent, setRecent] = useState<RecentRow[]>([]);
   const [recentError, setRecentError] = useState<string>("");
-
-  // --- Premium long-press action sheet state ---
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const [actionsRow, setActionsRow] = useState<{ id: string; whiskey_name: string | null } | null>(
-    null
-  );
-  const [deleting, setDeleting] = useState(false);
 
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = !!opts?.silent;
@@ -268,53 +257,46 @@ export default function ProfileTab() {
   const tastingsText = tastingCount === null ? "—" : String(tastingCount);
   const avgText = avgRating === null ? "—" : `${avgRating.toFixed(1)}`;
 
-  const closeActions = () => {
-    if (deleting) return;
-    setActionsOpen(false);
-    setTimeout(() => setActionsRow(null), 150);
-  };
+  const showActionsForRow = useCallback(
+    (row: { id: string; whiskey_name: string | null }) => {
+      const nm = (row.whiskey_name ?? "Whiskey").trim() || "Whiskey";
 
-  const editFromActions = () => {
-    if (!actionsRow) return;
-    closeActions();
-    router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(actionsRow.id)}`);
-  };
-
-  const deleteFromActions = async () => {
-    if (!actionsRow) return;
-
-    const nm = (actionsRow.whiskey_name ?? "Whiskey").trim() || "Whiskey";
-
-    Alert.alert("Delete tasting?", `This will permanently delete your tasting for “${nm}”.`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          if (deleting) return;
-          setDeleting(true);
-          try {
-            const { error } = await supabase.from("tastings").delete().eq("id", actionsRow.id);
-            if (error) throw new Error(error.message);
-
-            setActionsOpen(false);
-            setActionsRow(null);
-            await loadAll({ silent: true });
-          } catch (e: any) {
-            Alert.alert("Delete failed", String(e?.message ?? e));
-          } finally {
-            setDeleting(false);
-          }
+      Alert.alert(nm, "Choose an action", [
+        {
+          text: "Edit",
+          onPress: () => router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(row.id)}`),
         },
-      },
-    ]);
-  };
-
-  const actionsTitle = useMemo(() => {
-    const nm = (actionsRow?.whiskey_name ?? "").trim();
-    if (nm) return nm;
-    return "Tasting";
-  }, [actionsRow]);
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Delete tasting?",
+              `This will permanently delete your tasting for “${nm}”.`,
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      const { error } = await supabase.from("tastings").delete().eq("id", row.id);
+                      if (error) throw new Error(error.message);
+                      await loadAll({ silent: true });
+                    } catch (e: any) {
+                      Alert.alert("Delete failed", String(e?.message ?? e));
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ]);
+    },
+    [loadAll]
+  );
 
   if (loading) {
     return (
@@ -434,10 +416,7 @@ export default function ProfileTab() {
                         onPress={() =>
                           router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(r.id)}`)
                         }
-                        onLongPress={() => {
-                          setActionsRow({ id: r.id, whiskey_name: r.whiskey_name ?? null });
-                          setActionsOpen(true);
-                        }}
+                        onLongPress={() => showActionsForRow({ id: r.id, whiskey_name: r.whiskey_name ?? null })}
                         delayLongPress={260}
                         hitSlop={8}
                         style={({ pressed }) => ({
@@ -554,10 +533,7 @@ export default function ProfileTab() {
                       <Pressable
                         key={r.id}
                         onPress={() => router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(r.id)}`)}
-                        onLongPress={() => {
-                          setActionsRow({ id: r.id, whiskey_name: r.whiskey_name ?? null });
-                          setActionsOpen(true);
-                        }}
+                        onLongPress={() => showActionsForRow({ id: r.id, whiskey_name: r.whiskey_name ?? null })}
                         delayLongPress={260}
                         style={({ pressed }) => ({
                           flexDirection: "row",
@@ -591,110 +567,13 @@ export default function ProfileTab() {
 
               {recent.length > 0 ? (
                 <Text style={[type.microcopyItalic, { marginTop: 10, opacity: 0.65, color: colors.textPrimary }]}>
-                  Tip: press and hold a tasting to edit or delete.
+                  Tip: press and hold a tasting for options.
                 </Text>
               ) : null}
             </Card>
           </>
         )}
       </View>
-
-      {/* Premium Actions Bottom Sheet */}
-      <Modal visible={actionsOpen} transparent animationType="fade" onRequestClose={closeActions}>
-        <Pressable
-          onPress={closeActions}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.55)",
-            justifyContent: "flex-end",
-          }}
-        >
-          <Pressable
-            onPress={() => {}}
-            style={{
-              backgroundColor: colors.surface,
-              borderTopLeftRadius: 22,
-              borderTopRightRadius: 22,
-              padding: spacing.lg,
-              borderWidth: 1,
-              borderColor: colors.divider,
-              ...shadows.card,
-              gap: spacing.md,
-              paddingBottom: Math.max(spacing.lg, insets.bottom + spacing.lg),
-            }}
-          >
-            <View style={{ alignItems: "center", marginTop: 2, marginBottom: spacing.sm }}>
-              <View
-                style={{
-                  width: 44,
-                  height: 5,
-                  borderRadius: 999,
-                  backgroundColor: colors.divider,
-                  opacity: 0.9,
-                }}
-              />
-            </View>
-
-            <View style={{ gap: 4 }}>
-              <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>Tasting</Text>
-              <Text style={[type.body, { opacity: 0.75, color: colors.textPrimary }]} numberOfLines={2}>
-                {actionsTitle}
-              </Text>
-            </View>
-
-            <View style={{ height: 1, backgroundColor: colors.divider, opacity: 0.9 }} />
-
-            <Pressable
-              onPress={editFromActions}
-              disabled={deleting}
-              style={({ pressed }) => ({
-                borderRadius: radii.md,
-                paddingVertical: spacing.lg,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: colors.accent,
-                opacity: deleting ? 0.6 : pressed ? 0.92 : 1,
-              })}
-            >
-              <Text style={[type.button, { color: colors.background }]}>Edit</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={deleteFromActions}
-              disabled={deleting}
-              style={({ pressed }) => ({
-                borderRadius: radii.md,
-                paddingVertical: spacing.lg,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: colors.divider,
-                backgroundColor: pressed ? colors.highlight : colors.surface,
-                opacity: deleting ? 0.6 : 1,
-              })}
-            >
-              <Text style={[type.button, { color: colors.textPrimary }]}>{deleting ? "Deleting…" : "Delete"}</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={closeActions}
-              disabled={deleting}
-              style={({ pressed }) => ({
-                borderRadius: radii.md,
-                paddingVertical: spacing.lg,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: colors.divider,
-                backgroundColor: pressed ? colors.highlight : "transparent",
-                opacity: deleting ? 0.6 : 1,
-              })}
-            >
-              <Text style={[type.button, { color: colors.textPrimary }]}>Cancel</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </ScrollView>
   );
 }
