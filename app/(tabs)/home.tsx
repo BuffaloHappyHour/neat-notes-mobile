@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { radii } from "../../lib/radii";
@@ -71,6 +71,19 @@ function PrimaryButton({
 export default function HomeTab() {
   const [tapCount, setTapCount] = useState(0);
   const [lastTap, setLastTap] = useState<number | null>(null);
+
+  const didResetRef = useRef(false);
+
+  useEffect(() => {
+    if (didResetRef.current) return;
+    didResetRef.current = true;
+
+    const t = setTimeout(() => {
+      router.replace("/(tabs)/home");
+    }, 150);
+
+    return () => clearTimeout(t);
+  }, []);
 
   const bumpTap = useCallback((label: string) => {
     const t = Date.now();
