@@ -171,6 +171,9 @@ export default function SignInScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  const [rerenderTick, setRerenderTick] = useState(0);
+  const [sessionMessage, setSessionMessage] = useState("");
+
   const signIn = async () => {
     if (busy) return;
 
@@ -182,6 +185,7 @@ export default function SignInScreen() {
     }
 
     setBusy(true);
+    setSessionMessage("Running real sign in…");
 
     const { error } = await supabase.auth.signInWithPassword({
       email: em,
@@ -191,9 +195,11 @@ export default function SignInScreen() {
     setBusy(false);
 
     if (error) {
+      setSessionMessage(`Real sign in failed: ${error.message}`);
       return Alert.alert("Sign in failed", error.message);
     }
 
+    setSessionMessage("Real sign in succeeded.");
     router.replace("/(tabs)/home");
   };
 
@@ -252,6 +258,34 @@ export default function SignInScreen() {
     );
   };
 
+  const forceRerender = () => {
+    setRerenderTick((v) => v + 1);
+    setSessionMessage(`Forced rerender: ${Date.now()}`);
+  };
+
+  const runGetSession = async () => {
+    if (busy) return;
+
+    setBusy(true);
+    setSessionMessage("Running getSession()…");
+
+    try {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        setSessionMessage(`getSession failed: ${error.message}`);
+      } else if (data.session?.user) {
+        setSessionMessage(`getSession user: ${data.session.user.email ?? "signed in"}`);
+      } else {
+        setSessionMessage("getSession returned no session.");
+      }
+    } catch (e: any) {
+      setSessionMessage(`getSession threw: ${String(e?.message ?? e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -268,6 +302,37 @@ export default function SignInScreen() {
         <Text style={type.screenTitle}>
           {mode === "signin" ? "Sign In" : "Create Account"}
         </Text>
+
+        <Card
+          title="DEBUG: Auth Reset Lab"
+          subtitle="We’re testing which auth-related action unsticks navigation."
+        >
+          <Text style={[type.microcopyItalic, { opacity: 0.9 }]}>
+            Rerender Tick: {rerenderTick}
+          </Text>
+
+          {sessionMessage ? (
+            <Text style={[type.microcopyItalic, { opacity: 0.9, lineHeight: 20 }]}>
+              {sessionMessage}
+            </Text>
+          ) : null}
+
+          <View style={{ gap: spacing.md }}>
+            <ThemedButton
+              label="Force Rerender Only"
+              onPress={forceRerender}
+              disabled={busy}
+              tone="secondary"
+            />
+
+            <ThemedButton
+              label={busy ? "Working…" : "Run getSession()"}
+              onPress={runGetSession}
+              disabled={busy}
+              tone="secondary"
+            />
+          </View>
+        </Card>
 
         <Card
           title={mode === "signin" ? "Sign In" : "Create Account"}
@@ -294,7 +359,7 @@ export default function SignInScreen() {
           {mode === "signin" ? (
             <>
               <ThemedButton
-                label={busy ? "Working…" : "Sign In"}
+                label={busy ? "Working…" : "Real Sign In"}
                 onPress={signIn}
                 disabled={busy}
                 tone="primary"
