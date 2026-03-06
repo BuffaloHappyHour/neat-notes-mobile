@@ -330,6 +330,32 @@ export default function SignInScreen() {
               onPress={runGetSession}
               disabled={busy}
               tone="secondary"
+            />            
+            
+            <ThemedButton
+              label={busy ? "Working…" : "Run signOut()"}
+              onPress={async () => {
+                if (busy) return;
+
+                setBusy(true);
+                setSessionMessage("Running signOut()…");
+
+                try {
+                  const { error } = await supabase.auth.signOut();
+
+                  if (error) {
+                    setSessionMessage(`signOut failed: ${error.message}`);
+                  } else {
+                    setSessionMessage("signOut succeeded.");
+                  }
+                } catch (e: any) {
+                  setSessionMessage(`signOut threw: ${String(e?.message ?? e)}`);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              disabled={busy}
+              tone="secondary"
             />
           </View>
         </Card>
