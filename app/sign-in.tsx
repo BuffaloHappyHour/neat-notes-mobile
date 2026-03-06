@@ -1,11 +1,7 @@
 // app/sign-in.tsx
-import { Ionicons } from "@expo/vector-icons";
-import Constants from "expo-constants";
-import * as Linking from "expo-linking";
 import { router } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -16,7 +12,6 @@ import {
   View,
 } from "react-native";
 
-import { fetchMyProfile, upsertMyProfile } from "../lib/cloudProfile";
 import { supabase } from "../lib/supabase";
 
 import { radii } from "../lib/radii";
@@ -24,8 +19,6 @@ import { shadows } from "../lib/shadows";
 import { spacing } from "../lib/spacing";
 import { colors } from "../lib/theme";
 import { type } from "../lib/typography";
-
-/* ---------- Stable UI helpers ---------- */
 
 type InputProps = React.ComponentProps<typeof TextInput>;
 
@@ -160,116 +153,23 @@ function PasswordRow({
           opacity: pressed ? 0.7 : 1,
         })}
       >
-        <Ionicons
-          name={show ? "eye-off-outline" : "eye-outline"}
-          size={20}
-          color={colors.textSecondary}
-        />
+        <Text style={[type.microcopyItalic, { color: colors.textSecondary }]}>
+          {show ? "Hide" : "Show"}
+        </Text>
       </Pressable>
     </View>
   );
 }
 
-/* -------------------- Deep link helpers (kept for non-reset auth flows) -------------------- */
-
-function getAppScheme(): string | null {
-  const scheme =
-    (Constants.expoConfig as any)?.scheme ||
-    (Constants.manifest as any)?.scheme ||
-    null;
-
-  if (typeof scheme === "string" && scheme.trim()) return scheme.trim();
-  return null;
-}
-
-function buildAuthCallbackUrl(): string {
-  const scheme = getAppScheme();
-
-  try {
-    const url = Linking.createURL("auth/callback", scheme ? { scheme } : undefined);
-    return url;
-  } catch {
-    if (scheme) return `${scheme}://auth/callback`;
-    return "neatnotes://auth/callback";
-  }
-}
-
-/* -------------------- Screen -------------------- */
-
-type Mode = "signin" | "signup" | "signupName" | "signedIn";
+type Mode = "signin" | "signup";
 
 export default function SignInScreen() {
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-
   const [mode, setMode] = useState<Mode>("signin");
-
-  const [authedEmail, setAuthedEmail] = useState<string>("");
-  const [nameSaved, setNameSaved] = useState<string>("");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  const [nameInput, setNameInput] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
-  const [justSignedUpEmail, setJustSignedUpEmail] = useState<string>("");
-  const [signupEmail, setSignupEmail] = useState<string>("");
-
-  const titleText = useMemo(() => {
-    if (mode === "signup" || mode === "signupName") return "Create Account";
-    if (mode === "signedIn") return "Account";
-    return "Sign In";
-  }, [mode]);
-
-  async function loadSessionOnce() {
-    setLoading(true);
-
-    const { data } = await supabase.auth.getSession();
-    const user = data.session?.user;
-
-    if (!user) {
-      setMode("signin");
-      setAuthedEmail("");
-      setNameSaved("");
-      setLoading(false);
-      return;
-    }
-
-    setMode("signedIn");
-    setAuthedEmail(user.email ?? "");
-
-    try {
-      const profile = await fetchMyProfile();
-      const fn = (profile?.first_name ?? "").trim();
-      setNameSaved(fn);
-    } catch {
-      setNameSaved("");
-    }
-
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    loadSessionOnce();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const goToCreateAccount = () => {
-    setJustSignedUpEmail("");
-    setSignupEmail("");
-    setNameInput("");
-    setShowPassword(false);
-    setMode("signup");
-  };
-
-  const goToSignIn = () => {
-    setJustSignedUpEmail("");
-    setSignupEmail("");
-    setNameInput("");
-    setShowPassword(false);
-    setMode("signin");
-  };
 
   const signIn = async () => {
     if (busy) return;
@@ -291,47 +191,13 @@ export default function SignInScreen() {
     setBusy(false);
 
     if (error) {
-      const msg = error.message.toLowerCase();
-
-      if (msg.includes("email") && (msg.includes("confirm") || msg.includes("verified"))) {
-        return Alert.alert(
-          "Verify your email",
-          "Please verify your email address, then try signing in again.\n\nIf you don’t see the email, check spam."
-        );
-      }
-
-      if (msg.includes("invalid login credentials")) {
-        return Alert.alert(
-          "Sign in failed",
-          "That email/password combo didn’t work.\n\nIf you don’t have an account yet, tap Create Account.\nIf you forgot your password, tap Reset Password.",
-          [
-            { text: "Reset Password", onPress: () => onForgotPassword() },
-            { text: "Create Account", onPress: goToCreateAccount },
-            { text: "OK", style: "cancel" },
-          ]
-        );
-      }
-
       return Alert.alert("Sign in failed", error.message);
-    }
-
-    setPassword("");
-    setJustSignedUpEmail("");
-
-    await loadSessionOnce();
-
-    const nm = nameInput.trim();
-    if (nm) {
-      try {
-        await upsertMyProfile({ first_name: nm });
-        setNameSaved(nm);
-      } catch {}
     }
 
     router.replace("/(tabs)/home");
   };
 
-  const createAccountOneTap = async () => {
+  const createAccount = async () => {
     if (busy) return;
 
     const em = email.trim();
@@ -343,7 +209,7 @@ export default function SignInScreen() {
 
     setBusy(true);
 
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email: em,
       password: pw,
     });
@@ -351,42 +217,14 @@ export default function SignInScreen() {
     setBusy(false);
 
     if (error) {
-      const msg = error.message.toLowerCase();
-
-      if (msg.includes("already") || msg.includes("registered") || msg.includes("user already")) {
-        return Alert.alert(
-          "Account already exists",
-          "That email is already registered.\n\nPlease sign in with that email, or reset your password if you forgot it.",
-          [
-            { text: "Reset Password", onPress: () => onForgotPassword() },
-            { text: "Go to Sign In", onPress: goToSignIn },
-            { text: "OK", style: "cancel" },
-          ]
-        );
-      }
-
       return Alert.alert("Create account failed", error.message);
     }
-
-    setJustSignedUpEmail(em);
-    setSignupEmail(em);
 
     Alert.alert(
       "Check your email",
       "We sent a confirmation email. Verify your address, then return and sign in."
     );
-
-    setMode("signupName");
-
-    const user = data.session?.user;
-    if (user) {
-      // fine
-    }
-  };
-
-  const continueAfterName = async () => {
     setMode("signin");
-    Alert.alert("Almost there", "Once you confirm your email, sign in and we’ll apply your name.");
   };
 
   const onForgotPassword = async () => {
@@ -399,11 +237,7 @@ export default function SignInScreen() {
 
     setBusy(true);
 
-    // ✅ PATTERN B: send the user to your WEB reset page (Vercel).
-    // This must match Supabase Redirect URLs allowlist.
     const redirectTo = "https://neatnotes-web.vercel.app/auth/reset";
-    console.log("RESET redirectTo =", redirectTo);
-
     const { error } = await supabase.auth.resetPasswordForEmail(em, { redirectTo });
 
     setBusy(false);
@@ -414,27 +248,9 @@ export default function SignInScreen() {
 
     Alert.alert(
       "Reset email sent",
-      "Open the reset email and tap the button. You’ll land on a secure Neat Notes reset page to set a new password."
+      "Open the reset email and tap the button. You’ll land on a secure reset page."
     );
   };
-
-  if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: colors.background,
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        <ActivityIndicator />
-        <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.7 }]}>
-          Checking session…
-        </Text>
-      </View>
-    );
-  }
 
   return (
     <KeyboardAvoidingView
@@ -449,161 +265,80 @@ export default function SignInScreen() {
           paddingBottom: spacing.xl * 2,
         }}
       >
-        <Text style={type.screenTitle}>{titleText}</Text>
+        <Text style={type.screenTitle}>
+          {mode === "signin" ? "Sign In" : "Create Account"}
+        </Text>
 
-        {mode === "signedIn" ? (
-          <Card
-            title={nameSaved ? `Welcome, ${nameSaved}.` : "You’re signed in."}
-            subtitle="Your tastings are synced to the cloud."
-          >
-            <Text style={[type.body, { opacity: 0.85 }]}>
-              Signed in as{" "}
-              <Text style={{ fontWeight: "800", color: colors.textPrimary }}>
-                {authedEmail || "(no email)"}
-              </Text>
-            </Text>
+        <Card
+          title={mode === "signin" ? "Sign In" : "Create Account"}
+          subtitle="Static sign-in screen for iOS navigation isolate test."
+        >
+          <ThemedInput
+            placeholder="Email"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            returnKeyType="next"
+          />
 
-            <ThemedButton
-              label="Go Home"
-              onPress={() => router.replace("/(tabs)/home")}
-              disabled={busy}
-              tone="primary"
-            />
+          <PasswordRow
+            value={password}
+            onChangeText={setPassword}
+            show={showPassword}
+            onToggleShow={() => setShowPassword((v) => !v)}
+            returnKeyType="done"
+            onSubmitEditing={mode === "signin" ? signIn : createAccount}
+          />
 
-            <ThemedButton
-              label={busy ? "Working…" : "Sign Out"}
-              onPress={async () => {
-                if (busy) return;
-                setBusy(true);
-                const { error } = await supabase.auth.signOut();
-                setBusy(false);
-                if (error) return Alert.alert("Sign out failed", error.message);
-                await loadSessionOnce();
-              }}
-              disabled={busy}
-              tone="secondary"
-            />
-          </Card>
-        ) : mode === "signupName" ? (
-          <Card
-            title="Optional"
-            subtitle={
-              signupEmail
-                ? `Add a name for personalization (email: ${signupEmail}).`
-                : "Add a name for personalization."
-            }
-          >
-            <ThemedInput
-              placeholder="Name (optional)"
-              value={nameInput}
-              onChangeText={setNameInput}
-              autoCapitalize="words"
-              returnKeyType="done"
-            />
+          {mode === "signin" ? (
+            <>
+              <ThemedButton
+                label={busy ? "Working…" : "Sign In"}
+                onPress={signIn}
+                disabled={busy}
+                tone="primary"
+              />
 
-            <ThemedButton
-              label={busy ? "Working…" : "Continue"}
-              onPress={continueAfterName}
-              disabled={busy}
-              tone="primary"
-            />
+              <Pressable
+                onPress={onForgotPassword}
+                disabled={busy}
+                style={({ pressed }) => ({
+                  alignSelf: "flex-start",
+                  opacity: busy ? 0.6 : pressed ? 0.75 : 1,
+                  paddingVertical: 6,
+                })}
+              >
+                <Text style={[type.microcopyItalic, { color: colors.accent }]}>
+                  Forgot password?
+                </Text>
+              </Pressable>
 
-            <ThemedButton
-              label="Skip"
-              onPress={() => setMode("signin")}
-              disabled={busy}
-              tone="secondary"
-            />
-          </Card>
-        ) : mode === "signup" ? (
-          <Card title="Create Account" subtitle="One tap. Then confirm your email.">
-            <ThemedInput
-              placeholder="Email"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              returnKeyType="next"
-            />
+              <ThemedButton
+                label="Create Account"
+                onPress={() => setMode("signup")}
+                disabled={busy}
+                tone="secondary"
+              />
+            </>
+          ) : (
+            <>
+              <ThemedButton
+                label={busy ? "Working…" : "Create Account"}
+                onPress={createAccount}
+                disabled={busy}
+                tone="primary"
+              />
 
-            <PasswordRow
-              value={password}
-              onChangeText={setPassword}
-              show={showPassword}
-              onToggleShow={() => setShowPassword((v) => !v)}
-              returnKeyType="done"
-              onSubmitEditing={createAccountOneTap}
-            />
-
-            <ThemedButton
-              label={busy ? "Working…" : "Create Account"}
-              onPress={createAccountOneTap}
-              disabled={busy}
-              tone="primary"
-            />
-
-            <ThemedButton
-              label={busy ? "Working…" : "I already have an account"}
-              onPress={goToSignIn}
-              disabled={busy}
-              tone="secondary"
-            />
-
-            {justSignedUpEmail ? (
-              <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
-                Confirmation sent to {justSignedUpEmail}.
-              </Text>
-            ) : null}
-          </Card>
-        ) : (
-          <Card title="Sign In" subtitle="Sign in to keep a record of your tastings">
-            <ThemedInput
-              placeholder="Email"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              returnKeyType="next"
-            />
-
-            <PasswordRow
-              value={password}
-              onChangeText={setPassword}
-              show={showPassword}
-              onToggleShow={() => setShowPassword((v) => !v)}
-              returnKeyType="done"
-              onSubmitEditing={signIn}
-            />
-
-            <ThemedButton
-              label={busy ? "Working…" : "Sign In"}
-              onPress={signIn}
-              disabled={busy}
-              tone="primary"
-            />
-
-            <Pressable
-              onPress={onForgotPassword}
-              disabled={busy}
-              style={({ pressed }) => ({
-                alignSelf: "flex-start",
-                opacity: busy ? 0.6 : pressed ? 0.75 : 1,
-                paddingVertical: 6,
-              })}
-            >
-              <Text style={[type.microcopyItalic, { color: colors.accent }]}>
-                Forgot password?
-              </Text>
-            </Pressable>
-
-            <ThemedButton
-              label={busy ? "Working…" : "Create Account"}
-              onPress={goToCreateAccount}
-              disabled={busy}
-              tone="secondary"
-            />
-          </Card>
-        )}
+              <ThemedButton
+                label="Back to Sign In"
+                onPress={() => setMode("signin")}
+                disabled={busy}
+                tone="secondary"
+              />
+            </>
+          )}
+        </Card>
       </ScrollView>
     </KeyboardAvoidingView>
   );
