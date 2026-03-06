@@ -180,6 +180,8 @@ export async function saveCloudTasting(params: {
       whiskeyId: safeWhiskeyId,
       rating: Number(rating),
       flavorTags: mergedFlavorTags.length ? mergedFlavorTags : null,
+      textureLevel: textureLevel,
+      proofIntensity: proofIntensity,
       // dislikes removed from mirror payload
       dislikeTags: null,
       personalNotes: personalOrNull,

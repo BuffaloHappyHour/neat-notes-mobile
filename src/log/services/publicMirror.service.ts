@@ -63,6 +63,8 @@ export async function upsertPublicMirror(params: {
   sourceTastingId: string;
   whiskeyId: string | null;
   rating: number;
+  textureLevel: number | null;
+  proofIntensity: number | null;
   flavorTags: string[] | null;
   dislikeTags: string[] | null;
   personalNotes: string | null;
@@ -80,6 +82,8 @@ export async function upsertPublicMirror(params: {
     sourceTastingId,
     whiskeyId,
     rating,
+    textureLevel,
+    proofIntensity,
     flavorTags,
     dislikeTags,
     personalNotes,
@@ -120,6 +124,8 @@ export async function upsertPublicMirror(params: {
         flavor_tags: flavorTags,
         dislike_tags: dislikeTags,
         personal_notes: personalNotes,
+        texture_level: textureLevel,
+        proof_intensity: proofIntensity,
       })
       .eq("id", publicTastingId);
 
@@ -135,6 +141,8 @@ export async function upsertPublicMirror(params: {
         dislike_tags: dislikeTags,
         personal_notes: personalNotes,
         created_at: createdAt,
+        texture_level: textureLevel,
+        proof_intensity: proofIntensity,
       })
       .select("id")
       .maybeSingle();
