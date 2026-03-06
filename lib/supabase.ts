@@ -56,8 +56,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: SafeStorage as any,
     storageKey: "neatnotes-auth",
-    autoRefreshToken: true,
-    persistSession: true,
+    autoRefreshToken: false,
+    persistSession: false,
     detectSessionInUrl: false, // required for React Native (we handle deep links manually)
   },
 });
