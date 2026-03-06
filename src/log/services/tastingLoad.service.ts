@@ -8,6 +8,8 @@ export type LoadedTasting = {
   whiskeyName: string;
   whiskeyId: string | null;
   rating: number | null;
+  textureLevel: number | null;
+  proofIntensity: number | null;
   noseReaction: string | null;
   tasteReaction: string | null;
   flavorTags: string[];
@@ -27,6 +29,8 @@ export async function loadTastingById(tastingId: string): Promise<LoadedTasting 
       whiskey_name,
       whiskey_id,
       rating,
+      texture_level,
+      proof_intensity,
       nose_reaction,
       taste_reaction,
       flavor_tags,
@@ -52,13 +56,20 @@ export async function loadTastingById(tastingId: string): Promise<LoadedTasting 
       data.rating == null || !Number.isFinite(Number(data.rating))
         ? null
         : Number(data.rating),
+    textureLevel:
+      data.texture_level == null || !Number.isFinite(Number(data.texture_level))
+        ? null
+        : Number(data.texture_level),
+    proofIntensity:
+      data.proof_intensity == null || !Number.isFinite(Number(data.proof_intensity))
+        ? null
+        : Number(data.proof_intensity),
     noseReaction: safeText(data.nose_reaction) || null,
     tasteReaction: safeText(data.taste_reaction) || null,
     flavorTags: Array.isArray(data.flavor_tags) ? data.flavor_tags : [],
     dislikeTags: Array.isArray(data.dislike_tags) ? data.dislike_tags : [],
     personalNotes: safeText(data.personal_notes),
-    sourceType:
-      data.source_type === "bar" ? "bar" : "purchased",
+    sourceType: data.source_type === "bar" ? "bar" : "purchased",
     barName: safeText(data.bar_name),
   };
 }

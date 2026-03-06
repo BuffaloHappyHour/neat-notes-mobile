@@ -41,6 +41,8 @@ export async function saveCloudTasting(params: {
   nose: Reaction;
   taste: Reaction;
   personalNotes: string;
+  textureLevel: number | null;
+  proofIntensity: number | null;
 
   // whiskey + tags
   whiskeyId: string | null;
@@ -75,6 +77,8 @@ export async function saveCloudTasting(params: {
 
     name,
     rating,
+    textureLevel,
+    proofIntensity,
     nose,
     taste,
     personalNotes,
@@ -129,6 +133,8 @@ export async function saveCloudTasting(params: {
     whiskey_name: safeName,
     whiskey_id: safeWhiskeyId,
     rating: clamp100(Number(rating)),
+    texture_level: textureLevel,
+    proof_intensity: proofIntensity,
     nose_reaction: reactionLabel(nose) || null,
     taste_reaction: reactionLabel(taste) || null,
     flavor_tags: mergedFlavorTags.length ? mergedFlavorTags : null,

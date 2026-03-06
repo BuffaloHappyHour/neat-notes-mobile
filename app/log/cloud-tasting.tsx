@@ -16,8 +16,10 @@ import {
 import { Card } from "../../components/ui/Card";
 import { RefineModal } from "../../src/log/components/refine/RefineModal";
 import { BottleDetailsCard } from "../../src/log/components/tasting/BottleDetailsCard";
+import FlavorNotesSection from "../../src/log/components/tasting/FlavorNotesSection";
 import { QuickNotesSection } from "../../src/log/components/tasting/QuickNotesSection";
 import RatingSection from "../../src/log/components/tasting/RatingSection";
+import TastingSignalsSection from "../../src/log/components/tasting/TastingSignalsSection";
 import { Pill } from "../../src/log/components/ui/Pill";
 import { type Reaction } from "../../src/log/components/ui/ReactionList";
 import { SectionGroupHeader } from "../../src/log/components/ui/SectionGroupHeader";
@@ -237,6 +239,9 @@ export default function CloudTastingScreen() {
   const [name, setName] = useState(routeWhiskeyName || "");
   const [rating, setRating] = useState<number | null>(null);
 
+  const [textureLevel, setTextureLevel] = useState<number | null>(null);
+  const [proofIntensity, setProofIntensity] = useState<number | null>(null);
+
   const [nose, setNose] = useState<Reaction>(null);
   const [taste, setTaste] = useState<Reaction>(null);
 
@@ -435,6 +440,8 @@ export default function CloudTastingScreen() {
         setName(loaded.whiskeyName);
         setWhiskeyId(loaded.whiskeyId);
         setRating(loaded.rating);
+        setTextureLevel(loaded.textureLevel);
+        setProofIntensity(loaded.proofIntensity);
 
         setNose(loaded.noseReaction as any);
         setTaste(loaded.tasteReaction as any);
@@ -615,6 +622,8 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
 
       name,
       rating,
+      textureLevel,
+      proofIntensity,
       nose,
       taste,
       personalNotes,
@@ -908,21 +917,32 @@ function onEdit() {
   </View>
 </View>
           <QuickNotesSection
-            locked={locked}
-            nose={nose}
-            setNose={setNose}
-            taste={taste}
-            setTaste={setTaste}
-            allTopLevelLabels={ALL_TOP_LEVEL_LABELS}
-            flavorTags={flavorTags}
-            toggleFlavor={toggleFlavor}
-            additionalNotesLine={additionalNotesLine}
-            openRefine={openRefine}
-            selectedNodeIds={selectedNodeIds}
-            selectedCountText={selectedCountText}
-            selectedNodeLabelsPreview={selectedNodeLabelsPreview}
-            scopedRootIds={scopedRootIds}
-          />
+  locked={locked}
+  nose={nose}
+  setNose={setNose}
+  taste={taste}
+  setTaste={setTaste}
+/>
+
+<TastingSignalsSection
+  locked={locked}
+  textureLevel={textureLevel}
+  proofIntensity={proofIntensity}
+  setTextureLevel={setTextureLevel}
+  setProofIntensity={setProofIntensity}
+/>
+
+<FlavorNotesSection
+  locked={locked}
+  allTopLevelLabels={ALL_TOP_LEVEL_LABELS}
+  flavorTags={flavorTags}
+  toggleFlavor={toggleFlavor}
+  additionalNotesLine={additionalNotesLine}
+  openRefine={openRefine}
+  selectedNodeIds={selectedNodeIds}
+  selectedCountText={selectedCountText}
+  selectedNodeLabelsPreview={selectedNodeLabelsPreview}
+/>
       
           {/* Source */}
           <Card tight>
