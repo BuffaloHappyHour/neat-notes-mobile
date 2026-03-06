@@ -1,38 +1,9 @@
-import { useEffect } from "react";
 import { Stack } from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
-import { useFonts } from "expo-font";
-
-import {
-  CormorantGaramond_400Regular,
-  CormorantGaramond_400Regular_Italic,
-  CormorantGaramond_600SemiBold,
-} from "@expo-google-fonts/cormorant-garamond";
-
-import {
-  Montserrat_400Regular,
-  Montserrat_500Medium,
-} from "@expo-google-fonts/montserrat";
+import React from "react";
 
 import { colors } from "../lib/theme";
 
-SplashScreen.preventAutoHideAsync().catch(() => {});
-
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
-    CormorantGaramond_400Regular,
-    CormorantGaramond_400Regular_Italic,
-    CormorantGaramond_600SemiBold,
-    Montserrat_400Regular,
-    Montserrat_500Medium,
-  });
-
-  useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
-  }, [fontsLoaded]);
-
-  if (!fontsLoaded) return null;
-
   return (
     <Stack
       screenOptions={{
@@ -43,7 +14,6 @@ export default function RootLayout() {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
-      {/* This removes the weird "(tabs)" header entirely */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   );
