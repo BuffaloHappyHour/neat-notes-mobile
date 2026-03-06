@@ -65,6 +65,7 @@ export async function upsertPublicMirror(params: {
   rating: number;
   textureLevel: number | null;
   proofIntensity: number | null;
+  flavorIntensity: number | null;
   flavorTags: string[] | null;
   dislikeTags: string[] | null;
   personalNotes: string | null;
@@ -84,6 +85,7 @@ export async function upsertPublicMirror(params: {
     rating,
     textureLevel,
     proofIntensity,
+    flavorIntensity,
     flavorTags,
     dislikeTags,
     personalNotes,
@@ -121,11 +123,12 @@ export async function upsertPublicMirror(params: {
       .update({
         whiskey_id: whiskeyId,
         rating: Number(rating),
+        texture_level: textureLevel,
+        proof_intensity: proofIntensity,
+        flavor_intensity: flavorIntensity,
         flavor_tags: flavorTags,
         dislike_tags: dislikeTags,
         personal_notes: personalNotes,
-        texture_level: textureLevel,
-        proof_intensity: proofIntensity,
       })
       .eq("id", publicTastingId);
 
@@ -137,12 +140,13 @@ export async function upsertPublicMirror(params: {
         source_tasting_id: sourceTastingId,
         whiskey_id: whiskeyId,
         rating: Number(rating),
+        texture_level: textureLevel,
+        proof_intensity: proofIntensity,
+        flavor_intensity: flavorIntensity,
         flavor_tags: flavorTags,
         dislike_tags: dislikeTags,
         personal_notes: personalNotes,
         created_at: createdAt,
-        texture_level: textureLevel,
-        proof_intensity: proofIntensity,
       })
       .select("id")
       .maybeSingle();
@@ -164,34 +168,33 @@ export async function upsertPublicMirror(params: {
   if (delErr) throw new Error(delErr.message);
 
   const clean = uniqUuidsKeepOrder(selectedNodeIds);
-if (!clean.length) return;
+  if (!clean.length) return;
 
-// ✅ verify node ids exist in flavor_nodes_v2
-const { data: existingNodes, error: nodeErr } = await supabase
-  .from("flavor_nodes_v2")
-  .select("id")
-  .in("id", clean);
+  // ✅ verify node ids exist in flavor_nodes_v2
+  const { data: existingNodes, error: nodeErr } = await supabase
+    .from("flavor_nodes_v2")
+    .select("id")
+    .in("id", clean);
 
-if (nodeErr) throw new Error(nodeErr.message);
+  if (nodeErr) throw new Error(nodeErr.message);
 
-const existingSet = new Set((existingNodes ?? []).map((r: any) => safeText(r.id)));
-const valid = clean.filter((id) => existingSet.has(id));
-const validFinal = valid.filter((id) => isUuid(id));
-if (!validFinal.length) return;
+  const existingSet = new Set((existingNodes ?? []).map((r: any) => safeText(r.id)));
+  const valid = clean.filter((id) => existingSet.has(id));
+  const validFinal = valid.filter((id) => isUuid(id));
+  if (!validFinal.length) return;
 
-const inserts = validFinal.map((nodeId) => {
-  const s = sentimentById?.[nodeId] ?? "NEUTRAL";
-  return {
-    public_tasting_id: publicTastingId,
-    node_id: nodeId,
-    sentiment: mapSentimentToPublicEnum(s),
-  };
-});
+  const inserts = validFinal.map((nodeId) => {
+    const s = sentimentById?.[nodeId] ?? "NEUTRAL";
+    return {
+      public_tasting_id: publicTastingId,
+      node_id: nodeId,
+      sentiment: mapSentimentToPublicEnum(s),
+    };
+  });
 
   const { error: insKidsErr } = await supabase.from("public_tasting_flavor_nodes").insert(inserts);
 
   if (insKidsErr) {
-    // If someone forgets to apply the FK migration, this is the error they'll hit.
     const msg = String(insKidsErr.message ?? "");
     throw new Error(
       msg.includes("violates foreign key constraint")

@@ -133,8 +133,10 @@ type Props = {
   locked?: boolean;
   textureLevel: number | null;
   proofIntensity: number | null;
+  flavorIntensity: number | null;
   setTextureLevel: (value: number) => void;
   setProofIntensity: (value: number) => void;
+    setFlavorIntensity: (value: number) => void;
 };
 
 const TEXTURE_OPTIONS: SignalOption[] = [
@@ -152,13 +154,22 @@ const PROOF_INTENSITY_OPTIONS: SignalOption[] = [
   { value: 4, label: "Bold" },
   { value: 5, label: "Intense" },
 ];
+const FLAVOR_INTENSITY_OPTIONS: SignalOption[] = [
+  { value: 1, label: "Delicate" },
+  { value: 2, label: "Light" },
+  { value: 3, label: "Balanced" },
+  { value: 4, label: "Bold" },
+  { value: 5, label: "Explosive" },
+];
 
 export default function TastingSignalsSection({
   locked,
   textureLevel,
   proofIntensity,
+    flavorIntensity,
   setTextureLevel,
   setProofIntensity,
+    setFlavorIntensity,
 }: Props) {
   return (
     <View style={{ gap: spacing.md, marginTop: spacing.sm }}>
@@ -184,6 +195,14 @@ export default function TastingSignalsSection({
         locked={locked}
         options={PROOF_INTENSITY_OPTIONS}
         onChange={setProofIntensity}
+      />
+        <SignalRow
+        title="Flavor Intensity"
+        subtitle="How bold and concentrated did the overall flavor feel?"
+        value={flavorIntensity}
+        locked={locked}
+        options={FLAVOR_INTENSITY_OPTIONS}
+        onChange={setFlavorIntensity}
       />
     </View>
   );

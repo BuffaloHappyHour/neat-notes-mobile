@@ -241,6 +241,7 @@ export default function CloudTastingScreen() {
 
   const [textureLevel, setTextureLevel] = useState<number | null>(null);
   const [proofIntensity, setProofIntensity] = useState<number | null>(null);
+  const [flavorIntensity, setFlavorIntensity] = useState<number | null>(null);
 
   const [nose, setNose] = useState<Reaction>(null);
   const [taste, setTaste] = useState<Reaction>(null);
@@ -624,6 +625,7 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
       rating,
       textureLevel,
       proofIntensity,
+      flavorIntensity,
       nose,
       taste,
       personalNotes,
@@ -928,8 +930,10 @@ function onEdit() {
   locked={locked}
   textureLevel={textureLevel}
   proofIntensity={proofIntensity}
+  flavorIntensity={flavorIntensity}
   setTextureLevel={setTextureLevel}
   setProofIntensity={setProofIntensity}
+  setFlavorIntensity={setFlavorIntensity}
 />
 
 <FlavorNotesSection

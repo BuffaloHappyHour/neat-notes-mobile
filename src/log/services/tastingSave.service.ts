@@ -38,11 +38,12 @@ export async function saveCloudTasting(params: {
   // form values
   name: string;
   rating: number | null;
+  textureLevel: number | null;
+  proofIntensity: number | null;
+  flavorIntensity: number | null;
   nose: Reaction;
   taste: Reaction;
   personalNotes: string;
-  textureLevel: number | null;
-  proofIntensity: number | null;
 
   // whiskey + tags
   whiskeyId: string | null;
@@ -79,6 +80,7 @@ export async function saveCloudTasting(params: {
     rating,
     textureLevel,
     proofIntensity,
+    flavorIntensity,
     nose,
     taste,
     personalNotes,
@@ -135,6 +137,7 @@ export async function saveCloudTasting(params: {
     rating: clamp100(Number(rating)),
     texture_level: textureLevel,
     proof_intensity: proofIntensity,
+    flavor_intensity: flavorIntensity,
     nose_reaction: reactionLabel(nose) || null,
     taste_reaction: reactionLabel(taste) || null,
     flavor_tags: mergedFlavorTags.length ? mergedFlavorTags : null,
@@ -179,9 +182,10 @@ export async function saveCloudTasting(params: {
       sourceTastingId,
       whiskeyId: safeWhiskeyId,
       rating: Number(rating),
-      flavorTags: mergedFlavorTags.length ? mergedFlavorTags : null,
       textureLevel: textureLevel,
       proofIntensity: proofIntensity,
+      flavorIntensity: flavorIntensity,
+      flavorTags: mergedFlavorTags.length ? mergedFlavorTags : null,
       // dislikes removed from mirror payload
       dislikeTags: null,
       personalNotes: personalOrNull,
