@@ -1,45 +1,62 @@
 // app/(tabs)/_layout.tsx
+import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import React from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Platform, Pressable, ViewStyle } from "react-native";
 
 import { colors } from "../../lib/theme";
-import { type } from "../../lib/typography";
 
-function DebugTabButton(props: any) {
-  // props includes: onPress, accessibilityState, children, style, etc.
-  const selected = !!props?.accessibilityState?.selected;
+function DebugTabButton({
+  accessibilityState,
+  children,
+  onLongPress,
+  onPress,
+  onPressIn,
+  style,
+  testID,
+  accessibilityLabel,
+}: BottomTabBarButtonProps) {
+  const selected = !!accessibilityState?.selected;
 
   return (
     <Pressable
-      {...props}
+      accessibilityRole="button"
+      accessibilityState={accessibilityState}
+      accessibilityLabel={accessibilityLabel}
+      testID={testID}
+      onLongPress={onLongPress}
+      onPressIn={(e) => {
+        console.log("[TAB PRESS IN]", {
+          selected,
+          pageX: e.nativeEvent.pageX,
+          pageY: e.nativeEvent.pageY,
+        });
+        onPressIn?.(e);
+      }}
       onPress={(e) => {
         console.log("[TAB PRESS]", {
           selected,
-          // @ts-ignore
-          pageX: e?.nativeEvent?.pageX,
-          // @ts-ignore
-          pageY: e?.nativeEvent?.pageY,
+          pageX: e.nativeEvent.pageX,
+          pageY: e.nativeEvent.pageY,
         });
-        props?.onPress?.(e);
+        onPress?.(e);
       }}
-      style={({ pressed }) => [
-        props.style,
+      style={[
+        style as ViewStyle,
         {
-          // Visualize the *actual* hitbox
           borderWidth: 1,
-          borderColor: selected ? "rgba(190,150,99,0.9)" : "rgba(255,255,255,0.25)",
+          borderColor: selected
+            ? "rgba(190,150,99,0.9)"
+            : "rgba(255,255,255,0.25)",
           borderRadius: 12,
           marginHorizontal: 6,
           marginVertical: 6,
-          opacity: pressed ? 0.85 : 1,
+          backgroundColor: "rgba(255,0,0,0.06)",
         },
       ]}
     >
-      <View style={{ alignItems: "center", justifyContent: "center" }}>
-        {props.children}
-      </View>
+      {children}
     </Pressable>
   );
 }
@@ -50,19 +67,16 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textPrimary ?? "rgba(255,255,255,0.55)",
+        tabBarInactiveTintColor:
+          colors.textPrimary ?? "rgba(255,255,255,0.55)",
         tabBarLabelStyle: {
           fontSize: 11,
-          // IMPORTANT: remove custom font for this test
-          // fontFamily: type?.body?.fontFamily,
         },
         tabBarStyle: {
           backgroundColor: colors.background,
           borderTopColor: "rgba(255,255,255,0.10)",
           borderTopWidth: Platform.OS === "ios" ? 0.5 : 1,
         },
-
-        // ✅ The whole point of this build:
         tabBarButton: (props) => <DebugTabButton {...props} />,
       }}
     >
