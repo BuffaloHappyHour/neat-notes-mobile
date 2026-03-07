@@ -1,7 +1,6 @@
 // app/_layout.tsx
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
 import React, { useMemo } from "react";
 import { ImageBackground, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -21,30 +20,24 @@ import {
 
 import { colors } from "../lib/theme";
 
-// Keep splash until fonts are loaded
-SplashScreen.preventAutoHideAsync().catch(() => {});
-
 export default function RootLayout() {
-  // Load BOTH families (Cormorant + Montserrat)
-  const [cormorantLoaded] = useCormorantFonts({
+  // Load fonts, but DO NOT block router startup on them
+  useCormorantFonts({
     CormorantGaramond_400Regular,
     CormorantGaramond_400Regular_Italic,
     CormorantGaramond_600SemiBold,
   });
 
-  const [montserratLoaded] = useMontserratFonts({
+  useMontserratFonts({
     Montserrat_400Regular,
     Montserrat_500Medium,
   });
-
-  const fontsLoaded = cormorantLoaded && montserratLoaded;
 
   const navTheme = useMemo(() => {
     return {
       ...DarkTheme,
       colors: {
         ...DarkTheme.colors,
-        // ✅ removes the white layer so ImageBackground shows
         background: "transparent",
         card: "transparent",
         border: "transparent",
@@ -55,12 +48,6 @@ export default function RootLayout() {
     };
   }, []);
 
-  React.useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
-  }, [fontsLoaded]);
-
-  if (!fontsLoaded) return null;
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={navTheme}>
@@ -69,7 +56,6 @@ export default function RootLayout() {
           style={styles.bg}
           resizeMode="cover"
         >
-          {/* subtle dark wash so text/cards feel grounded */}
           <View style={styles.tint} />
 
           <Stack
