@@ -189,7 +189,7 @@ export default function ProfileTab() {
           paddingHorizontal: spacing.lg,
           paddingTop: spacing.xl + spacing.lg,
           paddingBottom: spacing.xl * 2,
-          gap: spacing.lg,
+          gap: spacing.xl,
         }}
       >
         <ProfileHeader
@@ -220,92 +220,76 @@ export default function ProfileTab() {
   </View>
 ) : null}
 
-{/* Quick stats (tastings + avg rating) */}
-<GlassCard>
-  <SectionHeader
-    title="Quick stats"
-    subtitle="A snapshot of your journal so far."
-  />
-  <Divider tight />
-  <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
-    <YourStatsCard
-      embedded
-      tastingsText={tastingsText}
-      avgText={avgText}
-      top5={[]}                // 👈 hides Top 5 for now
-      onLongPressRow={openActionsForRow}
-    />
-  </View>
-</GlassCard>
-
 <InsightsCTA
   isPremium={false}
   onPress={() => router.push("/insights" as any)}
 />
 
-            <GlassCard>
-              <SectionHeader
-                title="Journal snapshot"
-                subtitle="A quick pulse of your journal so far."
-              />
-              <Divider />
-              <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
-                <YourStatsCard
-                  embedded
-                  tastingsText={tastingsText}
-                  avgText={avgText}
-                  top5={top5}
-                  onLongPressRow={openActionsForRow}
-                />
-              </View>
-            </GlassCard>
 
-            <GlassCard>
-              <SectionHeader
-                title="What you drink most"
-                subtitle="Your category mix, based on logged pours."
-              />
-              <Divider />
-              <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
-                <CategoryMixCard embedded mixError={mixError} mix={mix} mixTotal={mixTotal} />
-              </View>
-            </GlassCard>
 
-            <GlassCard>
-              <SectionHeader
-                title="Recent entries"
-                subtitle="A look back at your latest pours."
-                right={
-                  <CTAButton
-                    label="Insights"
-                    onPress={() => router.push("/insights" as any)}
-                  />
-                }
-              />
-              <Divider />
-              <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
-                <RecentEntriesCard
-                  embedded
-                  recentError={recentError}
-                  recent={recent}
-                  onLongPressRow={openActionsForRow}
-                />
-              </View>
+  <View style={{ gap: spacing.sm }}>
+  <View style={{ gap: 8 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+      <View
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 3,
+          backgroundColor: colors.accent,
+          opacity: 0.85,
+        }}
+      />
+      <Text style={[type.sectionHeader, { fontSize: 26 }]}>Journal Snapshot</Text>
+    </View>
+  </View>
 
-              <Text
-                style={[
-                  type.caption,
-                  {
-                    color: colors.textMuted ?? colors.textTertiary,
-                    paddingHorizontal: spacing.md,
-                    paddingBottom: spacing.md,
-                    marginTop: -6,
-                  },
-                ]}
-              >
-                Tip: press and hold a tasting to edit or delete.
-              </Text>
-            </GlassCard>
+  <View style={{ paddingHorizontal: spacing.xs }}>
+    <YourStatsCard
+      embedded
+      tastingsText={tastingsText}
+      avgText={avgText}
+      top5={top5}
+      onLongPressRow={openActionsForRow}
+    />
+  </View>
+</View>
+
+            <View style={{ gap: spacing.sm }}>
+  <View style={{ gap: 8 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+      <View
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: 2,
+          backgroundColor: colors.accent,
+          opacity: 0.82,
+        }}
+      />
+      <Text style={[type.sectionHeader, { fontSize: 28 }]}>What you drink most</Text>
+    </View>
+
+    <Text style={[type.caption, { color: colors.textSecondary, opacity: 0.9 }]}>
+      Your category mix, based on logged pours.
+    </Text>
+  </View>
+
+  <View style={{ paddingHorizontal: spacing.xs }}>
+    <CategoryMixCard embedded mixError={mixError} mix={mix} mixTotal={mixTotal} />
+  </View>
+</View>
+
+<GlassCard>
+
+  <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.md }}>
+    <RecentEntriesCard
+      embedded
+      recentError={recentError}
+      recent={recent}
+      onLongPressRow={openActionsForRow}
+    />
+  </View>
+</GlassCard>
           </>
         )}
       </ScrollView>

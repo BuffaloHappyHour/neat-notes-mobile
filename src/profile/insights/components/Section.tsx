@@ -9,53 +9,63 @@ export function Section({
   title,
   subtitle,
   children,
-  right,
 }: {
   title: string;
   subtitle?: string;
-  right?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <View style={{ marginTop: spacing.sm }}>
-      {/* Header row */}
+    <View style={{ gap: spacing.lg }}>
+      {/* Page Header */}
       <View
         style={{
-          flexDirection: "row",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-          gap: spacing.lg,
+          alignItems: "center",
+          gap: spacing.xs,
+          paddingTop: spacing.sm,
         }}
       >
-        <View style={{ flex: 1 }}>
-          <Text style={type.sectionHeader}>{title}</Text>
-          {!!subtitle && (
-            <Text
-              style={[
-                type.microcopyItalic,
-                { marginTop: spacing.sm, opacity: 0.85 },
-              ]}
-            >
-              {subtitle}
-            </Text>
-          )}
-        </View>
+        <Text
+          style={[
+            type.sectionHeader,
+            {
+              textAlign: "center",
+              color: colors.textPrimary,
+              fontSize: 28,
+            },
+          ]}
+        >
+          {title}
+        </Text>
 
-        {!!right && <View>{right}</View>}
+        {subtitle ? (
+          <Text
+            style={[
+              type.microcopyItalic,
+              {
+                textAlign: "center",
+                color: colors.textSecondary,
+                maxWidth: 340,
+              },
+            ]}
+          >
+            {subtitle}
+          </Text>
+        ) : null}
+
+        {/* Gold divider */}
+        <View
+          style={{
+            width: 180,
+            height: 3,
+            borderRadius: 999,
+            backgroundColor: colors.accent,
+            marginTop: spacing.xs,
+            opacity: 0.9,
+          }}
+        />
       </View>
 
-      {/* Divider */}
-      <View
-        style={{
-          height: 1,
-          backgroundColor: colors.divider,
-          opacity: 0.55,
-          marginTop: spacing.md,
-        }}
-      />
-
-      {/* Content */}
-      <View style={{ marginTop: spacing.lg }}>{children}</View>
+      {children}
     </View>
   );
 }

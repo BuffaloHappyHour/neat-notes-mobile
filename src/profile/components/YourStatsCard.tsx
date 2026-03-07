@@ -31,10 +31,7 @@ export function YourStatsCard({
     <>
       {/* ===== Statistics (tight) ===== */}
       <View style={{ gap: 2 }}>
-        <Text style={[type.sectionHeader, { fontSize: 16 }]}>Statistics</Text>
-        <Text style={[type.caption, { color: colors.textSecondary, opacity: 0.9 }]}>
-          A quick snapshot of your journal so far.
-        </Text>
+        <Text style={[type.sectionHeader, { fontSize: 16 }]}>A quick snapshot of your journal so far.</Text>
       </View>
 
       <View style={{ marginTop: spacing.sm, flexDirection: "row", gap: spacing.md }}>
@@ -183,7 +180,7 @@ export function YourStatsCard({
   if (embedded) return <View style={{ gap: spacing.md }}>{Content}</View>;
 
   return (
-    <ProfileCard title="Statistics" subtitle="A quick snapshot of your journal so far.">
+    <ProfileCard title="A quick snapshot of your journal so far.">
       {Content}
     </ProfileCard>
   );

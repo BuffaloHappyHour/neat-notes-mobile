@@ -8,7 +8,6 @@ import { type } from "../../../lib/typography";
 
 import { type MixRow } from "../types";
 import { DonutChart } from "./DonutChart";
-import { MixBar } from "./MixBar";
 import { ProfileCard } from "./ProfileCard";
 
 function pctLabel(p: number) {
@@ -28,7 +27,6 @@ export function CategoryMixCard({
   mixTotal: number;
 }) {
   const donutRows = useMemo(() => {
-    // MixRow already has: label, count, pct (0..1), alpha
     return mix.map((m) => ({
       label: m.label,
       pct: m.pct,
@@ -41,25 +39,15 @@ export function CategoryMixCard({
   }, [mix]);
 
   const top = sorted[0];
-
   const topLabel = top?.label ?? null;
   const topPct = top ? pctLabel(top.pct) : null;
 
   const topBreakdown = useMemo(() => {
-    // show the meaningful items (usually 3–5)
-    const take = sorted.slice(0, 4);
-    return take;
+    return sorted.slice(0, 4);
   }, [sorted]);
 
   const Content = (
     <>
-      <View style={{ gap: 4 }}>
-        <Text style={type.sectionHeader}>What you drink most</Text>
-        <Text style={[type.caption, { color: colors.textSecondary }]}>
-          Your category mix, based on logged pours.
-        </Text>
-      </View>
-
       {mixError ? (
         <Text
           style={[
@@ -86,18 +74,17 @@ export function CategoryMixCard({
         </Text>
       ) : (
         <>
-          {/* Donut + real breakdown (right side) */}
           <View
             style={{
               marginTop: spacing.md,
               flexDirection: "row",
-              gap: spacing.md, // ✅ tighter
+              gap: spacing.md,
               alignItems: "center",
             }}
           >
             <DonutChart
               rows={donutRows}
-              size={132} // ✅ slightly smaller so it doesn’t dominate
+              size={132}
               thickness={16}
               centerLabel={topLabel ?? "Top"}
               centerValue={topPct ?? ""}
@@ -127,7 +114,6 @@ export function CategoryMixCard({
                 </Text>
               </View>
 
-              {/* ✅ Breakdown list replaces “DISTRIBUTION” block */}
               <View style={{ gap: 8 }}>
                 {topBreakdown.map((m) => (
                   <View
@@ -185,25 +171,10 @@ export function CategoryMixCard({
             </View>
           </View>
 
-          {/* Divider (subtle) */}
-          <View
-            style={{
-              height: 1,
-              backgroundColor: colors.divider,
-              opacity: 0.45,
-              marginTop: spacing.md,
-            }}
-          />
-
-          {/* Existing breakdown rows (keep, but tighter) */}
-          <View style={{ marginTop: spacing.sm }}>
-            <MixBar rows={mix} />
-          </View>
-
           <Text
             style={[
               type.caption,
-              { marginTop: spacing.sm, color: colors.textSecondary, opacity: 0.85 },
+              { marginTop: spacing.md, color: colors.textSecondary, opacity: 0.85 },
             ]}
           >
             Premium can add trends over time and palate shifts.

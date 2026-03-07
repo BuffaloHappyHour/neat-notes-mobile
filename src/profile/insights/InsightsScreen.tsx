@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
-import { radii } from "../../../lib/radii";
 import { spacing } from "../../../lib/spacing";
 import { colors } from "../../../lib/theme";
 import { type } from "../../../lib/typography";
+import { usePalateClarity } from "../hooks/usePalateClarity";
+import { useProfileData } from "../hooks/useProfileData";
 
 import { Section } from "./components/Section";
 
@@ -28,29 +29,39 @@ function TabButton({
       onPress={onPress}
       style={({ pressed }) => ({
         flex: 1,
-        minHeight: 44,
-        paddingHorizontal: spacing.md,
         paddingVertical: spacing.sm,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: active ? colors.accent : colors.divider,
-        backgroundColor: active ? colors.highlight : "transparent",
-        opacity: pressed ? 0.92 : 1,
+        paddingHorizontal: spacing.xs,
+        opacity: pressed ? 0.88 : 1,
         alignItems: "center",
         justifyContent: "center",
       })}
     >
-      <Text
-        style={[
-          type.body,
-          {
-            fontWeight: active ? "900" : "800",
-            color: active ? colors.textPrimary : colors.textSecondary,
-          },
-        ]}
-      >
-        {label}
-      </Text>
+      <View style={{ alignItems: "center", gap: 10, width: "100%" }}>
+        <Text
+          style={[
+            type.body,
+            {
+              fontWeight: active ? "900" : "700",
+              fontSize: 14,
+              color: active ? colors.textPrimary : colors.textSecondary,
+              textAlign: "center",
+              letterSpacing: active ? 0.2 : 0,
+            },
+          ]}
+        >
+          {label}
+        </Text>
+
+        <View
+          style={{
+            height: 3,
+            width: active ? "80%" : "30%",
+            borderRadius: 999,
+            backgroundColor: active ? colors.accent : "rgba(255,255,255,0.06)",
+            opacity: active ? 1 : 0.45,
+          }}
+        />
+      </View>
     </Pressable>
   );
 }
@@ -58,11 +69,16 @@ function TabButton({
 export default function InsightsScreen() {
   const [tab, setTab] = useState<InsightsTab>("clarity");
 
+  const { clarityInput } = useProfileData();
+  const clarity = usePalateClarity(clarityInput);
+  console.log("INSIGHTS clarityInput", clarityInput);
+console.log("INSIGHTS clarity", clarity);
+
   const headerCopy = useMemo(() => {
     if (tab === "clarity") {
       return {
         title: "Palate Clarity",
-        subtitle: "How defined and consistent your tasting identity is.",
+        subtitle: "Understand how your tasting identity is forming and evolving.",
       };
     }
 
@@ -81,47 +97,49 @@ export default function InsightsScreen() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
+      style={{ flex: 1, backgroundColor: "transparent" }}
       contentContainerStyle={{
         paddingHorizontal: spacing.md,
         paddingBottom: spacing.xl,
-        gap: spacing.lg,
+        gap: spacing.sm,
       }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ gap: spacing.sm }}>
+      <View style={{ gap: spacing.lg }}>
         <View
           style={{
-            flexDirection: "row",
-            gap: spacing.sm,
-            backgroundColor: colors.glassSurface ?? colors.surface,
-            borderRadius: radii.xl,
-            borderWidth: 1,
-            borderColor: colors.glassBorder ?? colors.divider,
-            padding: spacing.xs,
+            paddingTop: spacing.xs,
+            paddingBottom: spacing.sm,
           }}
         >
-          <TabButton
-            label="Palate Clarity"
-            active={tab === "clarity"}
-            onPress={() => setTab("clarity")}
-          />
-          <TabButton
-            label="Flavor Profile"
-            active={tab === "flavor"}
-            onPress={() => setTab("flavor")}
-          />
-          <TabButton
-            label="Behavior"
-            active={tab === "behavior"}
-            onPress={() => setTab("behavior")}
-          />
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-end",
+            }}
+          >
+            <TabButton
+              label="Palate Clarity"
+              active={tab === "clarity"}
+              onPress={() => setTab("clarity")}
+            />
+            <TabButton
+              label="Flavor Profile"
+              active={tab === "flavor"}
+              onPress={() => setTab("flavor")}
+            />
+            <TabButton
+              label="Behavior"
+              active={tab === "behavior"}
+              onPress={() => setTab("behavior")}
+            />
+          </View>
         </View>
       </View>
 
       {tab === "clarity" ? (
         <Section title={headerCopy.title} subtitle={headerCopy.subtitle}>
-          <ClarityDeepDive />
+          <ClarityDeepDive clarity={clarity} />
         </Section>
       ) : null}
 
