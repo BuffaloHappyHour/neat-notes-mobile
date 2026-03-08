@@ -43,14 +43,14 @@ function ActionBodyCard({
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({
-        backgroundColor: colors.glassSurface,
+        backgroundColor: pressed ? "rgba(190, 150, 99, 0.12)" : "rgba(255, 255, 255, 0.04)",
         borderRadius: radii.lg,
         borderWidth: 1,
-        borderColor: pressed ? colors.glassBorderStrong : colors.glassBorder,
+        borderColor: pressed ? "rgba(190, 150, 99, 0.42)" : colors.glassBorder,
         paddingVertical: 13,
         paddingHorizontal: spacing.lg,
         ...warmCardShadow,
-        opacity: pressed ? 0.94 : 1,
+        opacity: pressed ? 0.96 : 1,
       })}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg }}>
@@ -61,7 +61,7 @@ function ActionBodyCard({
               {
                 fontSize: 15.5,
                 lineHeight: 22,
-                opacity: 0.86,
+                opacity: 0.88,
                 color: colors.textPrimary,
               },
             ]}
@@ -77,23 +77,24 @@ function ActionBodyCard({
               paddingVertical: 7,
               borderRadius: 999,
               alignItems: "center",
-              backgroundColor: colors.glassSunken,
+              backgroundColor: "rgba(190, 150, 99, 0.10)",
               borderWidth: 1,
-              borderColor: colors.glassBorder,
+              borderColor: "rgba(190, 150, 99, 0.34)",
               shadowColor: colors.shadowWarm ?? colors.shadow,
-              shadowOpacity: 0.22,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 6 },
-              elevation: 4,
+              shadowOpacity: 0.18,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 3,
             }}
           >
             <Text
               style={[
                 type.caption,
                 {
-                  color: colors.textSecondary,
-                  opacity: 0.95,
+                  color: colors.accent,
+                  opacity: 0.96,
                   letterSpacing: 0.25,
+                  fontWeight: "700",
                 },
               ]}
             >
@@ -138,7 +139,7 @@ function SubtleNotice({
           {
             fontSize: 18,
             lineHeight: 22,
-            opacity: 0.72, // ✅ dim title as requested
+            opacity: 0.72,
             color: colors.textPrimary,
           },
         ]}
@@ -170,7 +171,6 @@ function SubtleNotice({
 export default function HomeTab() {
   const { isAuthed, firstName, tastingCount, statsLoading } = useHomeStats();
 
-  // --- logging helpers (fire-and-forget) ---
   const logPress = (action: string, href?: string) => {
     void logClientEvent("press", {
       screen: "home",
@@ -308,7 +308,6 @@ export default function HomeTab() {
       keyboardShouldPersistTaps="handled"
     >
       <View style={{ gap: spacing.md }}>
-        {/* Brand header */}
         <View style={{ gap: spacing.xs }}>
           <Text style={[type.screenTitle, { fontSize: 38, lineHeight: 42, color: colors.textPrimary }]}>
             Neat Notes
@@ -326,7 +325,6 @@ export default function HomeTab() {
           <View style={{ height: 1, backgroundColor: colors.glassDivider, marginTop: spacing.md }} />
         </View>
 
-        {/* Greeting + dynamic guidance */}
         <View style={{ gap: spacing.xs }}>
           {firstName ? (
             <Text style={[type.sectionHeader, { fontSize: 30, lineHeight: 24, opacity: 0.92 }]}>
@@ -347,7 +345,6 @@ export default function HomeTab() {
             {dynamic.subline}
           </Text>
 
-          {/* Divider */}
           <View style={{ marginTop: spacing.sm }}>
             <View
               style={{
@@ -374,7 +371,6 @@ export default function HomeTab() {
           </View>
         </View>
 
-        {/* SIGN IN (if not authed) */}
         {!isAuthed ? (
           <View style={{ gap: spacing.xs }}>
             <Text style={[type.sectionHeader, { fontSize: 21, lineHeight: 25, color: colors.textPrimary }]}>
@@ -388,23 +384,38 @@ export default function HomeTab() {
           </View>
         ) : null}
 
-        {/* LOG */}
-        <View style={{ gap: spacing.xs + 3 }}>
-          <Text style={[type.sectionHeader, { fontSize: 20, lineHeight: 25, color: colors.textPrimary }]}>
-            {logCopy.title}
-          </Text>
+      <View style={{ gap: 6 }}>
+  <Text style={[type.sectionHeader, { fontSize: 20, lineHeight: 25, color: colors.textPrimary }]}>
+    {logCopy.title}
+  </Text>
           <ActionBodyCard subtitle={logCopy.subtitle} rightHint={logCopy.hint} onPress={goLog} />
+          <View
+    style={{
+      height: 3,
+      width: 46,
+      borderRadius: 999,
+      backgroundColor: colors.accent,
+      opacity: 0.65,
+    }}
+  />
         </View>
 
-        {/* DISCOVER */}
-        <View style={{ gap: spacing.xs + 3 }}>
-          <Text style={[type.sectionHeader, { fontSize: 20, lineHeight: 25, color: colors.textPrimary }]}>
-            {discoverCopy.title}
-          </Text>
+       <View style={{ gap: 6 }}>
+  <Text style={[type.sectionHeader, { fontSize: 20, lineHeight: 25, color: colors.textPrimary }]}>
+    {discoverCopy.title}
+  </Text>
           <ActionBodyCard subtitle={discoverCopy.subtitle} rightHint={discoverCopy.hint} onPress={goDiscover} />
+          <View
+    style={{
+      height: 3,
+      width: 46,
+      borderRadius: 999,
+      backgroundColor: colors.accent,
+      opacity: 0.65,
+    }}
+  />
         </View>
 
-        {/* Divider between Discover and Beta */}
         <View style={{ marginTop: spacing.sm }}>
           <View
             style={{
@@ -430,7 +441,6 @@ export default function HomeTab() {
           />
         </View>
 
-        {/* Beta notice */}
         {isAuthed ? (
           <View style={{ marginTop: spacing.md + 4 }}>
             <SubtleNotice

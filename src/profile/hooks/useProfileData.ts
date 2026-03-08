@@ -34,6 +34,7 @@ export function useProfileData() {
 
   const [isAuthed, setIsAuthed] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
   const [privateName, setPrivateName] = useState("");
@@ -58,7 +59,6 @@ export function useProfileData() {
   );
   const [deleting, setDeleting] = useState(false);
 
-  // ✅ Palate clarity input rows for the palate engine
   const [clarityInput, setClarityInput] = useState<ClarityInputRow[]>([]);
 
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
@@ -76,6 +76,7 @@ export function useProfileData() {
     if (!session?.user) {
       setIsAuthed(false);
       setIsAdmin(false);
+      setIsPremium(false);
       setDisplayName("");
       setPrivateName("");
       setUsername("");
@@ -120,7 +121,6 @@ export function useProfileData() {
 
     const mixPromise = supabase.from("tastings").select("whiskey_id").limit(3000);
 
-    // ✅ For palate clarity we only need these fields from tastings
     const clarityPromise = supabase
       .from("tastings")
       .select("rating, created_at, flavor_tags, whiskey_id")
@@ -138,23 +138,23 @@ export function useProfileData() {
         clarityPromise,
       ]);
 
-    // ✅ Profile
     if (profileRes.status === "fulfilled") {
       const p: any = profileRes.value;
       setDisplayName((p?.display_name ?? "").trim());
       setPrivateName((p?.first_name ?? "").trim());
+      setIsPremium(p?.is_premium === true);
 
       const sAnon = typeof p?.share_anonymously === "boolean" ? p.share_anonymously : true;
       setShareAnon(sAnon);
+    } else {
+      setIsPremium(false);
     }
 
-    // ✅ Count
     if (countRes.status === "fulfilled") {
       const { count, error } = countRes.value as any;
       if (!error) setTastingCount(typeof count === "number" ? count : 0);
     }
 
-    // ✅ Average rating
     if (ratingsRes.status === "fulfilled") {
       const { data: rows, error } = ratingsRes.value as any;
       if (!error && Array.isArray(rows)) {
@@ -166,7 +166,6 @@ export function useProfileData() {
       }
     }
 
-    // ✅ Top 5
     if (top5Res.status === "fulfilled") {
       const { data: rows, error } = top5Res.value as any;
       if (!error && Array.isArray(rows)) setTop5(rows as any);
@@ -175,7 +174,6 @@ export function useProfileData() {
       setTop5([]);
     }
 
-    // ✅ Recent
     if (recentRes.status === "fulfilled") {
       const { data: rows, error } = recentRes.value as any;
       if (error) {
@@ -193,7 +191,6 @@ export function useProfileData() {
       setRecentError("Recent query promise rejected (network/auth).");
     }
 
-    // ✅ Palate clarity input build (category + proof come from whiskeys)
     try {
       if (clarityRes.status !== "fulfilled") throw new Error("Clarity query promise rejected.");
 
@@ -211,7 +208,6 @@ export function useProfileData() {
       const whiskeyToProof = new Map<string, number | null>();
 
       if (uniqueIds.length > 0) {
-        // IMPORTANT: wRows.id must match tastings.whiskey_id (normalized)
         const { data: wRows, error: wErr } = await supabase
           .from("whiskeys")
           .select("id, category, proof")
@@ -236,7 +232,7 @@ export function useProfileData() {
         return {
           rating: asFiniteNumber(t?.rating),
           created_at: t?.created_at ? String(t.created_at) : null,
-          category: cat ? safeLabel(cat) : null, // null => custom/unknown
+          category: cat ? safeLabel(cat) : null,
           proof,
           hasRefinedNotes: Array.isArray(t?.flavor_tags) && t.flavor_tags.length > 0,
         };
@@ -248,7 +244,6 @@ export function useProfileData() {
       setClarityInput([]);
     }
 
-    // ✅ Category mix
     try {
       if (mixRes.status !== "fulfilled") throw new Error("Mix query promise rejected (network/auth).");
 
@@ -425,7 +420,10 @@ export function useProfileData() {
     refreshing,
     isAuthed,
     isAdmin,
+    isPremium,
     shareAnon,
+
+    tastingCount,
 
     top5,
     recent,
@@ -443,7 +441,6 @@ export function useProfileData() {
     actionsTitle,
     deleting,
 
-    // ✅ palate clarity input
     clarityInput,
 
     loadAll,

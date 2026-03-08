@@ -69,10 +69,9 @@ function TabButton({
 export default function InsightsScreen() {
   const [tab, setTab] = useState<InsightsTab>("clarity");
 
-  const { clarityInput } = useProfileData();
+  const { clarityInput, isPremium } = useProfileData();
   const clarity = usePalateClarity(clarityInput);
-  console.log("INSIGHTS clarityInput", clarityInput);
-console.log("INSIGHTS clarity", clarity);
+  const hasPremiumAccess = isPremium === true;
 
   const headerCopy = useMemo(() => {
     if (tab === "clarity") {
@@ -94,6 +93,68 @@ console.log("INSIGHTS clarity", clarity);
       subtitle: "How broadly and deeply you explore different whiskies.",
     };
   }, [tab]);
+
+  if (!hasPremiumAccess) {
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: "transparent" }}
+        contentContainerStyle={{
+          paddingHorizontal: spacing.md,
+          paddingBottom: spacing.xl,
+          gap: spacing.lg,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View
+          style={{
+            marginTop: spacing.md,
+            padding: spacing.lg,
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: "rgba(190,150,99,0.34)",
+            backgroundColor: "rgba(18,16,14,0.74)",
+          }}
+        >
+          <Text
+            style={[
+              type.sectionHeader,
+              {
+                color: colors.textPrimary,
+                marginBottom: spacing.sm,
+              },
+            ]}
+          >
+            Premium Insights
+          </Text>
+
+          <Text
+            style={[
+              type.body,
+              {
+                color: colors.textSecondary,
+                lineHeight: 24,
+              },
+            ]}
+          >
+            Unlock your taste profile, behavior trends, and advanced palate intelligence.
+          </Text>
+
+          <Text
+            style={[
+              type.microcopyItalic,
+              {
+                color: colors.accent,
+                marginTop: spacing.sm,
+                opacity: 0.92,
+              },
+            ]}
+          >
+            Premium Insights - Coming Soon.
+          </Text>
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView

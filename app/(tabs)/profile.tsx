@@ -134,6 +134,8 @@ export default function ProfileTab() {
     tastingsText,
     avgText,
 
+    tastingCount,
+
     top5,
     recent,
     recentError,
@@ -156,6 +158,8 @@ export default function ProfileTab() {
   } = useProfileData();
 
   const clarity = usePalateClarity(clarityInput);
+  const isEarlyUser = (tastingCount ?? 0) < 3;
+  const hasAnyTastings = (tastingCount ?? 0) > 0;
 
   if (loading) {
     return (
@@ -208,88 +212,112 @@ export default function ProfileTab() {
           </GlassCard>
         ) : (
           <>
-            {clarity ? (
-  <View style={{ marginTop: spacing.sm }}>
-    <PalateClarityCard
-      clarityIndex={clarity.clarityIndex}
-      tierLabel={clarity.meta.tierLabel}
-      confidenceLevel={clarity.meta.confidenceLevel}
-      totalTastings={clarity.meta.totalTastings}
-      daysSinceLastTasting={clarity.meta.daysSinceLastTasting}
-    />
-  </View>
-) : null}
+            <View style={{ marginTop: spacing.sm }}>
+              {isEarlyUser ? (
+                <PalateClarityCard
+                  pending
+                  totalTastings={tastingCount ?? 0}
+                  tastingGoal={3}
+                />
+              ) : clarity ? (
+                <PalateClarityCard
+                  clarityIndex={clarity.clarityIndex}
+                  tierLabel={clarity.meta.tierLabel}
+                  confidenceLevel={clarity.meta.confidenceLevel}
+                  totalTastings={clarity.meta.totalTastings}
+                  daysSinceLastTasting={clarity.meta.daysSinceLastTasting}
+                />
+              ) : null}
+            </View>
 
-<InsightsCTA
-  isPremium={false}
-  onPress={() => router.push("/insights" as any)}
-/>
-
-
-
-  <View style={{ gap: spacing.sm }}>
-  <View style={{ gap: 8 }}>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-      <View
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 3,
-          backgroundColor: colors.accent,
-          opacity: 0.85,
-        }}
-      />
-      <Text style={[type.sectionHeader, { fontSize: 26 }]}>Journal Snapshot</Text>
-    </View>
-  </View>
-
-  <View style={{ paddingHorizontal: spacing.xs }}>
-    <YourStatsCard
-      embedded
-      tastingsText={tastingsText}
-      avgText={avgText}
-      top5={top5}
-      onLongPressRow={openActionsForRow}
-    />
-  </View>
-</View>
+            {isEarlyUser ? (
+              <InsightsCTA
+                compact
+                isPremium={false}
+                onPress={() => router.push("/insights" as any)}
+              />
+            ) : (
+              <InsightsCTA
+                isPremium={false}
+                onPress={() => router.push("/insights" as any)}
+              />
+            )}
 
             <View style={{ gap: spacing.sm }}>
-  <View style={{ gap: 8 }}>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-      <View
-        style={{
-          width: 10,
-          height: 10,
-          borderRadius: 2,
-          backgroundColor: colors.accent,
-          opacity: 0.82,
-        }}
-      />
-      <Text style={[type.sectionHeader, { fontSize: 28 }]}>What you drink most</Text>
-    </View>
+              <View style={{ gap: 8 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 3,
+                      backgroundColor: colors.accent,
+                      opacity: 0.85,
+                    }}
+                  />
+                  <Text style={[type.sectionHeader, { fontSize: 26 }]}>Journal Snapshot</Text>
+                </View>
+              </View>
 
-    <Text style={[type.caption, { color: colors.textSecondary, opacity: 0.9 }]}>
-      Your category mix, based on logged pours.
-    </Text>
-  </View>
+              <View style={{ paddingHorizontal: spacing.xs }}>
+                <YourStatsCard
+                  embedded
+                  tastingsText={tastingsText}
+                  avgText={avgText}
+                  top5={top5}
+                  onLongPressRow={openActionsForRow}
+                />
+              </View>
+            </View>
 
-  <View style={{ paddingHorizontal: spacing.xs }}>
-    <CategoryMixCard embedded mixError={mixError} mix={mix} mixTotal={mixTotal} />
-  </View>
-</View>
+            {hasAnyTastings ? (
+              <View style={{ gap: spacing.sm }}>
+                <View style={{ gap: 8 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                    <View
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 2,
+                        backgroundColor: colors.accent,
+                        opacity: 0.82,
+                      }}
+                    />
+                    <Text style={[type.sectionHeader, { fontSize: 28 }]}>What you drink most</Text>
+                  </View>
 
-<GlassCard>
+                  <Text style={[type.caption, { color: colors.textSecondary, opacity: 0.9 }]}>
+                    Your category mix, based on logged pours.
+                  </Text>
+                </View>
 
-  <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.md }}>
-    <RecentEntriesCard
-      embedded
-      recentError={recentError}
-      recent={recent}
-      onLongPressRow={openActionsForRow}
-    />
-  </View>
-</GlassCard>
+                <View style={{ paddingHorizontal: spacing.xs }}>
+                  <CategoryMixCard
+                    embedded
+                    mixError={mixError}
+                    mix={mix}
+                    mixTotal={mixTotal}
+                  />
+                </View>
+              </View>
+            ) : null}
+
+            <GlassCard>
+              <View
+                style={{
+                  paddingHorizontal: spacing.md,
+                  paddingTop: spacing.md,
+                  paddingBottom: spacing.md,
+                }}
+              >
+                <RecentEntriesCard
+                  embedded
+                  recentError={recentError}
+                  recent={recent}
+                  onLongPressRow={openActionsForRow}
+                />
+              </View>
+            </GlassCard>
           </>
         )}
       </ScrollView>

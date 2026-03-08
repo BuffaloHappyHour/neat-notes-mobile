@@ -13,13 +13,17 @@ import { type } from "../../../lib/typography";
 export function InsightsCTA({
   isPremium,
   onPress,
+  compact = false,
 }: {
   isPremium: boolean;
   onPress: () => void;
+  compact?: boolean;
 }) {
   const shimmer = React.useRef(new Animated.Value(-1)).current;
 
   React.useEffect(() => {
+    if (compact) return;
+
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(shimmer, {
@@ -34,7 +38,121 @@ export function InsightsCTA({
 
     loop.start();
     return () => loop.stop();
-  }, [shimmer]);
+  }, [shimmer, compact]);
+
+  if (compact) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => ({
+          borderRadius: radii.xl ?? radii.lg,
+          borderWidth: 1,
+          borderColor: "rgba(190,150,99,0.34)",
+          backgroundColor: pressed ? "rgba(18,16,14,0.84)" : "rgba(18,16,14,0.72)",
+          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.md,
+          ...shadows.card,
+          overflow: "hidden",
+        })}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: spacing.md,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text
+              style={[
+                type.body,
+                {
+                  color: colors.textPrimary,
+                  fontSize: 20,
+                  lineHeight: 26,
+                },
+              ]}
+            >
+              Unlock Premium Insights
+            </Text>
+
+            <Text
+              style={[
+                type.caption,
+                {
+                  color: colors.textSecondary,
+                  marginTop: 6,
+                  lineHeight: 20,
+                },
+              ]}
+            >
+              Deeper taste profile, behavior trends, and palate intelligence.
+            </Text>
+
+            <Text
+              style={[
+                type.microcopyItalic,
+                {
+                  color: colors.accent,
+                  opacity: 0.92,
+                  marginTop: 8,
+                },
+              ]}
+            >
+              Best after 3 pours.
+            </Text>
+          </View>
+
+          <View
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: "rgba(190,150,99,0.55)",
+              backgroundColor: "rgba(0,0,0,0.2)",
+            }}
+          >
+            <Text
+              style={[
+                type.body,
+                {
+                  color: colors.accent,
+                  letterSpacing: 1,
+                  fontWeight: "900",
+                },
+              ]}
+            >
+              PREMIUM
+            </Text>
+          </View>
+        </View>
+
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            marginTop: spacing.sm,
+          }}
+        >
+          <Ionicons name="lock-closed" size={14} color={colors.accent} />
+          <Text
+            style={[
+              type.caption,
+              {
+                color: colors.textSecondary,
+                opacity: 0.9,
+              },
+            ]}
+          >
+          Insights become more meaningful with a few logged pours.
+          </Text>
+        </View>
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable
@@ -59,7 +177,6 @@ export function InsightsCTA({
     >
       {!isPremium ? (
         <>
-          {/* Small preview tucked into bottom-right */}
           <View
             pointerEvents="none"
             style={{
@@ -74,7 +191,6 @@ export function InsightsCTA({
             <LockedInsightsPreview />
           </View>
 
-          {/* Dim wash over preview area */}
           <View
             pointerEvents="none"
             style={{
@@ -87,7 +203,6 @@ export function InsightsCTA({
             }}
           />
 
-          {/* Soft premium glow */}
           <View
             pointerEvents="none"
             style={{
@@ -101,7 +216,6 @@ export function InsightsCTA({
             }}
           />
 
-          {/* Subtle shimmer sweep */}
           <Animated.View
             pointerEvents="none"
             style={{

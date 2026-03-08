@@ -1,7 +1,7 @@
 // app/log/cloud-tasting.tsx
 // ====== SECTION: Imports ======
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack, useLocalSearchParams, type Href } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { Card } from "../../components/ui/Card";
+import { MetadataModal } from "../../src/log/components/metadata/MetadataModal";
 import { RefineModal } from "../../src/log/components/refine/RefineModal";
 import { BottleDetailsCard } from "../../src/log/components/tasting/BottleDetailsCard";
 import FlavorNotesSection from "../../src/log/components/tasting/FlavorNotesSection";
@@ -254,28 +255,6 @@ export default function CloudTastingScreen() {
 
   const [whiskeyMeta, setWhiskeyMeta] = useState<WhiskeyMeta | null>(null);
 
-  // ----- Post-save metadata modal state -----
-  const [metaOpen, setMetaOpen] = useState(false);
-  const [metaLoading, setMetaLoading] = useState(false);
-  const [metaSaving, setMetaSaving] = useState(false);
-  const [postSaveTargetWhiskeyId, setPostSaveTargetWhiskeyId] = useState<string | null>(null);
-  const [pendingNavigateTo, setPendingNavigateTo] = useState<Href | null>(null);
-
-  const [taxCategories, setTaxCategories] = useState<string[]>([]);
-  const [taxRegions, setTaxRegions] = useState<string[]>([]);
-  const [taxSubRegions, setTaxSubRegions] = useState<string[]>([]);
-
-  // Form values (only for modal)
-  const [fDistillery, setFDistillery] = useState("");
-  const [fType, setFType] = useState<string | null>(null);
-  const [fProof, setFProof] = useState("");
-  const [fAge, setFAge] = useState("");
-  const [fCategory, setFCategory] = useState<string | null>(null);
-  const [fRegion, setFRegion] = useState<string | null>(null);
-  const [fSubRegion, setFSubRegion] = useState<string | null>(null);
-
-  const [metaMissingKeys, setMetaMissingKeys] = useState<string[]>([]);
-
   const [flavorTags, setFlavorTags] = useState<string[]>([]);
 
   const [sourceType, setSourceType] = useState<"purchased" | "bar">("purchased");
@@ -312,6 +291,7 @@ export default function CloudTastingScreen() {
     byId,
     byParent,
     topLevelNodes,
+    rootIdByLabel,
     rootLabelById,
     ALL_TOP_LEVEL_LABELS,
   
@@ -333,6 +313,7 @@ export default function CloudTastingScreen() {
     addFamilyLabel: engineAddFamilyLabel,
 
     loadTastingFlavorNodes,
+    loadTastingFlavorSentiments,
     replaceTastingFlavorNodes,
     replaceTastingFlavorNodesWithSentiment,
   } = engine;
@@ -443,6 +424,7 @@ export default function CloudTastingScreen() {
         setRating(loaded.rating);
         setTextureLevel(loaded.textureLevel);
         setProofIntensity(loaded.proofIntensity);
+        setFlavorIntensity(loaded.flavorIntensity);
 
         setNose(loaded.noseReaction as any);
         setTaste(loaded.tasteReaction as any);
@@ -453,11 +435,16 @@ export default function CloudTastingScreen() {
         setSourceType(loaded.sourceType);
         setBarName(loaded.barName);
 
-        const sel = await loadTastingFlavorNodes(tastingId);
+                setLocked(true);
+        setLoading(false);
+
+               const [sel, savedSentiments] = await Promise.all([
+          loadTastingFlavorNodes(tastingId),
+          loadTastingFlavorSentiments(tastingId),
+        ]);
         if (!alive) return;
         setSelectedNodeIds(sel);
-
-        setLocked(true);
+        setSentimentById(savedSentiments);
       } catch (e: any) {
         if (!alive) return;
         Alert.alert("Couldn’t load tasting", String(e?.message ?? e));
@@ -471,7 +458,7 @@ export default function CloudTastingScreen() {
     return () => {
       alive = false;
     };
-  }, [isExisting, tastingId, loadTastingFlavorNodes, setSelectedNodeIds]);
+   }, [isExisting, tastingId]);
 
   // ====== SECTION: Data Fetching (whiskey meta) ======
 
@@ -611,6 +598,35 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
 }
 
   // ====== SECTION: Save/Upsert Logic ======
+  function fallbackSentimentFromTaste(): "LIKE" | "NEUTRAL" | "DISLIKE" {
+    if (taste === "ENJOYED") return "LIKE";
+    if (taste === "NOT_FOR_ME") return "DISLIKE";
+    return "NEUTRAL";
+  }
+
+    const analyticsNodeIds = useMemo(() => {
+    if (selectedNodeIds.length > 0) {
+      return Array.from(new Set(selectedNodeIds.filter((id) => isUuid(id))));
+    }
+
+    return Array.from(
+      new Set(
+        flavorTags
+          .map((tag) => rootIdByLabel.get(normalizeKey(tag)))
+          .filter((id): id is string => !!id && isUuid(id))
+      )
+    );
+  }, [selectedNodeIds, flavorTags, rootIdByLabel]);
+  const analyticsSentimentById = useMemo(() => {
+    const fallback = fallbackSentimentFromTaste();
+    const out: Record<string, "LIKE" | "NEUTRAL" | "DISLIKE"> = {};
+
+    for (const id of analyticsNodeIds) {
+      out[id] = sentimentById[id] ?? fallback;
+    }
+
+    return out;
+  }, [analyticsNodeIds, sentimentById, taste]);
 
   async function onSave() {
   if (saving) return;
@@ -632,16 +648,17 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
 
       whiskeyId,
       flavorTags,
-      selectedNodeIds,
+      selectedNodeIds: analyticsNodeIds,
       getTopLevelLabelForNode,
       isFinishLabel,
-      sentimentById,
+      sentimentById: analyticsSentimentById,
       sourceType,
       barName,
 
       lockName,
 
       replaceTastingFlavorNodes,
+      replaceTastingFlavorNodesWithSentiment,
     });
 
     setLocked(true);
@@ -1068,10 +1085,54 @@ function onEdit() {
         sentimentById={sentimentById}
         setSentimentById={setSentimentById}
       />
+                  <MetadataModal
+        visible={postSaveMeta.metaOpen}
+        loading={postSaveMeta.metaLoading}
+        saving={postSaveMeta.metaSaving}
+        isCustom={postSaveMeta.metaIsCustom}
+        metaMissingKeys={postSaveMeta.metaMissingKeys}
+        onSkip={() => {
+          const to = postSaveMeta.finishPostSaveFlow();
+          if (to) router.replace(to);
+        }}
+        onSave={async () => {
+          const to = await postSaveMeta.saveMetadataFromModal();
+          if (to) router.replace(to);
+        }}
+        fName={postSaveMeta.fName}
+        setFName={postSaveMeta.setFName}
+        fDistillery={postSaveMeta.fDistillery}
+        setFDistillery={postSaveMeta.setFDistillery}
+        fTypeId={postSaveMeta.fTypeId}
+        setFTypeId={postSaveMeta.setFTypeId}
+        whiskeyTypeOptions={postSaveMeta.whiskeyTypeOptions}
+        selectedWhiskeyTypeName={postSaveMeta.selectedWhiskeyTypeName}
+        fProof={postSaveMeta.fProof}
+        setFProof={postSaveMeta.setFProof}
+        fAge={postSaveMeta.fAge}
+        setFAge={postSaveMeta.setFAge}
+        fCategory={postSaveMeta.fCategory}
+        setFCategory={postSaveMeta.setFCategory}
+        fRegion={postSaveMeta.fRegion}
+        setFRegion={postSaveMeta.setFRegion}
+        fSubRegion={postSaveMeta.fSubRegion}
+        setFSubRegion={postSaveMeta.setFSubRegion}
+        categoryOptions={postSaveMeta.categoryOptions}
+        regionOptions={postSaveMeta.regionOptions}
+        subRegionOptions={postSaveMeta.subRegionOptions}
+        canEditCategory={postSaveMeta.canEditCategory}
+        canEditRegion={postSaveMeta.canEditRegion}
+        canEditSubRegion={postSaveMeta.canEditSubRegion}
+        showCategoryBlock={postSaveMeta.showCategoryBlock}
+        showRegionBlock={postSaveMeta.showRegionBlock}
+        showSubRegionBlock={postSaveMeta.showSubRegionBlock}
+        onCategoryChange={postSaveMeta.onCategoryChange}
+        onRegionChange={postSaveMeta.onRegionChange}
+        />
     </>
   );
 }
-
+      
 // ====== SECTION: Reaction helpers (bottom) ======
 function reactionLabel(v: Reaction) {
   if (v === "ENJOYED") return "Enjoyed";

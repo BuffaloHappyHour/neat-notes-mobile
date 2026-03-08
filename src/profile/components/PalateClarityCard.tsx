@@ -9,7 +9,9 @@ import { spacing } from "../../../lib/spacing";
 import { colors } from "../../../lib/theme";
 import { fontFamilies, type } from "../../../lib/typography";
 
-type Props = {
+
+type ReadyProps = {
+  pending?: false;
   clarityIndex: number;
   tierLabel: string;
   confidenceLevel: "low" | "medium" | "high";
@@ -17,26 +19,37 @@ type Props = {
   daysSinceLastTasting: number | null;
 };
 
-export function PalateClarityCard({
-  clarityIndex,
-  tierLabel,
-  confidenceLevel,
-  totalTastings,
-  daysSinceLastTasting,
-}: Props) {
-  const score = Math.round(clarityIndex);
-  const fillPct = Math.max(0, Math.min(100, score));
+type PendingProps = {
+  pending: true;
+  tastingGoal?: number;
+  totalTastings?: number;
+};
 
-  const confidenceText = capitalize(confidenceLevel);
+type Props = ReadyProps | PendingProps;
 
-  const lastPourShort =
-    daysSinceLastTasting == null
-      ? "Not yet"
-      : daysSinceLastTasting === 0
-      ? "Today"
-      : daysSinceLastTasting === 1
-      ? "1 day ago"
-      : `${daysSinceLastTasting} days ago`;
+export function PalateClarityCard(props: Props) {
+  const isPending = props.pending === true;
+  const daysSinceLastTasting = isPending ? null : props.daysSinceLastTasting;
+
+  const score = isPending ? null : Math.round(props.clarityIndex);
+  const fillPct = isPending ? 0 : Math.max(0, Math.min(100, score ?? 0));
+
+  const confidenceText = isPending ? "Building" : capitalize(props.confidenceLevel);
+
+  const statusText = isPending ? "Pending" : props.tierLabel;
+  const tastingGoal = isPending ? props.tastingGoal ?? 3 : null;
+  const totalTastings = isPending ? props.totalTastings ?? 0 : props.totalTastings;
+  
+ const lastPourShort =
+  daysSinceLastTasting == null
+    ? (isPending && totalTastings === 0 ? "Not yet" : "Today")
+    : daysSinceLastTasting === 0
+    ? "Today"
+    : daysSinceLastTasting === 1
+    ? "1 day ago"
+    : `${daysSinceLastTasting} days ago`;
+
+
 
   return (
     <View
@@ -49,7 +62,6 @@ export function PalateClarityCard({
         ...shadows.e2,
       }}
     >
-      {/* Subtle top highlight (keeps it crafted, not “spotlit”) */}
       <View
         pointerEvents="none"
         style={{
@@ -63,7 +75,6 @@ export function PalateClarityCard({
         }}
       />
 
-      {/* Accent edge (very subtle frame cue) */}
       <View
         pointerEvents="none"
         style={{
@@ -78,13 +89,11 @@ export function PalateClarityCard({
       />
 
       <View style={{ padding: spacing.heroPadding ?? spacing.sm }}>
-        {/* Header */}
         <View style={{ gap: spacing.xs }}>
           <Text
             style={[
               type.labelCaps ?? type.body,
               {
-                // make it unmistakably a header label
                 fontFamily: fontFamilies.headingSemiBold,
                 fontSize: 18,
                 lineHeight: 20,
@@ -95,19 +104,21 @@ export function PalateClarityCard({
           >
             YOUR PALATE CLARITY
           </Text>
-                  <Text
-          style={[
-            type.microcopyItalic,
-            {color: colors.textSecondary },
-          ]}
-        >
-          <Text style={{ color: colors.textPrimary }}>{" "}
-          How clearly your taste identity is understood{" "}
-        </Text>
-        </Text>
+
+          <Text
+            style={[
+              type.microcopyItalic,
+              { color: colors.textSecondary },
+            ]}
+          >
+            <Text style={{ color: colors.textPrimary }}>
+              {isPending
+                ? ` Log ${tastingGoal} tastings to begin building your palate profile`
+                : " How clearly your taste identity is understood "}
+            </Text>
+          </Text>
         </View>
 
-        {/* HERO line: 53% + Defining (before bar) */}
         <View
           style={{
             marginTop: spacing.lg,
@@ -117,7 +128,7 @@ export function PalateClarityCard({
             gap: spacing.md,
           }}
         >
-          <Text style={type.heroMetric}>{score}%</Text>
+          <Text style={type.heroMetric}>{isPending ? "Pending" : `${score}%`}</Text>
 
           <Text
             style={[
@@ -125,12 +136,9 @@ export function PalateClarityCard({
               { color: colors.textPrimary, opacity: 0.92, paddingBottom: 10 },
             ]}
             numberOfLines={1}
-          >
-            
-          </Text>
+          />
         </View>
 
-        {/* Bar */}
         <View
           style={{
             marginTop: spacing.sm,
@@ -145,18 +153,61 @@ export function PalateClarityCard({
           <View
             style={{
               height: "100%",
-              width: `${fillPct}%`,
+              width: isPending ? `${Math.min(100, (totalTastings / tastingGoal!) * 100)}%` : `${fillPct}%`,
               borderRadius: 999,
               backgroundColor: colors.accent,
-              opacity: 0.95,
+              opacity: isPending ? 0.55 : 0.95,
             }}
           />
         </View>
 
-        {/* Supporting meta (quiet line) */}
+       {isPending ? (
+  <>
+    <Text
+      style={[
+        type.caption,
+        {
+          color: colors.textSecondary,
+          marginTop: spacing.sm,
+          opacity: 0.92,
+        },
+      ]}
+    >
+      {totalTastings} of {tastingGoal} tastings logged
+    </Text>
 
+    {totalTastings === 1 && (
+      <Text
+        style={[
+          type.microcopyItalic,
+          {
+            color: colors.accent,
+            marginTop: 4,
+            opacity: 0.9,
+          },
+        ]}
+      >
+        Nice start. Two more pours reveal your first palate signal.
+      </Text>
+    )}
 
-        {/* Divider */}
+    {totalTastings === 2 && (
+      <Text
+        style={[
+          type.microcopyItalic,
+          {
+            color: colors.accent,
+            marginTop: 4,
+            opacity: 0.9,
+          },
+        ]}
+      >
+        One more pour unlocks your first clarity signal.
+      </Text>
+    )}
+  </>
+) : null}
+
         <View
           style={{
             height: 1,
@@ -167,9 +218,8 @@ export function PalateClarityCard({
           }}
         />
 
-        {/* 3-column “at a glance” row */}
-        <View style={{ flexDirection: "row", gap: spacing.sm+2 }}>
-          <StatCol label="STATUS" value={tierLabel} />
+        <View style={{ flexDirection: "row", gap: spacing.sm + 2 }}>
+          <StatCol label="STATUS" value={statusText} />
           <StatCol label="CONFIDENCE" value={confidenceText} />
           <StatCol label="LAST POUR" value={lastPourShort} />
         </View>
@@ -184,7 +234,7 @@ function StatCol({ label, value }: { label: string; value: string }) {
       style={{
         flex: 1,
         gap: 3,
-        alignItems: "center",     // 👈 center content horizontally
+        alignItems: "center",
       }}
     >
       <Text
@@ -196,7 +246,7 @@ function StatCol({ label, value }: { label: string; value: string }) {
             letterSpacing: 1.1,
             color: colors.textSecondary,
             opacity: 0.85,
-            textAlign: "center",   // 👈 center text
+            textAlign: "center",
           },
         ]}
       >
@@ -210,7 +260,7 @@ function StatCol({ label, value }: { label: string; value: string }) {
             fontSize: 12,
             lineHeight: 18,
             color: colors.textPrimary,
-            textAlign: "center",   // 👈 center value
+            textAlign: "center",
           },
         ]}
       >

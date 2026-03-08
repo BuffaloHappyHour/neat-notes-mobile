@@ -28,9 +28,7 @@ function TraitPill({ text }: { text: string }) {
 
 export default function TasteProfileRadar() {
   // TEMP: placeholder values (0..1). We'll wire real data after UI locks.
-  const { axes, loading } = useInsightsData();
-  const topTraits = ["Dessert-forward", "Spice-friendly", "Oak tolerant", "Fruit-curious", "Balanced"];
-  const avoidedTraits = ["Peaty smoke", "Floral-forward", "Sharp medicinal"];
+  const { axes, topTraits, avoidedTraits, sentence, loading } = useInsightsData();
 
   // TEMP: pretend locked state (we’ll hook into premium later)
   const isLocked = false;
@@ -44,7 +42,7 @@ export default function TasteProfileRadar() {
 
       {/* Interpretation line (Apple Health vibe: 1 sentence) */}
       <Text style={type.microcopyItalic}>
-        Your profile leans sweet and spice-forward, with low smoke affinity.
+       {sentence}
       </Text>
 
       {/* Traits card — subtle surface inside the section */}

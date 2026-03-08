@@ -20,6 +20,17 @@ export type LoadedTasting = {
   barName: string;
 };
 
+function normalizeReaction(v: any): string | null {
+  const s = safeText(v).toLowerCase();
+
+  if (!s) return null;
+  if (s === "enjoyed") return "ENJOYED";
+  if (s === "neutral") return "NEUTRAL";
+  if (s === "not for me") return "NOT_FOR_ME";
+
+  return null;
+}
+
 export async function loadTastingById(tastingId: string): Promise<LoadedTasting | null> {
   if (!isUuid(tastingId)) return null;
 
@@ -70,8 +81,8 @@ export async function loadTastingById(tastingId: string): Promise<LoadedTasting 
       data.flavor_intensity == null || !Number.isFinite(Number(data.flavor_intensity))
         ? null
         : Number(data.flavor_intensity),
-    noseReaction: safeText(data.nose_reaction) || null,
-    tasteReaction: safeText(data.taste_reaction) || null,
+    noseReaction: normalizeReaction(data.nose_reaction),
+    tasteReaction: normalizeReaction(data.taste_reaction),
     flavorTags: Array.isArray(data.flavor_tags) ? data.flavor_tags : [],
     dislikeTags: Array.isArray(data.dislike_tags) ? data.dislike_tags : [],
     personalNotes: safeText(data.personal_notes),

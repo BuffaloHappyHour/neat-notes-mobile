@@ -35,13 +35,6 @@ type Snapshot = {
 
   trends?: TrendsBlock | null;
 
-  activation?: {
-    signup_to_first_tasting_pct?: number | null;
-    time_to_first_tasting_median_minutes?: number | null;
-    tasting_completion_rate_pct?: number | null;
-    note?: string | null;
-  } | null;
-
   engagement?: {
     weekly_active_tasters?: number | null;
     monthly_active_tasters?: number | null;
@@ -73,13 +66,12 @@ type Snapshot = {
     users_100plus_tastings?: number | null;
     note?: string | null;
   } | null;
+};
 
-  reliability?: {
-    auth_success_rate?: number | null;
-    sync_error_rate?: number | null;
-    crash_free_sessions?: number | null;
-    note?: string | null;
-  } | null;
+type Totals = {
+  totalUsers: number | null;
+  totalWhiskies: number | null;
+  totalTastings: number | null;
 };
 
 function fmt(v: any) {
@@ -88,18 +80,18 @@ function fmt(v: any) {
   return String(v);
 }
 
+function fmtCount(v: any) {
+  if (v === null || v === undefined) return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  return n.toLocaleString();
+}
+
 function fmtPct(v: any) {
   if (v === null || v === undefined) return "—";
   const n = Number(v);
   if (!Number.isFinite(n)) return "—";
   return `${n.toFixed(2)}%`;
-}
-
-function fmtPct1(v: any) {
-  if (v === null || v === undefined) return "—";
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "—";
-  return `${n.toFixed(1)}%`;
 }
 
 function fmtNum2(v: any) {
@@ -192,7 +184,6 @@ function MetricRow({ label, value }: { label: string; value: string }) {
             lineHeight: 18,
           },
         ]}
-        numberOfLines={1}
       >
         {label}
       </Text>
@@ -207,7 +198,6 @@ function MetricRow({ label, value }: { label: string; value: string }) {
             fontWeight: "900",
           },
         ]}
-        numberOfLines={1}
       >
         {value}
       </Text>
@@ -236,7 +226,6 @@ function MetricRowNoDivider({ label, value }: { label: string; value: string }) 
             lineHeight: 18,
           },
         ]}
-        numberOfLines={1}
       >
         {label}
       </Text>
@@ -251,20 +240,10 @@ function MetricRowNoDivider({ label, value }: { label: string; value: string }) 
             fontWeight: "900",
           },
         ]}
-        numberOfLines={1}
       >
         {value}
       </Text>
     </View>
-  );
-}
-
-function NoteText({ text }: { text?: string | null }) {
-  if (!text) return null;
-  return (
-    <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.9 }]}>
-      {text}
-    </Text>
   );
 }
 
@@ -283,17 +262,29 @@ function TrendLine({
   const tone = trendTone(pctPrev7);
 
   return (
-    <View style={{ gap: 6, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider }}>
-      <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: spacing.md }}>
-        <Text style={[type.body, { color: colors.textSecondary, fontSize: 14 }]} numberOfLines={1}>
+    <View
+      style={{
+        gap: 6,
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.divider,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: spacing.md,
+        }}
+      >
+        <Text style={[type.body, { color: colors.textSecondary, fontSize: 14, flex: 1 }]}>
           {title}
         </Text>
 
-        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 10 }}>
-          <Text style={[type.body, { color: tone, fontWeight: "900", fontSize: 14 }]} numberOfLines={1}>
-            {arrow} {fmt(value)}
-          </Text>
-        </View>
+        <Text style={[type.body, { color: tone, fontWeight: "900", fontSize: 14 }]}>
+          {arrow} {fmt(value)}
+        </Text>
       </View>
 
       <View style={{ flexDirection: "row", justifyContent: "space-between", gap: spacing.md }}>
@@ -308,21 +299,103 @@ function TrendLine({
   );
 }
 
+function OverviewStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        minWidth: 0,
+        backgroundColor: colors.background,
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.divider,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.md,
+        gap: 6,
+      }}
+    >
+      <Text
+        style={[
+          type.microcopyItalic,
+          {
+            color: colors.textSecondary,
+            opacity: 0.9,
+            fontSize: 12,
+            lineHeight: 16,
+            textAlign: "center",
+            minHeight: 32,
+          },
+        ]}
+      >
+        {label}
+      </Text>
+      <Text
+        style={[
+          type.sectionHeader,
+          {
+            color: colors.textPrimary,
+            fontSize: 24,
+            lineHeight: 28,
+            textAlign: "center",
+          },
+        ]}
+        numberOfLines={1}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 export default function AdminMetricsScreen() {
   const [loading, setLoading] = useState(true);
   const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [totals, setTotals] = useState<Totals>({
+    totalUsers: null,
+    totalWhiskies: null,
+    totalTastings: null,
+  });
   const [error, setError] = useState<string>("");
 
   const load = useCallback(async () => {
     setError("");
     setLoading(true);
+
     try {
-      const { data, error } = await supabase.rpc("admin_metrics_snapshot");
-      if (error) throw error;
-      setSnap((data ?? null) as any);
+      const [snapshotRes, totalsRes] = await Promise.all([
+        supabase.rpc("admin_metrics_snapshot"),
+        supabase.rpc("admin_totals_snapshot"),
+      ]);
+
+      if (snapshotRes.error) throw snapshotRes.error;
+      if (totalsRes.error) throw totalsRes.error;
+
+      setSnap((snapshotRes.data ?? null) as any);
+
+      const totalsData = Array.isArray(totalsRes.data) ? totalsRes.data[0] : totalsRes.data;
+
+      setTotals({
+        totalUsers:
+          typeof totalsData?.total_users === "number" ? totalsData.total_users : null,
+        totalWhiskies:
+          typeof totalsData?.total_whiskies === "number" ? totalsData.total_whiskies : null,
+        totalTastings:
+          typeof totalsData?.total_tastings === "number" ? totalsData.total_tastings : null,
+      });
     } catch (e: any) {
       setError(String(e?.message ?? e));
       setSnap(null);
+      setTotals({
+        totalUsers: null,
+        totalWhiskies: null,
+        totalTastings: null,
+      });
     } finally {
       setLoading(false);
     }
@@ -334,17 +407,24 @@ export default function AdminMetricsScreen() {
 
   const updatedAt = useMemo(() => fmtDateTime(snap?.generated_at), [snap?.generated_at]);
 
-  const trendsActivation = snap?.trends?.activation ?? null;
   const trendsTastings = snap?.trends?.tastings ?? null;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ padding: spacing.xl, gap: spacing.lg }}>
-        {/* Header */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: spacing.md,
+          }}
+        >
           <View style={{ gap: 6, flex: 1 }}>
             <Text style={[type.screenTitle, { color: colors.textPrimary }]}>Metrics</Text>
-            <Text style={[type.microcopyItalic, { color: colors.textSecondary }]}>Updated: {updatedAt}</Text>
+            <Text style={[type.microcopyItalic, { color: colors.textSecondary }]}>
+              Updated: {updatedAt}
+            </Text>
           </View>
 
           <View style={{ flexDirection: "row", gap: spacing.xs }}>
@@ -384,7 +464,14 @@ export default function AdminMetricsScreen() {
                 opacity: pressed ? 0.9 : 1,
               })}
             >
-              <Text style={[type.button, { fontSize: 13, lineHeight: 16, color: colors.textPrimary }]}>Back</Text>
+              <Text
+                style={[
+                  type.button,
+                  { fontSize: 13, lineHeight: 16, color: colors.textPrimary },
+                ]}
+              >
+                Back
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -401,88 +488,55 @@ export default function AdminMetricsScreen() {
           </View>
         ) : null}
 
-        {/* Trends */}
-        <Card title="Trends">
-          <TrendLine
-            title="Activated users (last 7d)"
-            value={trendsActivation?.activated_7}
-            pctPrev7={trendsActivation?.pct_vs_prev7}
-            pct30Avg={trendsActivation?.pct_vs_30avg7}
-          />
+        <Card title="Overview">
+          <View style={{ flexDirection: "row", gap: spacing.md }}>
+            <OverviewStat label="Total Users" value={fmtCount(totals.totalUsers)} />
+            <OverviewStat label="Total Whiskies" value={fmtCount(totals.totalWhiskies)} />
+            <OverviewStat label="Total Tastings" value={fmtCount(totals.totalTastings)} />
+          </View>
+
+          <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.9 }]}>
+            These totals come from the admin totals snapshot and reflect database-wide counts.
+          </Text>
+        </Card>
+
+        <Card title="Growth">
           <TrendLine
             title="Tastings (last 7d)"
             value={trendsTastings?.tastings_7}
             pctPrev7={trendsTastings?.pct_vs_prev7}
             pct30Avg={trendsTastings?.pct_vs_30avg7}
           />
-          <MetricRowNoDivider
-            label="Note"
-            value="Early beta = big % swings (low baseline)."
-          />
-        </Card>
-
-        <Card title="Activation">
-          <MetricRow label="Signup → first tasting" value={fmtPct1(snap?.activation?.signup_to_first_tasting_pct)} />
-          <MetricRow
-            label="Time to first tasting (median)"
-            value={
-              snap?.activation?.time_to_first_tasting_median_minutes == null
-                ? "—"
-                : `${fmt(snap.activation.time_to_first_tasting_median_minutes)} min`
-            }
-          />
-          <MetricRow label="Tasting completion rate" value={fmtPct1(snap?.activation?.tasting_completion_rate_pct)} />
-          <NoteText text={snap?.activation?.note ?? null} />
-        </Card>
-
-        <Card title="Engagement">
           <MetricRow label="Weekly active tasters" value={fmt(snap?.engagement?.weekly_active_tasters)} />
           <MetricRow label="Monthly active tasters" value={fmt(snap?.engagement?.monthly_active_tasters)} />
-          <MetricRow label="Tastings (last 7d)" value={fmt(snap?.engagement?.tastings_last_7d)} />
           <MetricRow label="Tastings (last 30d)" value={fmt(snap?.engagement?.tastings_last_30d)} />
-          <MetricRow
+          <MetricRowNoDivider
             label="Tastings per active user (7d)"
             value={fmtNum2(snap?.engagement?.tastings_per_active_user_7d)}
           />
-          <NoteText text={snap?.engagement?.note ?? null} />
         </Card>
 
-        <Card title="Data quality">
+        <Card title="Depth & Quality">
           <MetricRow label="% tastings with notes" value={fmtPct(snap?.data_quality?.pct_tastings_with_notes)} />
-          <MetricRow label="Avg note length" value={fmtNum2(snap?.data_quality?.avg_note_length)} />
-          <MetricRow label="% with type populated" value={fmtPct(snap?.data_quality?.pct_with_type_populated)} />
-          <MetricRow label="Edit rate (24h)" value={fmtPct(snap?.data_quality?.edit_rate_24h)} />
-          <NoteText text={snap?.data_quality?.note ?? null} />
+          <MetricRowNoDivider label="Avg note length" value={fmtNum2(snap?.data_quality?.avg_note_length)} />
         </Card>
 
-        <Card title="Catalog pipeline">
+        <Card title="Catalog Pipeline">
           <MetricRow label="Candidates created (7d)" value={fmt(snap?.catalog_pipeline?.candidates_created_7d)} />
           <MetricRow label="Promoted (7d)" value={fmt(snap?.catalog_pipeline?.promoted_7d)} />
           <MetricRow label="Rejected (7d)" value={fmt(snap?.catalog_pipeline?.rejected_7d)} />
-          <MetricRow
+          <MetricRowNoDivider
             label="Median hours to promotion (30d)"
             value={fmtNum2(snap?.catalog_pipeline?.median_hours_to_promotion_30d)}
           />
         </Card>
 
-        <Card title="Monetization readiness">
+        <Card title="Monetization Readiness">
           <MetricRow label="Users with 10+ tastings" value={fmt(snap?.monetization_readiness?.users_10plus_tastings)} />
           <MetricRow label="Users with 25+ tastings" value={fmt(snap?.monetization_readiness?.users_25plus_tastings)} />
           <MetricRow label="Users with 50+ tastings" value={fmt(snap?.monetization_readiness?.users_50plus_tastings)} />
-          <MetricRow label="Users with 100+ tastings" value={fmt(snap?.monetization_readiness?.users_100plus_tastings)} />
-          <NoteText text={snap?.monetization_readiness?.note ?? null} />
+          <MetricRowNoDivider label="Users with 100+ tastings" value={fmt(snap?.monetization_readiness?.users_100plus_tastings)} />
         </Card>
-
-        <Card title="Reliability">
-          <MetricRow label="Auth success rate" value={fmtPct(snap?.reliability?.auth_success_rate)} />
-          <MetricRow label="Sync error rate" value={fmtPct(snap?.reliability?.sync_error_rate)} />
-          <MetricRow label="Crash-free sessions" value={fmtPct(snap?.reliability?.crash_free_sessions)} />
-          <NoteText text={snap?.reliability?.note ?? null} />
-        </Card>
-
-        <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.85 }]}>
-          Tip: Trends will stabilize as the beta pool grows.
-        </Text>
       </View>
     </ScrollView>
   );

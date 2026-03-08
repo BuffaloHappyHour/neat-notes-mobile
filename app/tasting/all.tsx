@@ -257,7 +257,7 @@ export default function AllTastingsScreen() {
         style={{
           padding: spacing.xl,
           paddingBottom: spacing.lg,
-          backgroundColor: colors.background,
+          backgroundColor: "transparent",
           gap: spacing.lg,
         }}
       >

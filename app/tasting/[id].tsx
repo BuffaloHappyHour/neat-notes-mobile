@@ -1,22 +1,22 @@
+import { Ionicons } from "@expo/vector-icons";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  Pressable,
   ActivityIndicator,
-  ScrollView,
   Alert,
+  Pressable,
+  ScrollView,
+  Text,
   TextInput,
+  View,
 } from "react-native";
-import { Stack, useLocalSearchParams, router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 
+import { radii } from "../../lib/radii";
+import { shadows } from "../../lib/shadows";
+import { spacing } from "../../lib/spacing";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
-import { spacing } from "../../lib/spacing";
-import { radii } from "../../lib/radii";
-import { shadows } from "../../lib/shadows";
 
 type TastingRow = {
   id: string;
@@ -175,7 +175,7 @@ export default function TastingDetailScreen() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
+    <ScrollView style={{ flex: 1, backgroundColor: "transparent" }}>
       <Stack.Screen
         options={{
           title: "Tasting",
