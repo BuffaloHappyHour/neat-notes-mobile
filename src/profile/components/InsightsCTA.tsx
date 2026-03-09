@@ -22,7 +22,7 @@ export function InsightsCTA({
   const shimmer = React.useRef(new Animated.Value(-1)).current;
 
   React.useEffect(() => {
-    if (compact) return;
+    if (compact || isPremium) return;
 
     const loop = Animated.loop(
       Animated.sequence([
@@ -38,9 +38,68 @@ export function InsightsCTA({
 
     loop.start();
     return () => loop.stop();
-  }, [shimmer, compact]);
+  }, [shimmer, compact, isPremium]);
 
   if (compact) {
+    if (isPremium) {
+      return (
+        <Pressable
+          onPress={onPress}
+          style={({ pressed }) => ({
+            borderRadius: radii.xl ?? radii.lg,
+            borderWidth: 1,
+            borderColor: colors.glassBorderStrong ?? colors.borderStrong,
+            backgroundColor: pressed
+              ? "rgba(190,150,99,0.16)"
+              : "rgba(190,150,99,0.12)",
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.md,
+            ...shadows.card,
+            overflow: "hidden",
+          })}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: spacing.md,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[
+                  type.body,
+                  {
+                    color: colors.textPrimary,
+                    fontSize: 20,
+                    lineHeight: 26,
+                  },
+                ]}
+              >
+                View Insights
+              </Text>
+
+              <Text
+                style={[
+                  type.caption,
+                  {
+                    color: colors.textSecondary,
+                    marginTop: 6,
+                    lineHeight: 20,
+                  },
+                ]}
+              >
+                Explore the metrics shaping your palate.
+              </Text>
+            </View>
+
+            <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+          </View>
+        </Pressable>
+      );
+    }
+
     return (
       <Pressable
         onPress={onPress}
@@ -147,8 +206,67 @@ export function InsightsCTA({
               },
             ]}
           >
-          Insights become more meaningful with a few logged pours.
+            Insights become more meaningful with a few logged pours.
           </Text>
+        </View>
+      </Pressable>
+    );
+  }
+
+  if (isPremium) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => ({
+          borderRadius: radii.xl ?? radii.lg,
+          borderWidth: 1,
+          borderColor: colors.glassBorderStrong ?? colors.borderStrong,
+          backgroundColor: pressed
+            ? "rgba(190,150,99,0.16)"
+            : "rgba(190,150,99,0.12)",
+          paddingHorizontal: spacing.lg,
+          paddingVertical: spacing.lg,
+          ...shadows.card,
+          overflow: "hidden",
+        })}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: spacing.md,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text
+              style={[
+                type.sectionHeader,
+                {
+                  fontSize: 22,
+                  lineHeight: 28,
+                  color: colors.textPrimary,
+                },
+              ]}
+            >
+              View Insights
+            </Text>
+
+            <Text
+              style={[
+                type.caption,
+                {
+                  color: colors.textSecondary,
+                  marginTop: 4,
+                  lineHeight: 20,
+                },
+              ]}
+            >
+              Explore the metrics shaping your palate.
+            </Text>
+          </View>
+
+          <Ionicons name="chevron-forward" size={20} color={colors.accent} />
         </View>
       </Pressable>
     );
@@ -161,82 +279,72 @@ export function InsightsCTA({
         minHeight: 220,
         borderRadius: radii.xxl ?? radii.xl,
         borderWidth: 1.5,
-        borderColor: isPremium
-          ? colors.glassBorderStrong ?? colors.borderStrong
-          : "rgba(190,150,99,0.42)",
-        backgroundColor: isPremium
-          ? pressed
-            ? "rgba(190,150,99,0.16)"
-            : "rgba(190,150,99,0.12)"
-          : pressed
-            ? "rgba(18,16,14,0.84)"
-            : "rgba(18,16,14,0.76)",
+        borderColor: "rgba(190,150,99,0.42)",
+        backgroundColor: pressed ? "rgba(18,16,14,0.84)" : "rgba(18,16,14,0.76)",
         ...shadows.card,
         overflow: "hidden",
       })}
     >
-      {!isPremium ? (
-        <>
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              right: -22,
-              bottom: -75,
-              width: "74%",
-              opacity: 0.16,
-              transform: [{ scale: 0.68 }],
-            }}
-          >
-            <LockedInsightsPreview />
-          </View>
+      <>
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            right: -22,
+            bottom: -75,
+            width: "74%",
+            opacity: 0.16,
+            transform: [{ scale: 0.68 }],
+          }}
+        >
+          <LockedInsightsPreview />
+        </View>
 
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              top: 0,
-              right: 0,
-              bottom: 0,
-              width: "62%",
-              backgroundColor: "rgba(0,0,0,0.34)",
-            }}
-          />
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: "62%",
+            backgroundColor: "rgba(0,0,0,0.34)",
+          }}
+        />
 
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              right: 24,
-              top: 28,
-              width: 150,
-              height: 150,
-              borderRadius: 999,
-              backgroundColor: "rgba(190,150,99,0.07)",
-            }}
-          />
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            right: 24,
+            top: 28,
+            width: 150,
+            height: 150,
+            borderRadius: 999,
+            backgroundColor: "rgba(190,150,99,0.07)",
+          }}
+        />
 
-          <Animated.View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              top: -30,
-              bottom: -30,
-              width: 180,
-              backgroundColor: "rgba(190,150,99,0.06)",
-              transform: [
-                {
-                  translateX: shimmer.interpolate({
-                    inputRange: [-1, 1],
-                    outputRange: [-180, 420],
-                  }),
-                },
-                { rotate: "12deg" },
-              ],
-            }}
-          />
-        </>
-      ) : null}
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: -30,
+            bottom: -30,
+            width: 180,
+            backgroundColor: "rgba(190,150,99,0.06)",
+            transform: [
+              {
+                translateX: shimmer.interpolate({
+                  inputRange: [-1, 1],
+                  outputRange: [-180, 420],
+                }),
+              },
+              { rotate: "12deg" },
+            ],
+          }}
+        />
+      </>
 
       <View
         style={{
@@ -279,37 +387,33 @@ export function InsightsCTA({
                 },
               ]}
             >
-              {isPremium
-                ? "Deep-dive metrics that reveal your palate."
-                : "See your taste profile, behavior trends, and deeper palate intelligence."}
+              See your taste profile, behavior trends, and deeper palate intelligence.
             </Text>
           </View>
 
-          {!isPremium ? (
-            <View
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: "rgba(190,150,99,0.7)",
-                backgroundColor: "rgba(0,0,0,0.26)",
-              }}
+          <View
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: "rgba(190,150,99,0.7)",
+              backgroundColor: "rgba(0,0,0,0.26)",
+            }}
+          >
+            <Text
+              style={[
+                type.body,
+                {
+                  color: colors.accent,
+                  letterSpacing: 1.2,
+                  fontWeight: "900",
+                },
+              ]}
             >
-              <Text
-                style={[
-                  type.body,
-                  {
-                    color: colors.accent,
-                    letterSpacing: 1.2,
-                    fontWeight: "900",
-                  },
-                ]}
-              >
-                PREMIUM
-              </Text>
-            </View>
-          ) : null}
+              PREMIUM
+            </Text>
+          </View>
         </View>
 
         <View
@@ -318,41 +422,39 @@ export function InsightsCTA({
             height: 3,
             borderRadius: 999,
             backgroundColor: colors.accent,
-            opacity: isPremium ? 0.95 : 0.85,
+            opacity: 0.85,
             marginTop: spacing.sm,
           }}
         />
 
-        {!isPremium ? (
-          <View
-            style={{
-              marginTop: "auto",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              borderRadius: 999,
-              backgroundColor: "rgba(0,0,0,0.24)",
-              alignSelf: "flex-start",
-            }}
-          >
-            <Ionicons name="lock-closed" size={16} color={colors.accent} />
+        <View
+          style={{
+            marginTop: "auto",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            borderRadius: 999,
+            backgroundColor: "rgba(0,0,0,0.24)",
+            alignSelf: "flex-start",
+          }}
+        >
+          <Ionicons name="lock-closed" size={16} color={colors.accent} />
 
-            <Text
-              style={[
-                type.microcopyItalic,
-                {
-                  color: colors.textSecondary,
-                  opacity: 0.92,
-                  lineHeight: 20,
-                },
-              ]}
-            >
-              Taste profile • behavior trends • palate intelligence
-            </Text>
-          </View>
-        ) : null}
+          <Text
+            style={[
+              type.microcopyItalic,
+              {
+                color: colors.textSecondary,
+                opacity: 0.92,
+                lineHeight: 20,
+              },
+            ]}
+          >
+            Taste profile • behavior trends • palate intelligence
+          </Text>
+        </View>
       </View>
     </Pressable>
   );

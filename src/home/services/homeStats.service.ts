@@ -1,4 +1,3 @@
-// src/home/services/homeStats.service.ts
 import { supabase } from "../../../lib/supabase";
 
 export async function fetchHomeStats() {
@@ -10,12 +9,12 @@ export async function fetchHomeStats() {
       isAuthed: false,
       firstName: null as string | null,
       tastingCount: null as number | null,
+      avgRating: null as number | null,
     };
   }
 
   const userId = user.id;
 
-  // 1) Fetch first_name (personalization)
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("first_name")
@@ -25,7 +24,6 @@ export async function fetchHomeStats() {
   const firstName =
     !profileError && profile?.first_name ? String(profile.first_name) : null;
 
-  // 2) Fetch tasting count
   const { count, error: countError } = await supabase
     .from("tastings")
     .select("id", { count: "exact", head: true })
@@ -34,9 +32,29 @@ export async function fetchHomeStats() {
   const tastingCount =
     countError ? null : typeof count === "number" ? count : 0;
 
+  const { data: ratings, error: ratingsError } = await supabase
+    .from("tastings")
+    .select("rating")
+    .eq("user_id", userId)
+    .not("rating", "is", null);
+
+  let avgRating: number | null = null;
+
+  if (!ratingsError && ratings && ratings.length > 0) {
+    const numericRatings = ratings
+      .map((row) => Number(row.rating))
+      .filter((value) => Number.isFinite(value));
+
+    if (numericRatings.length > 0) {
+      const total = numericRatings.reduce((sum, value) => sum + value, 0);
+      avgRating = Number((total / numericRatings.length).toFixed(1));
+    }
+  }
+
   return {
     isAuthed: true,
     firstName,
     tastingCount,
+    avgRating,
   };
 }

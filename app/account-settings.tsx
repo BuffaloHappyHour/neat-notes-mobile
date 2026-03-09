@@ -870,9 +870,9 @@ export default function AccountSettingsScreen() {
           </Text>
         </Card>
 
-        <Card title="Beta Feedback" subtitle="Help shape Neat Notes. Report bugs or share ideas.">
+        <Card title="Application Feedback" subtitle="Help shape Neat Notes. Report bugs or share ideas.">
           <ThemedButton
-            label="Submit Feedback (Beta)"
+            label="Submit Feedback"
             onPress={withTick(async () => {
               try {
                 const { data } = await supabase.auth.getSession();
@@ -882,7 +882,7 @@ export default function AccountSettingsScreen() {
                 const platform = Platform.OS;
                 const timestamp = new Date().toISOString();
 
-                const subject = encodeURIComponent("Neat Notes Beta Feedback");
+                const subject = encodeURIComponent("Neat Notes Application Feedback");
                 const body = encodeURIComponent(
 `Please describe the issue or feedback below:
 

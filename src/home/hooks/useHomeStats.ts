@@ -1,4 +1,3 @@
-// src/home/hooks/useHomeStats.ts
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import { fetchHomeStats } from "../services/homeStats.service";
@@ -7,6 +6,7 @@ export function useHomeStats() {
   const [isAuthed, setIsAuthed] = useState(false);
   const [firstName, setFirstName] = useState<string | null>(null);
   const [tastingCount, setTastingCount] = useState<number | null>(null);
+  const [avgRating, setAvgRating] = useState<number | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -16,6 +16,7 @@ export function useHomeStats() {
       setIsAuthed(res.isAuthed);
       setFirstName(res.firstName);
       setTastingCount(res.tastingCount);
+      setAvgRating(res.avgRating);
     } finally {
       setStatsLoading(false);
     }
@@ -32,5 +33,5 @@ export function useHomeStats() {
     }, [refresh])
   );
 
-  return { isAuthed, firstName, tastingCount, statsLoading, refresh };
+  return { isAuthed, firstName, tastingCount, avgRating, statsLoading, refresh };
 }

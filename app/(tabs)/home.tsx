@@ -1,4 +1,3 @@
-// app/(tabs)/home.tsx
 import { router } from "expo-router";
 import React, { useEffect, useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -107,69 +106,176 @@ function ActionBodyCard({
   );
 }
 
-function SubtleNotice({
-  title,
-  subtitle,
-  cta,
+function JournalSnapshotCard({
+  tastingCount,
+  avgRating,
   onPress,
 }: {
-  title: string;
-  subtitle: string;
-  cta: string;
+  tastingCount: number | null;
+  avgRating: number | null;
   onPress: () => void;
 }) {
+  const tastingsValue =
+    tastingCount === null ? "—" : String(tastingCount);
+
+  const avgValue =
+    avgRating === null || !Number.isFinite(avgRating) ? "—" : avgRating.toFixed(1);
+
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({
         borderRadius: radii.lg,
+        borderWidth: 1,
+        borderColor: pressed ? "rgba(190, 150, 99, 0.42)" : colors.glassBorder,
+        backgroundColor: pressed ? "rgba(190, 150, 99, 0.08)" : colors.glassSurface,
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.lg,
-        borderWidth: 1,
-        backgroundColor: colors.glassSurface,
-        borderColor: pressed ? colors.glassBorderStrong : colors.glassBorder,
         ...warmCardShadow,
-        opacity: pressed ? 0.94 : 1,
-        gap: 10,
+        opacity: pressed ? 0.97 : 1,
       })}
     >
-      <Text
-        style={[
-          type.sectionHeader,
-          {
-            fontSize: 18,
-            lineHeight: 22,
-            opacity: 0.72,
-            color: colors.textPrimary,
-          },
-        ]}
-      >
-        {title}
-      </Text>
+      <View style={{ gap: spacing.sm }}>
+        <Text
+          style={[
+            type.microcopyItalic,
+            {
+              fontSize: 15,
+              lineHeight: 21,
+              opacity: 0.84,
+              color: colors.textPrimary,
+            },
+          ]}
+        >
+          A quick snapshot of your journal so far.
+        </Text>
 
-      <Text
-        style={[
-          type.microcopyItalic,
-          {
-            fontSize: 15,
-            lineHeight: 21,
-            opacity: 0.82,
-            color: colors.textPrimary,
-          },
-        ]}
-      >
-        {subtitle}
-      </Text>
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          <View
+            style={{
+              flex: 1,
+              borderRadius: radii.lg,
+              borderWidth: 1,
+              borderColor: colors.glassBorder,
+              backgroundColor: "rgba(255,255,255,0.03)",
+              paddingVertical: spacing.sm,
+              paddingHorizontal: spacing.sm,
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 68,
+            }}
+          >
+            <Text
+              style={[
+                type.caption,
+                {
+                  color: colors.textSecondary,
+                  fontWeight: "800",
+                  letterSpacing: 1.2,
+                  textTransform: "uppercase",
+                },
+              ]}
+            >
+              Tastings
+            </Text>
 
-      <Text style={[type.caption, { color: colors.accent, fontWeight: "700", opacity: 0.92 }]}>
-        → {cta}
-      </Text>
+            <Text
+              style={[
+                type.sectionHeader,
+                {
+                  marginTop: 4,
+                  fontSize: 24,
+                  lineHeight: 28,
+                  color: colors.textPrimary,
+                },
+              ]}
+            >
+              {tastingsValue}
+            </Text>
+          </View>
+
+          <View
+            style={{
+              flex: 1,
+              borderRadius: radii.lg,
+              borderWidth: 1,
+              borderColor: colors.glassBorder,
+              backgroundColor: "rgba(255,255,255,0.03)",
+              paddingVertical: spacing.sm,
+              paddingHorizontal: spacing.sm,
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 68,
+            }}
+          >
+            <Text
+              style={[
+                type.caption,
+                {
+                  color: colors.textSecondary,
+                  fontWeight: "800",
+                  letterSpacing: 1.2,
+                  textTransform: "uppercase",
+                },
+              ]}
+            >
+              Avg. Rating
+            </Text>
+
+            <Text
+              style={[
+                type.sectionHeader,
+                {
+                  marginTop: 4,
+                  fontSize: 24,
+                  lineHeight: 28,
+                  color: colors.textPrimary,
+                },
+              ]}
+            >
+              {avgValue}
+            </Text>
+          </View>
+        </View>
+        <View style={{ alignItems: "center", marginTop: spacing.sm }}>
+  <View
+    style={{
+      width: 260,
+      paddingVertical: 9,
+      borderRadius: 999,
+      alignItems: "center",
+      backgroundColor: "rgba(190, 150, 99, 0.10)",
+      borderWidth: 1,
+      borderColor: "rgba(190, 150, 99, 0.34)",
+      shadowColor: colors.shadowWarm ?? colors.shadow,
+      shadowOpacity: 0.18,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 3,
+    }}
+  >
+    <Text
+      style={[
+        type.caption,
+        {
+          color: colors.accent,
+          opacity: 0.96,
+          letterSpacing: 0.25,
+          fontWeight: "700",
+        },
+      ]}
+    >
+      View your profile
+    </Text>
+  </View>
+</View>
+      </View>
     </Pressable>
   );
 }
 
 export default function HomeTab() {
-  const { isAuthed, firstName, tastingCount, statsLoading } = useHomeStats();
+  const { isAuthed, firstName, tastingCount, avgRating, statsLoading } = useHomeStats();
 
   const logPress = (action: string, href?: string) => {
     void logClientEvent("press", {
@@ -270,15 +376,6 @@ export default function HomeTab() {
     []
   );
 
-  const goAccountSettings = useMemo(
-    () =>
-      withTick(() => {
-        logPress("home_account_feedback", "/account-settings");
-        router.push("/account-settings");
-      }),
-    []
-  );
-
   const goLog = useMemo(
     () =>
       withTick(() => {
@@ -293,6 +390,15 @@ export default function HomeTab() {
       withTick(() => {
         logPress("home_discover_cta", "/(tabs)/discover");
         router.push("/(tabs)/discover");
+      }),
+    []
+  );
+
+  const goProfile = useMemo(
+    () =>
+      withTick(() => {
+        logPress("home_profile_cta", "/(tabs)/profile");
+        router.push("/(tabs)/profile");
       }),
     []
   );
@@ -384,36 +490,36 @@ export default function HomeTab() {
           </View>
         ) : null}
 
-      <View style={{ gap: 6 }}>
-  <Text style={[type.sectionHeader, { fontSize: 20, lineHeight: 25, color: colors.textPrimary }]}>
-    {logCopy.title}
-  </Text>
+        <View style={{ gap: 6 }}>
+          <Text style={[type.sectionHeader, { fontSize: 20, lineHeight: 25, color: colors.textPrimary }]}>
+            {logCopy.title}
+          </Text>
           <ActionBodyCard subtitle={logCopy.subtitle} rightHint={logCopy.hint} onPress={goLog} />
           <View
-    style={{
-      height: 3,
-      width: 46,
-      borderRadius: 999,
-      backgroundColor: colors.accent,
-      opacity: 0.65,
-    }}
-  />
+            style={{
+              height: 3,
+              width: 46,
+              borderRadius: 999,
+              backgroundColor: colors.accent,
+              opacity: 0.65,
+            }}
+          />
         </View>
 
-       <View style={{ gap: 6 }}>
-  <Text style={[type.sectionHeader, { fontSize: 20, lineHeight: 25, color: colors.textPrimary }]}>
-    {discoverCopy.title}
-  </Text>
+        <View style={{ gap: 6 }}>
+          <Text style={[type.sectionHeader, { fontSize: 20, lineHeight: 25, color: colors.textPrimary }]}>
+            {discoverCopy.title}
+          </Text>
           <ActionBodyCard subtitle={discoverCopy.subtitle} rightHint={discoverCopy.hint} onPress={goDiscover} />
           <View
-    style={{
-      height: 3,
-      width: 46,
-      borderRadius: 999,
-      backgroundColor: colors.accent,
-      opacity: 0.65,
-    }}
-  />
+            style={{
+              height: 3,
+              width: 46,
+              borderRadius: 999,
+              backgroundColor: colors.accent,
+              opacity: 0.65,
+            }}
+          />
         </View>
 
         <View style={{ marginTop: spacing.sm }}>
@@ -442,12 +548,25 @@ export default function HomeTab() {
         </View>
 
         {isAuthed ? (
-          <View style={{ marginTop: spacing.md + 4 }}>
-            <SubtleNotice
-              title="Founding Tester (Beta)"
-              subtitle="Your tastings are private. If something feels off, send feedback — it helps us harden the app."
-              cta="Account & feedback"
-              onPress={goAccountSettings}
+          <View style={{ gap: 6, marginTop: spacing.md }}>
+            <Text style={[type.sectionHeader, { fontSize: 20, lineHeight: 25, color: colors.textPrimary }]}>
+              Your Journal
+            </Text>
+
+            <JournalSnapshotCard
+              tastingCount={tastingCount}
+              avgRating={avgRating}
+              onPress={goProfile}
+            />
+
+            <View
+              style={{
+                height: 3,
+                width: 46,
+                borderRadius: 999,
+                backgroundColor: colors.accent,
+                opacity: 0.65,
+              }}
             />
           </View>
         ) : null}

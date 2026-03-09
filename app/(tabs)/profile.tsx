@@ -129,6 +129,7 @@ export default function ProfileTab() {
     refreshing,
     isAuthed,
     isAdmin,
+    isPremium,
 
     welcomeTitle,
     tastingsText,
@@ -230,18 +231,18 @@ export default function ProfileTab() {
               ) : null}
             </View>
 
-            {isEarlyUser ? (
-              <InsightsCTA
-                compact
-                isPremium={false}
-                onPress={() => router.push("/insights" as any)}
-              />
-            ) : (
-              <InsightsCTA
-                isPremium={false}
-                onPress={() => router.push("/insights" as any)}
-              />
-            )}
+  {isEarlyUser ? (
+  <InsightsCTA
+    compact
+    isPremium={isPremium}
+    onPress={() => router.push("/insights" as any)}
+  />
+) : (
+  <InsightsCTA
+    isPremium={isPremium}
+    onPress={() => router.push("/insights" as any)}
+  />
+)}
 
             <View style={{ gap: spacing.sm }}>
               <View style={{ gap: 8 }}>

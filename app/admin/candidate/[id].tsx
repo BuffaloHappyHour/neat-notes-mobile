@@ -1,4 +1,3 @@
-// app/admin/candidate/[id].tsx
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
@@ -23,6 +22,7 @@ import {
 import { radii } from "../../../lib/radii";
 import { shadows } from "../../../lib/shadows";
 import { spacing } from "../../../lib/spacing";
+import { supabase } from "../../../lib/supabase";
 import { colors } from "../../../lib/theme";
 import { type } from "../../../lib/typography";
 
@@ -63,6 +63,120 @@ function Field({
   );
 }
 
+function ControlledSelect({
+  label,
+  value,
+  placeholder,
+  options,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  placeholder: string;
+  options: string[];
+  disabled?: boolean;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  const safeOptions = Array.isArray(options) ? options : [];
+  const canOpen = !disabled && safeOptions.length > 0;
+
+  return (
+    <View style={{ gap: spacing.xs }}>
+      <Text style={{ ...type.microcopyItalic }}>{label}</Text>
+
+      <Pressable
+        disabled={!canOpen}
+        onPress={() => setOpen((v) => !v)}
+        style={({ pressed }) => ({
+          paddingVertical: 12,
+          paddingHorizontal: spacing.md,
+          borderRadius: radii.md,
+          borderWidth: 1,
+          borderColor: colors.divider,
+          backgroundColor: pressed ? colors.highlight : colors.surface,
+          opacity: canOpen ? 1 : 0.55,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+        })}
+      >
+        <Text style={[type.body, { color: colors.textPrimary, opacity: value ? 0.95 : 0.6 }]} numberOfLines={1}>
+          {value ? value : placeholder}
+        </Text>
+
+        <Ionicons
+          name={open ? "chevron-up" : "chevron-down"}
+          size={18}
+          color={colors.textSecondary}
+        />
+      </Pressable>
+
+      {open ? (
+        <View
+          style={{
+            marginTop: 6,
+            borderRadius: radii.md,
+            borderWidth: 1,
+            borderColor: colors.divider,
+            overflow: "hidden",
+            backgroundColor: colors.surface,
+          }}
+        >
+          <ScrollView
+            style={{ maxHeight: 260 }}
+            contentContainerStyle={{ paddingVertical: 4 }}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+          >
+            {safeOptions.map((opt) => {
+              const active = opt === value;
+              return (
+                <Pressable
+                  key={opt}
+                  onPress={() => {
+                    onChange(opt);
+                    setOpen(false);
+                  }}
+                  style={({ pressed }) => ({
+                    paddingVertical: 12,
+                    paddingHorizontal: 12,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.divider,
+                    backgroundColor: active
+                      ? colors.highlight
+                      : pressed
+                      ? colors.highlight
+                      : "transparent",
+                  })}
+                >
+                  <Text style={[type.body, { color: colors.textPrimary, fontWeight: active ? "900" : "800" }]}>
+                    {opt}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+
+      {!disabled && safeOptions.length === 0 ? (
+        <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.8 }]}>
+          No type options available.
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 export default function AdminCandidateDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [ok, setOk] = useState<boolean | null>(null);
@@ -77,6 +191,7 @@ export default function AdminCandidateDetail() {
   const [note, setNote] = useState("");
 
   const [meta, setMeta] = useState<any>(null);
+  const [whiskeyTypeOptions, setWhiskeyTypeOptions] = useState<string[]>([]);
 
   const header = useMemo(() => {
     if (ok === null) return "Checking admin…";
@@ -84,9 +199,24 @@ export default function AdminCandidateDetail() {
     return "Candidate";
   }, [ok]);
 
+  async function loadWhiskeyTypes() {
+    const { data, error } = await supabase
+      .from("whiskey_types")
+      .select("name")
+      .order("name", { ascending: true });
+
+    if (error) throw error;
+
+    const names = (Array.isArray(data) ? data : [])
+      .map((r: any) => String(r?.name ?? "").trim())
+      .filter(Boolean);
+
+    setWhiskeyTypeOptions(names);
+  }
+
   async function load() {
     setLoading(true);
-    const row = await fetchCandidate(id);
+    const [row] = await Promise.all([fetchCandidate(id), loadWhiskeyTypes()]);
     setMeta(row);
 
     setNameRaw(row.name_raw ?? "");
@@ -204,21 +334,40 @@ export default function AdminCandidateDetail() {
             }}
           >
             <Field label="Name" value={nameRaw} onChangeText={setNameRaw} placeholder="Display name" />
+
             <Field
               label="Canonical slug"
               value={slug}
               onChangeText={setSlug}
               placeholder="lowercase-hyphen-slug"
             />
-            <Field
-              label="Whiskey type (must match allowed list)"
+
+            <ControlledSelect
+              label="Whiskey type"
               value={whiskeyType}
-              onChangeText={setWhiskeyType}
-              placeholder="e.g., Bourbon"
+              placeholder="Select whiskey type…"
+              options={whiskeyTypeOptions}
+              onChange={setWhiskeyType}
             />
+
             <Field label="Distillery" value={distillery} onChangeText={setDistillery} placeholder="Distillery" />
-            <Field label="Proof (required to promote)" value={proof} onChangeText={setProof} placeholder="e.g., 92" keyboardType="numeric" />
-            <Field label="Age" value={age} onChangeText={setAge} placeholder="e.g., 12" keyboardType="numeric" />
+
+            <Field
+              label="Proof"
+              value={proof}
+              onChangeText={setProof}
+              placeholder="e.g., 92"
+              keyboardType="numeric"
+            />
+
+            <Field
+              label="Age"
+              value={age}
+              onChangeText={setAge}
+              placeholder="e.g., 12"
+              keyboardType="numeric"
+            />
+
             <Field label="Reviewer note" value={note} onChangeText={setNote} placeholder="Internal notes" />
           </View>
 
