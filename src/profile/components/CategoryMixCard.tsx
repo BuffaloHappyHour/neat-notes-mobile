@@ -177,7 +177,7 @@ export function CategoryMixCard({
               { marginTop: spacing.md, color: colors.textSecondary, opacity: 0.85 },
             ]}
           >
-            Premium can add trends over time and palate shifts.
+            Trends over time and palate shifts can appear here as you log more tastings.
           </Text>
         </>
       )}

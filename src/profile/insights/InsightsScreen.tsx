@@ -101,7 +101,6 @@ export default function InsightsScreen() {
         contentContainerStyle={{
           paddingHorizontal: spacing.md,
           paddingBottom: spacing.xl,
-          gap: spacing.lg,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -124,7 +123,7 @@ export default function InsightsScreen() {
               },
             ]}
           >
-            Premium Insights
+            Insights
           </Text>
 
           <Text
@@ -136,20 +135,7 @@ export default function InsightsScreen() {
               },
             ]}
           >
-            Unlock your taste profile, behavior trends, and advanced palate intelligence.
-          </Text>
-
-          <Text
-            style={[
-              type.microcopyItalic,
-              {
-                color: colors.accent,
-                marginTop: spacing.sm,
-                opacity: 0.92,
-              },
-            ]}
-          >
-            Premium Insights - Coming Soon.
+            Insights will become available as you log more tastings.
           </Text>
         </View>
       </ScrollView>
