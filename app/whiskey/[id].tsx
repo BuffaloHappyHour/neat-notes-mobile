@@ -16,6 +16,8 @@ import { spacing } from "../../lib/spacing";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
+import { AppToast } from "../../src/components/ui/AppToast";
+
 
 import {
   hapticError,
@@ -371,12 +373,17 @@ type TastingSupabaseRow = {
 
 export default function WhiskeyDetailScreen() {
   const params = useLocalSearchParams<{
-    id?: string | string[];
-    name?: string | string[];
-  }>();
+  id?: string | string[];
+  name?: string | string[];
+  toastTitle?: string | string[];
+  toastMessage?: string | string[];
+}>();
 
   const routeId = (asString(params.id) ?? "").trim();
   const typedName = (asString(params.name) ?? "").trim();
+
+  const routeToastTitle = (asString(params.toastTitle) ?? "").trim();
+  const routeToastMessage = (asString(params.toastMessage) ?? "").trim();
 
   const [loading, setLoading] = useState(true);
   const [statusError, setStatusError] = useState<string>("");
@@ -392,6 +399,20 @@ export default function WhiskeyDetailScreen() {
       "Whiskey";
     return toDisplayTitleCase(fallback);
   }, [headerNameRaw, typedName, routeId]);
+
+  const [toastVisible, setToastVisible] = useState(false);
+const [toastTitle, setToastTitle] = useState("");
+const [toastMessage, setToastMessage] = useState("");
+
+function showToast(title: string, message?: string) {
+  setToastTitle(title);
+  setToastMessage(message ?? "");
+  setToastVisible(true);
+}
+useEffect(() => {
+  if (!routeToastTitle) return;
+  showToast(routeToastTitle, routeToastMessage);
+}, [routeToastTitle, routeToastMessage]);
 
   const [details, setDetails] = useState<{
     distillery: string | null;
@@ -633,6 +654,7 @@ export default function WhiskeyDetailScreen() {
   }, [routeId]);
 
   return (
+  <>
     <ScrollView style={{ flex: 1, backgroundColor: "transparent" }}>
       <Stack.Screen options={{ title: "Whiskey Profile" }} />
 
@@ -799,6 +821,14 @@ export default function WhiskeyDetailScreen() {
           )}
         </View>
       </View>
-    </ScrollView>
-  );
+       </ScrollView>
+
+    <AppToast
+      visible={toastVisible}
+      title={toastTitle}
+      message={toastMessage}
+      onHide={() => setToastVisible(false)}
+    />
+  </>
+);
 }

@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { hapticError, hapticSuccess } from "../../../lib/haptics";
 import { supabase } from "../../../lib/supabase";
+import { maybeCreateWhiskeyCandidate } from "../services/whiskeyCandidates.service";
 
 import {
   cleanText,
@@ -203,7 +204,7 @@ export function usePostSaveMetadata() {
         setMetaIsCustom(true);
 
         // For custom we want to show at minimum these three required blocks
-        setMetaMissingKeys(["whiskey_type", "proof"]); // Name is handled via fName + isCustom in modal
+        setMetaMissingKeys(["whiskey_type", "proof", "distillery", "age"]); // Name is handled via fName + isCustom in modal
 
         setPostSaveTargetWhiskeyId(null); // no uuid
         setPendingNavigateTo(navigateTo);
@@ -302,21 +303,36 @@ export function usePostSaveMetadata() {
     if (metaSaving) return null;
 
     // ✅ Custom: no whiskey_id to update — just close after validation (modal enforces required)
-    if (metaIsCustom) {
-      setMetaSaving(true);
-      try {
-        // TODO (optional): submit a “catalog suggestion” record here.
-        // Example:
-        // await supabase.from("whiskey_suggestions").insert({ name: fName, whiskey_type_id: fTypeId, proof: parseNumericOrNull(fProof), distillery: fDistillery, ... })
-        await hapticSuccess();
-        return finishPostSaveFlow();
-      } catch {
-        await hapticError();
-        return null;
-      } finally {
-        setMetaSaving(false);
-      }
-    }
+   if (metaIsCustom) {
+  const dist = cleanText(fDistillery);
+  const proof = parseNumericOrNull(fProof);
+  const age = parseNumericOrNull(fAge);
+
+  const whiskeyTypeName =
+    (whiskeyTypeOptions || []).find((x) => safeText(x.id) === safeText(fTypeId))?.name ?? null;
+
+  setMetaSaving(true);
+  try {
+   await maybeCreateWhiskeyCandidate({
+  nameRaw: fName,
+  whiskeyType: whiskeyTypeName,
+  distillery: dist,
+  proof,
+  age,
+  category: fCategory,
+  region: fRegion,
+  subRegion: fSubRegion,
+});
+
+    await hapticSuccess();
+    return finishPostSaveFlow();
+  } catch {
+    await hapticError();
+    return null;
+  } finally {
+    setMetaSaving(false);
+  }
+}
 
     // Normal: must have uuid
     if (!postSaveTargetWhiskeyId || !isUuid(postSaveTargetWhiskeyId)) {

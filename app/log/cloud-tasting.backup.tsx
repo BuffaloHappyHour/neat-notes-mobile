@@ -2042,7 +2042,6 @@ export default function CloudTastingScreen() {
           has_notes: !!personalOrNull,
           notes_len: personalOrNull ? personalOrNull.length : 0,
           has_flavor_tags: mergedFlavorTags.length > 0,
-          has_dislike_tags: !noDislikes && dislikeTags.length > 0,
           source_type: sourceType,
         });
 
@@ -2091,7 +2090,6 @@ export default function CloudTastingScreen() {
           has_notes: !!personalOrNull,
           notes_len: personalOrNull ? personalOrNull.length : 0,
           has_flavor_tags: mergedFlavorTags.length > 0,
-          has_dislike_tags: !noDislikes && dislikeTags.length > 0,
           source_type: sourceType,
         });
 

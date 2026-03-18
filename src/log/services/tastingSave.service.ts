@@ -10,7 +10,6 @@ import {
   getMyShareSetting,
   upsertPublicMirror,
 } from "./publicMirror.service";
-import { maybeCreateWhiskeyCandidate } from "./whiskeyCandidates.service";
 
 export type Reaction = "ENJOYED" | "NEUTRAL" | "NOT_FOR_ME" | null;
 
@@ -270,10 +269,6 @@ export async function saveCloudTasting(params: {
 
     // ✅ mirror should never be able to break saving
     await syncPublicMirrorSafely(newId, shareOk);
-
-    if (!lockName) {
-      await maybeCreateWhiskeyCandidate(safeName);
-    }
 
     trackTastingSaved({
       screen: "cloud-tasting",

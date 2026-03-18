@@ -8,6 +8,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
+        "APP_VARIANT": "development",
         "EXPO_PUBLIC_SUPABASE_URL": "https://vfqbioksbylatydjqdhg.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZmcWJpb2tzYnlsYXR5ZGpxZGhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5ODcxMTQsImV4cCI6MjA4NjU2MzExNH0.ebCX2AibgTY4Q1SkLf98tchLZU2U7TS5DwoKerBig7c"
       }

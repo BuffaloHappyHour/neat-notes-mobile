@@ -1,4 +1,3 @@
-// app/(tabs)/log.tsx
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -316,6 +315,7 @@ export default function LogTab() {
           .from("whiskeys")
           .select("id, display_name")
           .eq("id", t)
+          .eq("is_active", true)
           .limit(1);
 
         if (byIdErr) throw new Error(byIdErr.message);
@@ -337,6 +337,7 @@ export default function LogTab() {
       const { data: wData, error: wErr } = await supabase
         .from("whiskeys")
         .select("id, display_name")
+        .eq("is_active", true)
         .ilike("display_name", `%${safe}%`)
         .order("display_name", { ascending: true })
         .limit(20);

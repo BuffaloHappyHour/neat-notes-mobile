@@ -10,6 +10,9 @@ export type CandidateRow = {
   distillery: string | null;
   proof: number | null;
   age: number | null;
+  category: string | null;
+  region: string | null;
+  sub_region: string | null;
 
   status: string | null;
   merged_into_whiskey_id: string | null;
@@ -88,7 +91,11 @@ export async function adminUpdateCandidate(input: {
   distillery: string;
   proof: number | null;
   age: number | null;
+  category: string | null;
+  region: string | null;
+  sub_region: string | null;
   reviewer_note: string;
+  merged_into_whiskey_id: string | null;
 }) {
   const { error } = await supabase.rpc("admin_update_candidate", {
     p_id: input.id,
@@ -98,10 +105,11 @@ export async function adminUpdateCandidate(input: {
     p_distillery: input.distillery,
     p_proof: input.proof,
     p_age: input.age,
-    p_category: null,
-    p_region: null,
-    p_sub_region: null,
+    p_category: input.category,
+    p_region: input.region,
+    p_sub_region: input.sub_region,
     p_reviewer_note: input.reviewer_note,
+    p_merged_into_whiskey_id: input.merged_into_whiskey_id,
   });
 
   if (error) throw error;

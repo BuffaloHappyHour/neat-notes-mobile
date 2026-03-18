@@ -10,10 +10,11 @@ import {
   ScrollView,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
 
 import { Card } from "../../components/ui/Card";
+import { AppToast } from "../../src/components/ui/AppToast";
 import { MetadataModal } from "../../src/log/components/metadata/MetadataModal";
 import { RefineModal } from "../../src/log/components/refine/RefineModal";
 import { BottleDetailsCard } from "../../src/log/components/tasting/BottleDetailsCard";
@@ -41,7 +42,7 @@ import {
   cleanText,
   isUuid,
   normalizeKey,
-  safeText
+  safeText,
 } from "../../src/log/utils/text";
 
 // ✅ ANALYTICS
@@ -109,6 +110,7 @@ function GlassCard({
     </View>
   );
 }
+
 function ControlledSelect({
   label,
   value,
@@ -244,6 +246,17 @@ export default function CloudTastingScreen() {
   const [proofIntensity, setProofIntensity] = useState<number | null>(null);
   const [flavorIntensity, setFlavorIntensity] = useState<number | null>(null);
 
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastTitle, setToastTitle] = useState("");
+  const [toastMessage, setToastMessage] = useState("");
+
+  // 👇 ADD THIS HERE
+  function showToast(title: string, message?: string) {
+    setToastTitle(title);
+    setToastMessage(message ?? "");
+    setToastVisible(true);
+}
+
   const [nose, setNose] = useState<Reaction>(null);
   const [taste, setTaste] = useState<Reaction>(null);
 
@@ -286,7 +299,6 @@ export default function CloudTastingScreen() {
     nodesLoading,
     nodesError,
     fetchFlavorNodes,
-    allNodes,
 
     byId,
     byParent,
@@ -294,7 +306,6 @@ export default function CloudTastingScreen() {
     rootIdByLabel,
     rootLabelById,
     ALL_TOP_LEVEL_LABELS,
-  
 
     scopedRootIds,
     visibleNodes,
@@ -389,7 +400,6 @@ export default function CloudTastingScreen() {
     setAddFamilyOpen(false);
   }
 
-
   function toggleFlavor(tag: string) {
     const t = safeText(tag);
     if (!t) return;
@@ -397,7 +407,6 @@ export default function CloudTastingScreen() {
     setFlavorTags((prev) => {
       const has = prev.includes(t);
       const next = has ? prev.filter((x) => x !== t) : [...prev, t];
-      // never allow Finish/Dislikes as top-level tags
       return next.filter((x) => !isFinishLabel(x) && normalizeKey(x) !== "dislikes");
     });
   }
@@ -435,10 +444,10 @@ export default function CloudTastingScreen() {
         setSourceType(loaded.sourceType);
         setBarName(loaded.barName);
 
-                setLocked(true);
+        setLocked(true);
         setLoading(false);
 
-               const [sel, savedSentiments] = await Promise.all([
+        const [sel, savedSentiments] = await Promise.all([
           loadTastingFlavorNodes(tastingId),
           loadTastingFlavorSentiments(tastingId),
         ]);
@@ -458,7 +467,7 @@ export default function CloudTastingScreen() {
     return () => {
       alive = false;
     };
-   }, [isExisting, tastingId]);
+  }, [isExisting, tastingId]);
 
   // ====== SECTION: Data Fetching (whiskey meta) ======
 
@@ -511,91 +520,89 @@ export default function CloudTastingScreen() {
 
   // ====== SECTION: Refine rendering ======
 
-function renderNodeRow(n: FlavorNode, allowMore: boolean) {
-  const active = selectedNodeIds.includes(n.id);
-  const children = byParent.get(n.id) ?? [];
-  const hasChildren = children.length > 0;
+  function renderNodeRow(n: FlavorNode, allowMore: boolean) {
+    const active = selectedNodeIds.includes(n.id);
+    const children = byParent.get(n.id) ?? [];
+    const hasChildren = children.length > 0;
 
-  const fam = safeText(n.family);
-  const lbl = safeText(n.label);
-  const showFamily = fam && normalizeKey(fam) !== normalizeKey(lbl);
+    const fam = safeText(n.family);
+    const lbl = safeText(n.label);
+    const showFamily = fam && normalizeKey(fam) !== normalizeKey(lbl);
 
-  const baseRowStyle = {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: radii.md,
-    borderWidth: active ? 2 : 1,
-    borderColor: active ? colors.accent : colors.divider,
-    backgroundColor: active ? colors.highlight : "transparent",
-    opacity: locked ? 0.6 : 1,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    gap: 10,
-  };
+    const baseRowStyle = {
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: radii.md,
+      borderWidth: active ? 2 : 1,
+      borderColor: active ? colors.accent : colors.divider,
+      backgroundColor: active ? colors.highlight : "transparent",
+      opacity: locked ? 0.6 : 1,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      gap: 10,
+    };
 
-  return (
-    <View key={n.id} style={baseRowStyle}>
-      {/* Left area: select toggle */}
-      <Pressable
-        disabled={locked}
-        onPress={() => toggleNodeId(n.id)}
-        style={({ pressed }) => ({
-          flex: 1,
-          opacity: locked ? 0.6 : pressed ? 0.92 : 1,
-        })}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={[
-                type.body,
-                { fontWeight: active ? "900" : "800", opacity: active ? 1 : 0.92 },
-              ]}
-              numberOfLines={1}
-            >
-              {lbl}
-            </Text>
-
-            {showFamily ? (
-              <Text style={[type.microcopyItalic, { opacity: 0.68 }]} numberOfLines={1}>
-                {fam}
-              </Text>
-            ) : null}
-          </View>
-
-          <Ionicons
-            name={active ? "checkmark-circle" : "ellipse-outline"}
-            size={20}
-            color={active ? colors.accent : colors.textSecondary}
-          />
-        </View>
-      </Pressable>
-
-      {/* Right area: More (sibling pressable, NOT nested) */}
-      {allowMore && hasChildren ? (
+    return (
+      <View key={n.id} style={baseRowStyle}>
         <Pressable
           disabled={locked}
-          onPress={() => {
-            setRefineSearch("");
-            setRefinePath((p) => [...p, n.id]);
-          }}
+          onPress={() => toggleNodeId(n.id)}
           style={({ pressed }) => ({
-            paddingVertical: 6,
-            paddingHorizontal: 10,
-            borderRadius: 999,
-            borderWidth: 1,
-            borderColor: colors.divider,
-            backgroundColor: pressed ? colors.highlight : "transparent",
-            opacity: locked ? 0.6 : 1,
+            flex: 1,
+            opacity: locked ? 0.6 : pressed ? 0.92 : 1,
           })}
         >
-          <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>More</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[
+                  type.body,
+                  { fontWeight: active ? "900" : "800", opacity: active ? 1 : 0.92 },
+                ]}
+                numberOfLines={1}
+              >
+                {lbl}
+              </Text>
+
+              {showFamily ? (
+                <Text style={[type.microcopyItalic, { opacity: 0.68 }]} numberOfLines={1}>
+                  {fam}
+                </Text>
+              ) : null}
+            </View>
+
+            <Ionicons
+              name={active ? "checkmark-circle" : "ellipse-outline"}
+              size={20}
+              color={active ? colors.accent : colors.textSecondary}
+            />
+          </View>
         </Pressable>
-      ) : null}
-    </View>
-  );
-}
+
+        {allowMore && hasChildren ? (
+          <Pressable
+            disabled={locked}
+            onPress={() => {
+              setRefineSearch("");
+              setRefinePath((p) => [...p, n.id]);
+            }}
+            style={({ pressed }) => ({
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.divider,
+              backgroundColor: pressed ? colors.highlight : "transparent",
+              opacity: locked ? 0.6 : 1,
+            })}
+          >
+            <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>More</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  }
 
   // ====== SECTION: Save/Upsert Logic ======
   function fallbackSentimentFromTaste(): "LIKE" | "NEUTRAL" | "DISLIKE" {
@@ -604,7 +611,7 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
     return "NEUTRAL";
   }
 
-    const analyticsNodeIds = useMemo(() => {
+  const analyticsNodeIds = useMemo(() => {
     if (selectedNodeIds.length > 0) {
       return Array.from(new Set(selectedNodeIds.filter((id) => isUuid(id))));
     }
@@ -617,6 +624,7 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
       )
     );
   }, [selectedNodeIds, flavorTags, rootIdByLabel]);
+
   const analyticsSentimentById = useMemo(() => {
     const fallback = fallbackSentimentFromTaste();
     const out: Record<string, "LIKE" | "NEUTRAL" | "DISLIKE"> = {};
@@ -663,40 +671,51 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
 
     setLocked(true);
 
-    // ============================
-    // Post-save gating logic
-    // ============================
+    // Existing tasting: stay here and show branded feedback
+    if (isExisting) {
+      showToast("Saved", "Your tasting has been saved.");
+      return;
+    }
 
+    // New tasting: continue post-save flow
     if (result.whiskeyId) {
-      // ✅ Normal whiskey (UUID exists)
       const to = await postSaveMeta.maybeOpenPostSaveMetadata(
         result.whiskeyId,
         `/whiskey/${encodeURIComponent(result.whiskeyId)}`
       );
 
-      if (to) {
-        router.replace(to);
-      }
+if (to) {
+ const toastUrl =
+  `${to}${String(to).includes("?") ? "&" : "?"}` +
+  `toastTitle=${encodeURIComponent("Saved")}&` +
+  `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
 
+router.replace(toastUrl as any);
+  return;
+}
     } else {
-      // ✅ Custom whiskey (no UUID)
       const to = await postSaveMeta.maybeOpenPostSaveMetadata(
-        "CUSTOM",              // dummy id (hook handles custom mode)
-        "/log",                // safe fallback destination after Save/Skip
+        "CUSTOM",
+        "/log",
         {
           isCustom: true,
           name: name,
-          proof: "",           // pass if you collect proof earlier
-          whiskeyTypeId: null, // pass if available
+          proof: "",
+          whiskeyTypeId: null,
           distillery: "",
         }
       );
 
-      if (to) {
-        router.replace(to);
-      }
-    }
+ if (to) {
+ const toastUrl =
+  `${to}${String(to).includes("?") ? "&" : "?"}` +
+  `toastTitle=${encodeURIComponent("Saved")}&` +
+  `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
 
+router.replace(toastUrl as any);
+  return;
+}
+    }
   } catch (e: any) {
     const msg = String(e?.message ?? e ?? "Save failed");
     const isOffline = !!e?.isOffline;
@@ -717,10 +736,12 @@ function renderNodeRow(n: FlavorNode, allowMore: boolean) {
     setSaving(false);
   }
 }
+
   // ====== SECTION: Render ======
-function onEdit() {
-  setLocked(false);
-}
+  function onEdit() {
+    setLocked(false);
+  }
+
   return (
     <>
       <Stack.Screen
@@ -772,6 +793,7 @@ function onEdit() {
               <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.7 }]}>Loading…</Text>
             </View>
           ) : null}
+
           {/* Whiskey Name (Hero) */}
           <View style={{ alignItems: "center", gap: spacing.sm }}>
             <TextInput
@@ -810,161 +832,197 @@ function onEdit() {
             />
           </View>
 
-{whiskeyId && whiskeyMeta && hasBottleDetails ? (
-  <BottleDetailsCard
-    detailsLabel="Bottle details"
-    rows={[
-      { label: "Distillery", value: whiskeyMeta?.distillery ? String(whiskeyMeta.distillery) : "" },
-      { label: "Category", value: whiskeyMeta?.category ? String(whiskeyMeta.category) : "" },
-      { label: "Region", value: whiskeyMeta?.region ? String(whiskeyMeta.region) : "" },
-      { label: "Sub-Region", value: whiskeyMeta?.sub_region ? String(whiskeyMeta.sub_region) : "" },
-      { label: "Style", value: whiskeyMeta?.whiskey_type ? String(whiskeyMeta.whiskey_type) : "" },
-      {
-        label: "Proof",
-        value:
-          whiskeyMeta?.proof != null && Number.isFinite(Number(whiskeyMeta.proof))
-            ? `${Math.round(Number(whiskeyMeta.proof))} proof`
-            : "",
-      },
-      {
-        label: "Age",
-        value:
-          whiskeyMeta?.age != null && Number.isFinite(Number(whiskeyMeta.age))
-            ? `${Math.round(Number(whiskeyMeta.age))} yr`
-            : "",
-      },
-    ]}
-    defaultOpen={false}
-  />
-) : null}
-<View style={{ marginVertical: spacing.sm }}>
-  <View
-    style={{
-      height: 2,
-      marginTop: 4,
-      borderRadius: 999,
-      overflow: "hidden",
-      opacity: 0.95,
-    }}
-  >
-    <View
-      style={{
-        position: "absolute",
-        left: 0,
-        top: 0,
-        bottom: 0,
-        width: "25%",
-        backgroundColor: colors.divider,
-        opacity: 0.65,
-      }}
-    />
-    <View
-      style={{
-        position: "absolute",
-        left: "25%",
-        top: 0,
-        bottom: 0,
-        width: "50%",
-        backgroundColor: colors.accent,
-        opacity: 0.12,
-      }}
-    />
-    <View
-      style={{
-        position: "absolute",
-        right: 0,
-        top: 0,
-        bottom: 0,
-        width: "25%",
-        backgroundColor: colors.divider,
-        opacity: 0.65,
-      }}
-    />
-  </View>
-</View>
+          {whiskeyId && whiskeyMeta && hasBottleDetails ? (
+            <BottleDetailsCard
+              detailsLabel="Bottle details"
+              rows={[
+                { label: "Distillery", value: whiskeyMeta?.distillery ? String(whiskeyMeta.distillery) : "" },
+                { label: "Category", value: whiskeyMeta?.category ? String(whiskeyMeta.category) : "" },
+                { label: "Region", value: whiskeyMeta?.region ? String(whiskeyMeta.region) : "" },
+                { label: "Sub-Region", value: whiskeyMeta?.sub_region ? String(whiskeyMeta.sub_region) : "" },
+                { label: "Style", value: whiskeyMeta?.whiskey_type ? String(whiskeyMeta.whiskey_type) : "" },
+                {
+                  label: "Proof",
+                  value:
+                    whiskeyMeta?.proof != null && Number.isFinite(Number(whiskeyMeta.proof))
+                      ? `${Math.round(Number(whiskeyMeta.proof))} proof`
+                      : "",
+                },
+                {
+                  label: "Age",
+                  value:
+                    whiskeyMeta?.age != null && Number.isFinite(Number(whiskeyMeta.age))
+                      ? `${Math.round(Number(whiskeyMeta.age))} yr`
+                      : "",
+                },
+              ]}
+              defaultOpen={false}
+            />
+          ) : null}
 
-          {/* Rating (extracted) */}
+          <View style={{ marginVertical: spacing.sm }}>
+            <View
+              style={{
+                height: 2,
+                marginTop: 4,
+                borderRadius: 999,
+                overflow: "hidden",
+                opacity: 0.95,
+              }}
+            >
+              <View
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: "25%",
+                  backgroundColor: colors.divider,
+                  opacity: 0.65,
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  left: "25%",
+                  top: 0,
+                  bottom: 0,
+                  width: "50%",
+                  backgroundColor: colors.accent,
+                  opacity: 0.12,
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: "25%",
+                  backgroundColor: colors.divider,
+                  opacity: 0.65,
+                }}
+              />
+            </View>
+          </View>
+
+          {/* Rating */}
           <RatingSection
             locked={locked}
             rating={rating}
             setRating={setRating}
             onSlidingChange={(s: boolean) => setIsSliding(s)}
           />
-<View style={{ marginVertical: spacing.sm }}>
-  <View
-    style={{
-      height: 2,
-      marginTop: 4,
-      borderRadius: 999,
-      overflow: "hidden",
-      opacity: 0.95,
-    }}
-  >
-    <View
-      style={{
-        position: "absolute",
-        left: 0,
-        top: 0,
-        bottom: 0,
-        width: "25%",
-        backgroundColor: colors.divider,
-        opacity: 0.65,
-      }}
-    />
-    <View
-      style={{
-        position: "absolute",
-        left: "25%",
-        top: 0,
-        bottom: 0,
-        width: "50%",
-        backgroundColor: colors.accent,
-        opacity: 0.12,
-      }}
-    />
-    <View
-      style={{
-        position: "absolute",
-        right: 0,
-        top: 0,
-        bottom: 0,
-        width: "25%",
-        backgroundColor: colors.divider,
-        opacity: 0.65,
-      }}
-    />
-  </View>
-</View>
+
+          <View style={{ marginVertical: spacing.sm }}>
+            <View
+              style={{
+                height: 2,
+                marginTop: 4,
+                borderRadius: 999,
+                overflow: "hidden",
+                opacity: 0.95,
+              }}
+            >
+              <View
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: "25%",
+                  backgroundColor: colors.divider,
+                  opacity: 0.65,
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  left: "25%",
+                  top: 0,
+                  bottom: 0,
+                  width: "50%",
+                  backgroundColor: colors.accent,
+                  opacity: 0.12,
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: "25%",
+                  backgroundColor: colors.divider,
+                  opacity: 0.65,
+                }}
+              />
+            </View>
+          </View>
+
           <QuickNotesSection
-  locked={locked}
-  nose={nose}
-  setNose={setNose}
-  taste={taste}
-  setTaste={setTaste}
-/>
+            locked={locked}
+            nose={nose}
+            setNose={setNose}
+            taste={taste}
+            setTaste={setTaste}
+          />
 
-<TastingSignalsSection
-  locked={locked}
-  textureLevel={textureLevel}
-  proofIntensity={proofIntensity}
-  flavorIntensity={flavorIntensity}
-  setTextureLevel={setTextureLevel}
-  setProofIntensity={setProofIntensity}
-  setFlavorIntensity={setFlavorIntensity}
-/>
+          <TastingSignalsSection
+            locked={locked}
+            textureLevel={textureLevel}
+            proofIntensity={proofIntensity}
+            flavorIntensity={flavorIntensity}
+            setTextureLevel={setTextureLevel}
+            setProofIntensity={setProofIntensity}
+            setFlavorIntensity={setFlavorIntensity}
+          />
 
-<FlavorNotesSection
-  locked={locked}
-  allTopLevelLabels={ALL_TOP_LEVEL_LABELS}
-  flavorTags={flavorTags}
-  toggleFlavor={toggleFlavor}
-  additionalNotesLine={additionalNotesLine}
-  openRefine={openRefine}
-  selectedNodeIds={selectedNodeIds}
-  selectedCountText={selectedCountText}
-  selectedNodeLabelsPreview={selectedNodeLabelsPreview}
-/>
-      
+          <FlavorNotesSection
+            locked={locked}
+            allTopLevelLabels={ALL_TOP_LEVEL_LABELS}
+            flavorTags={flavorTags}
+            toggleFlavor={toggleFlavor}
+            additionalNotesLine={additionalNotesLine}
+            openRefine={openRefine}
+            selectedNodeIds={selectedNodeIds}
+            selectedCountText={selectedCountText}
+            selectedNodeLabelsPreview={selectedNodeLabelsPreview}
+          />
+
+          {/* Personal Notes */}
+          <Card tight>
+            <Text style={type.sectionHeader}>Personal notes</Text>
+            <Text style={[type.microcopyItalic, { color: colors.textSecondary, marginTop: 2 }]}>
+              Add any freeform tasting thoughts, reminders, or details you want to remember.
+            </Text>
+
+            <TextInput
+              value={personalNotes}
+              onChangeText={setPersonalNotes}
+              editable={!locked}
+              placeholder="Write your tasting notes here..."
+              placeholderTextColor={colors.textSecondary}
+              multiline
+              textAlignVertical="top"
+              style={{
+                marginTop: spacing.md,
+                minHeight: 140,
+                paddingVertical: spacing.md,
+                paddingHorizontal: spacing.md,
+                borderRadius: radii.md,
+                borderWidth: 1,
+                borderColor: colors.divider,
+                backgroundColor: "transparent",
+                color: colors.textPrimary,
+                fontSize: 16,
+                lineHeight: 22,
+                fontFamily: type.body.fontFamily,
+                opacity: !locked ? 1 : 0.75,
+              }}
+            />
+          </Card>
+
           {/* Source */}
           <Card tight>
             <Text style={type.sectionHeader}>Where did you have this bottle?</Text>
@@ -1085,21 +1143,47 @@ function onEdit() {
         sentimentById={sentimentById}
         setSentimentById={setSentimentById}
       />
-                  <MetadataModal
-        visible={postSaveMeta.metaOpen}
-        loading={postSaveMeta.metaLoading}
-        saving={postSaveMeta.metaSaving}
-        isCustom={postSaveMeta.metaIsCustom}
-        metaMissingKeys={postSaveMeta.metaMissingKeys}
-        onSkip={() => {
-          const to = postSaveMeta.finishPostSaveFlow();
-          if (to) router.replace(to);
-        }}
-        onSave={async () => {
-          const to = await postSaveMeta.saveMetadataFromModal();
-          if (to) router.replace(to);
-        }}
-        fName={postSaveMeta.fName}
+
+     <MetadataModal
+  visible={postSaveMeta.metaOpen}
+  loading={postSaveMeta.metaLoading}
+  saving={postSaveMeta.metaSaving}
+  isCustom={postSaveMeta.metaIsCustom}
+  metaMissingKeys={postSaveMeta.metaMissingKeys}
+  onSkip={() => {
+    const to = postSaveMeta.finishPostSaveFlow();
+    if (to) {
+      const toastUrl =
+        `${to}${String(to).includes("?") ? "&" : "?"}` +
+        `toastTitle=${encodeURIComponent("Saved")}&` +
+        `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
+
+      router.replace(toastUrl as any);
+    }
+  }}
+  onSave={async () => {
+    const to = await postSaveMeta.saveMetadataFromModal();
+    if (to) {
+      const toastUrl =
+        `${to}${String(to).includes("?") ? "&" : "?"}` +
+        `toastTitle=${encodeURIComponent("Saved")}&` +
+        `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
+
+      router.replace(toastUrl as any);
+      return;
+    }
+
+    const fallback = postSaveMeta.finishPostSaveFlow();
+    if (fallback) {
+      const toastUrl =
+        `${fallback}${String(fallback).includes("?") ? "&" : "?"}` +
+        `toastTitle=${encodeURIComponent("Saved")}&` +
+        `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
+
+      router.replace(toastUrl as any);
+    }
+  }}
+  fName={postSaveMeta.fName}
         setFName={postSaveMeta.setFName}
         fDistillery={postSaveMeta.fDistillery}
         setFDistillery={postSaveMeta.setFDistillery}
@@ -1128,11 +1212,17 @@ function onEdit() {
         showSubRegionBlock={postSaveMeta.showSubRegionBlock}
         onCategoryChange={postSaveMeta.onCategoryChange}
         onRegionChange={postSaveMeta.onRegionChange}
-        />
+      />
+      <AppToast
+  visible={toastVisible}
+  title={toastTitle}
+  message={toastMessage}
+  onHide={() => setToastVisible(false)}
+/>
     </>
   );
 }
-      
+
 // ====== SECTION: Reaction helpers (bottom) ======
 function reactionLabel(v: Reaction) {
   if (v === "ENJOYED") return "Enjoyed";
