@@ -1,6 +1,14 @@
 import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 
+import { purchaseCurrentPackage, restoreMyPurchases } from "../../../lib/purchases";
 import { spacing } from "../../../lib/spacing";
 import { colors } from "../../../lib/theme";
 import { type } from "../../../lib/typography";
@@ -66,10 +74,100 @@ function TabButton({
   );
 }
 
+function PrimaryButton({
+  label,
+  loading,
+  onPress,
+}: {
+  label: string;
+  loading: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={loading}
+      style={({ pressed }) => ({
+        marginTop: spacing.lg,
+        minHeight: 52,
+        borderRadius: 999,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: pressed ? "rgba(190,150,99,0.85)" : colors.accent,
+        opacity: loading ? 0.7 : 1,
+        paddingHorizontal: spacing.lg,
+      })}
+    >
+      {loading ? (
+        <ActivityIndicator color={colors.background} />
+      ) : (
+        <Text
+          style={[
+            type.body,
+            {
+              color: colors.background,
+              fontWeight: "800",
+            },
+          ]}
+        >
+          {label}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+function SecondaryButton({
+  label,
+  loading,
+  onPress,
+}: {
+  label: string;
+  loading: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={loading}
+      style={({ pressed }) => ({
+        marginTop: spacing.sm,
+        minHeight: 48,
+        borderRadius: 999,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 1,
+        borderColor: "rgba(190,150,99,0.34)",
+        backgroundColor: pressed ? "rgba(190,150,99,0.10)" : "transparent",
+        opacity: loading ? 0.7 : 1,
+        paddingHorizontal: spacing.lg,
+      })}
+    >
+      {loading ? (
+        <ActivityIndicator color={colors.textPrimary} />
+      ) : (
+        <Text
+          style={[
+            type.body,
+            {
+              color: colors.textPrimary,
+              fontWeight: "700",
+            },
+          ]}
+        >
+          {label}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
 export default function InsightsScreen() {
   const [tab, setTab] = useState<InsightsTab>("clarity");
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
 
-  const { clarityInput, isPremium } = useProfileData();
+  const { clarityInput, isPremium, loadAll } = useProfileData();
   const clarity = usePalateClarity(clarityInput);
   const hasPremiumAccess = isPremium === true;
 
@@ -93,6 +191,42 @@ export default function InsightsScreen() {
       subtitle: "How broadly and deeply you explore different whiskies.",
     };
   }, [tab]);
+
+  async function handleUnlockInsights() {
+    if (purchaseLoading || restoreLoading) return;
+
+    try {
+      setPurchaseLoading(true);
+      await purchaseCurrentPackage();
+      await loadAll({ silent: true });
+
+      Alert.alert("Premium unlocked", "Insights are now available on your account.");
+    } catch (e: any) {
+      Alert.alert("Purchase not completed", String(e?.message ?? e));
+    } finally {
+      setPurchaseLoading(false);
+    }
+  }
+
+  async function handleRestorePurchases() {
+    if (purchaseLoading || restoreLoading) return;
+
+    try {
+      setRestoreLoading(true);
+      const restored = await restoreMyPurchases();
+      await loadAll({ silent: true });
+
+      if (restored) {
+        Alert.alert("Purchases restored", "Your premium access has been restored.");
+      } else {
+        Alert.alert("Nothing to restore", "No active premium purchase was found for this account.");
+      }
+    } catch (e: any) {
+      Alert.alert("Restore failed", String(e?.message ?? e));
+    } finally {
+      setRestoreLoading(false);
+    }
+  }
 
   if (!hasPremiumAccess) {
     return (
@@ -139,18 +273,17 @@ export default function InsightsScreen() {
             Unlock your taste profile, behavior trends, and advanced palate intelligence.
           </Text>
 
-          <Text
-            style={[
-              type.microcopyItalic,
-              {
-                color: colors.accent,
-                marginTop: spacing.sm,
-                opacity: 0.92,
-              },
-            ]}
-          >
-            Premium Insights - Coming Soon.
-          </Text>
+          <PrimaryButton
+            label="Unlock Insights"
+            loading={purchaseLoading}
+            onPress={handleUnlockInsights}
+          />
+
+          <SecondaryButton
+            label="Restore Purchases"
+            loading={restoreLoading}
+            onPress={handleRestorePurchases}
+          />
         </View>
       </ScrollView>
     );
