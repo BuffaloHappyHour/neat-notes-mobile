@@ -1,10 +1,11 @@
-// app/admin/catalog.tsx
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
     FlatList,
+    KeyboardAvoidingView,
+    Platform,
     Pressable,
     ScrollView,
     Text,
@@ -239,9 +240,9 @@ export default function AdminCatalogScreen() {
   const [sortKey, setSortKey] = useState<SortKey>("tastings_desc");
   const [featuringId, setFeaturingId] = useState<string | null>(null);
   const [featureDraft, setFeatureDraft] = useState<WhiskeyRow | null>(null);
-const [featureStartDate, setFeatureStartDate] = useState("");
-const [featureEndDate, setFeatureEndDate] = useState("");
-const [featureNote, setFeatureNote] = useState("");
+  const [featureStartDate, setFeatureStartDate] = useState("");
+  const [featureEndDate, setFeatureEndDate] = useState("");
+  const [featureNote, setFeatureNote] = useState("");
 
   async function loadWhiskeys(q: string, sort: SortKey) {
     setLoading(true);
@@ -373,43 +374,43 @@ const [featureNote, setFeatureNote] = useState("");
   }
 
   async function setFeaturedBottle(row: WhiskeyRow) {
-  if (!featureStartDate || !featureEndDate) {
-    Alert.alert("Please enter both a start date and end date.");
-    return;
+    if (!featureStartDate || !featureEndDate) {
+      Alert.alert("Please enter both a start date and end date.");
+      return;
+    }
+
+    const startIso = `${featureStartDate}T00:00:00.000Z`;
+    const endIso = `${featureEndDate}T23:59:59.999Z`;
+
+    if (new Date(endIso).getTime() <= new Date(startIso).getTime()) {
+      Alert.alert("End date must be after start date.");
+      return;
+    }
+
+    setFeaturingId(row.id);
+
+    const { error } = await supabase.rpc("admin_set_featured_whiskey", {
+      p_whiskey_id: row.id,
+      p_start_date: startIso,
+      p_end_date: endIso,
+      p_feature_note: featureNote.trim() ? featureNote.trim() : null,
+    });
+
+    setFeaturingId(null);
+
+    if (error) {
+      console.log("featured rpc error", error);
+      Alert.alert("Could not set featured bottle.", error.message);
+      return;
+    }
+
+    setFeatureDraft(null);
+    setFeatureStartDate("");
+    setFeatureEndDate("");
+    setFeatureNote("");
+
+    Alert.alert("Featured bottle updated", row.display_name);
   }
-
-  const startIso = `${featureStartDate}T00:00:00.000Z`;
-  const endIso = `${featureEndDate}T23:59:59.999Z`;
-
-  if (new Date(endIso).getTime() <= new Date(startIso).getTime()) {
-    Alert.alert("End date must be after start date.");
-    return;
-  }
-
-  setFeaturingId(row.id);
-
-  const { error } = await supabase.rpc("admin_set_featured_whiskey", {
-    p_whiskey_id: row.id,
-    p_start_date: startIso,
-    p_end_date: endIso,
-    p_feature_note: featureNote.trim() ? featureNote.trim() : null,
-  });
-
-  setFeaturingId(null);
-
-  if (error) {
-    console.log("featured rpc error", error);
-    Alert.alert("Could not set featured bottle.", error.message);
-    return;
-  }
-
-  setFeatureDraft(null);
-  setFeatureStartDate("");
-  setFeatureEndDate("");
-  setFeatureNote("");
-
-  Alert.alert("Featured bottle updated", row.display_name);
-}
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -423,268 +424,294 @@ const [featureNote, setFeatureNote] = useState("");
     return query.trim().length > 0 ? "No results." : "No whiskies found.";
   }, [query]);
 
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: colors.background,
-        padding: spacing.xl,
-        gap: spacing.md,
-      }}
+    return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
     >
-      <Text style={[type.screenTitle, { color: colors.textPrimary }]}>
-        Catalog
-      </Text>
-
-      <TextInput
-        placeholder="Search whiskey..."
-        placeholderTextColor={colors.textSecondary}
-        value={query}
-        onChangeText={setQuery}
-        style={{
-          borderWidth: 1,
-          borderColor: colors.divider,
-          borderRadius: radii.lg,
-          paddingHorizontal: spacing.md,
-          paddingVertical: spacing.sm,
-          color: colors.textPrimary,
+      <FlatList
+        data={loading ? [] : rows}
+        keyExtractor={(item) => item.id}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="none"
+        contentContainerStyle={{
+          padding: spacing.xl,
+          paddingBottom: spacing.xl * 5,
+          gap: spacing.md,
         }}
-      />
+        ListHeaderComponent={
+          <View style={{ gap: spacing.md }}>
+            <Text style={[type.screenTitle, { color: colors.textPrimary }]}>
+              Catalog
+            </Text>
 
-      <View style={{ gap: spacing.xs }}>
-        <Text style={[type.caption, { color: colors.textSecondary }]}>
-          Sort by
-        </Text>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={{ flexDirection: "row", gap: spacing.sm }}>
-            {SORT_OPTIONS.map((opt) => {
-              const active = opt.key === sortKey;
-
-              return (
-                <Pressable
-                  key={opt.key}
-                  onPress={() => setSortKey(opt.key)}
-                  style={({ pressed }) => ({
-                    paddingVertical: 8,
-                    paddingHorizontal: 12,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: active ? colors.accent : colors.divider,
-                    backgroundColor: active
-                      ? "rgba(190, 150, 99, 0.10)"
-                      : colors.surface,
-                    opacity: pressed ? 0.92 : 1,
-                  })}
-                >
-                  <Text
-                    style={[
-                      type.caption,
-                      {
-                        color: active ? colors.accent : colors.textPrimary,
-                        fontWeight: active ? "700" : "400",
-                      },
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </ScrollView>
-      </View>
-{featureDraft ? (
-  <View
-    style={{
-      padding: spacing.md,
-      borderRadius: radii.lg,
-      borderWidth: 1,
-      borderColor: "rgba(190, 150, 99, 0.34)",
-      backgroundColor: "rgba(190, 150, 99, 0.06)",
-      gap: spacing.sm,
-    }}
-  >
-    <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>
-      Set Featured Bottle
-    </Text>
-
-    <Text style={[type.body, { color: colors.textPrimary }]}>
-      {featureDraft.display_name}
-    </Text>
-
-    <TextInput
-      placeholder="Start date (YYYY-MM-DD)"
-      placeholderTextColor={colors.textSecondary}
-      value={featureStartDate}
-      onChangeText={setFeatureStartDate}
-      style={{
-        borderWidth: 1,
-        borderColor: colors.divider,
-        borderRadius: radii.lg,
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-        color: colors.textPrimary,
-        backgroundColor: colors.surface,
-      }}
-    />
-
-    <TextInput
-      placeholder="End date (YYYY-MM-DD)"
-      placeholderTextColor={colors.textSecondary}
-      value={featureEndDate}
-      onChangeText={setFeatureEndDate}
-      style={{
-        borderWidth: 1,
-        borderColor: colors.divider,
-        borderRadius: radii.lg,
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-        color: colors.textPrimary,
-        backgroundColor: colors.surface,
-      }}
-    />
-
-    <TextInput
-      placeholder="Why is this featured?"
-      placeholderTextColor={colors.textSecondary}
-      value={featureNote}
-      onChangeText={setFeatureNote}
-      multiline
-      style={{
-        borderWidth: 1,
-        borderColor: colors.divider,
-        borderRadius: radii.lg,
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-        color: colors.textPrimary,
-        backgroundColor: colors.surface,
-        minHeight: 88,
-        textAlignVertical: "top",
-      }}
-    />
-
-    <View style={{ flexDirection: "row", gap: spacing.sm }}>
-      <Pressable
-        onPress={() => {
-          setFeatureDraft(null);
-          setFeatureStartDate("");
-          setFeatureEndDate("");
-          setFeatureNote("");
-        }}
-        style={{
-          flex: 1,
-          paddingVertical: 12,
-          borderRadius: 999,
-          alignItems: "center",
-          borderWidth: 1,
-          borderColor: colors.divider,
-          backgroundColor: colors.surface,
-        }}
-      >
-        <Text style={[type.caption, { color: colors.textPrimary }]}>Cancel</Text>
-      </Pressable>
-
-      <Pressable
-        onPress={() => {
-          if (featureDraft) {
-            setFeaturedBottle(featureDraft);
-          }
-        }}
-        style={{
-          flex: 1,
-          paddingVertical: 12,
-          borderRadius: 999,
-          alignItems: "center",
-          borderWidth: 1,
-          borderColor: "rgba(190, 150, 99, 0.34)",
-          backgroundColor: "rgba(190, 150, 99, 0.10)",
-        }}
-      >
-        <Text style={[type.caption, { color: colors.accent, fontWeight: "700" }]}>
-          Save Featured
-        </Text>
-      </Pressable>
-    </View>
-  </View>
-) : null}
-      {loading ? (
-        <ActivityIndicator />
-      ) : (
-        <FlatList
-          data={rows}
-          keyExtractor={(item) => item.id}
-          keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
-            <View
+            <TextInput
+              placeholder="Search whiskey..."
+              placeholderTextColor={colors.textSecondary}
+              value={query}
+              onChangeText={setQuery}
+              returnKeyType="search"
               style={{
-                padding: spacing.md,
-                borderRadius: radii.lg,
                 borderWidth: 1,
                 borderColor: colors.divider,
-                backgroundColor: colors.surface,
-                marginBottom: spacing.sm,
-                gap: 10,
+                borderRadius: radii.lg,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+                color: colors.textPrimary,
               }}
-            >
-              <Pressable
-                onPress={() => router.push(`/whiskey/${encodeURIComponent(item.id)}`)}
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.92 : 1,
-                  gap: 6,
-                })}
+            />
+
+            <View style={{ gap: spacing.xs }}>
+              <Text style={[type.caption, { color: colors.textSecondary }]}>
+                Sort by
+              </Text>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
               >
-                <Text style={[type.body, { color: colors.textPrimary }]}>
-                  {item.display_name}
-                </Text>
+                <View style={{ flexDirection: "row", gap: spacing.sm }}>
+                  {SORT_OPTIONS.map((opt) => {
+                    const active = opt.key === sortKey;
 
-                <MetaLine row={item} />
-              </Pressable>
+                    return (
+                      <Pressable
+                        key={opt.key}
+                        onPress={() => setSortKey(opt.key)}
+                        style={({ pressed }) => ({
+                          paddingVertical: 8,
+                          paddingHorizontal: 12,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: active ? colors.accent : colors.divider,
+                          backgroundColor: active
+                            ? "rgba(190, 150, 99, 0.10)"
+                            : colors.surface,
+                          opacity: pressed ? 0.92 : 1,
+                        })}
+                      >
+                        <Text
+                          style={[
+                            type.caption,
+                            {
+                              color: active ? colors.accent : colors.textPrimary,
+                              fontWeight: active ? "700" : "400",
+                            },
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </View>
 
-              <Pressable
-                onPress={() => {
-  const now = new Date();
-  const end = new Date(now);
-  end.setDate(end.getDate() + 7);
-
-  setFeatureDraft(item);
-  setFeatureStartDate(now.toISOString().slice(0, 10));
-  setFeatureEndDate(end.toISOString().slice(0, 10));
-  setFeatureNote("");
-}}
-                disabled={featuringId === item.id}
-                style={({ pressed }) => ({
-                  alignSelf: "flex-start",
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 999,
+            {featureDraft ? (
+              <View
+                style={{
+                  padding: spacing.md,
+                  borderRadius: radii.lg,
                   borderWidth: 1,
                   borderColor: "rgba(190, 150, 99, 0.34)",
-                  backgroundColor: "rgba(190, 150, 99, 0.10)",
-                  opacity: featuringId === item.id ? 0.7 : pressed ? 0.92 : 1,
-                })}
+                  backgroundColor: "rgba(190, 150, 99, 0.06)",
+                  gap: spacing.sm,
+                }}
               >
-                <Text
-                  style={[
-                    type.caption,
-                    {
-                      color: colors.accent,
-                      fontWeight: "700",
-                    },
-                  ]}
-                >
-                  {featuringId === item.id ? "Setting..." : "Feature"}
+                <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>
+                  Set Featured Bottle
                 </Text>
-              </Pressable>
-            </View>
-          )}
-          ListEmptyComponent={
-            <Text style={[type.caption, { color: colors.textSecondary }]}>
+
+                <Text style={[type.body, { color: colors.textPrimary }]}>
+                  {featureDraft.display_name}
+                </Text>
+
+                <TextInput
+                  placeholder="Start date (YYYY-MM-DD)"
+                  placeholderTextColor={colors.textSecondary}
+                  value={featureStartDate}
+                  onChangeText={setFeatureStartDate}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: colors.divider,
+                    borderRadius: radii.lg,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surface,
+                  }}
+                />
+
+                <TextInput
+                  placeholder="End date (YYYY-MM-DD)"
+                  placeholderTextColor={colors.textSecondary}
+                  value={featureEndDate}
+                  onChangeText={setFeatureEndDate}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: colors.divider,
+                    borderRadius: radii.lg,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surface,
+                  }}
+                />
+
+                <TextInput
+                  placeholder="Why is this featured?"
+                  placeholderTextColor={colors.textSecondary}
+                  value={featureNote}
+                  onChangeText={setFeatureNote}
+                  multiline
+                  style={{
+                    borderWidth: 1,
+                    borderColor: colors.divider,
+                    borderRadius: radii.lg,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surface,
+                    minHeight: 88,
+                    textAlignVertical: "top",
+                  }}
+                />
+
+                <View style={{ flexDirection: "row", gap: spacing.sm }}>
+                  <Pressable
+                    onPress={() => {
+                      setFeatureDraft(null);
+                      setFeatureStartDate("");
+                      setFeatureEndDate("");
+                      setFeatureNote("");
+                    }}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 999,
+                      alignItems: "center",
+                      borderWidth: 1,
+                      borderColor: colors.divider,
+                      backgroundColor: colors.surface,
+                    }}
+                  >
+                    <Text style={[type.caption, { color: colors.textPrimary }]}>
+                      Cancel
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      if (featureDraft) {
+                        setFeaturedBottle(featureDraft);
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 999,
+                      alignItems: "center",
+                      borderWidth: 1,
+                      borderColor: "rgba(190, 150, 99, 0.34)",
+                      backgroundColor: "rgba(190, 150, 99, 0.10)",
+                    }}
+                  >
+                    <Text
+                      style={[
+                        type.caption,
+                        { color: colors.accent, fontWeight: "700" },
+                      ]}
+                    >
+                      Save Featured
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            {loading ? <ActivityIndicator /> : null}
+          </View>
+        }
+        renderItem={({ item }) => (
+          <View
+            style={{
+              padding: spacing.md,
+              borderRadius: radii.lg,
+              borderWidth: 1,
+              borderColor: colors.divider,
+              backgroundColor: colors.surface,
+              marginTop: spacing.sm,
+              gap: 10,
+            }}
+          >
+            <Pressable
+              onPress={() =>
+                router.push(`/whiskey/${encodeURIComponent(item.id)}`)
+              }
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.92 : 1,
+                gap: 6,
+              })}
+            >
+              <Text style={[type.body, { color: colors.textPrimary }]}>
+                {item.display_name}
+              </Text>
+
+              <MetaLine row={item} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                const now = new Date();
+                const end = new Date(now);
+                end.setDate(end.getDate() + 7);
+
+                setFeatureDraft(item);
+                setFeatureStartDate(now.toISOString().slice(0, 10));
+                setFeatureEndDate(end.toISOString().slice(0, 10));
+                setFeatureNote("");
+              }}
+              disabled={featuringId === item.id}
+              style={({ pressed }) => ({
+                alignSelf: "flex-start",
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: "rgba(190, 150, 99, 0.34)",
+                backgroundColor: "rgba(190, 150, 99, 0.10)",
+                opacity: featuringId === item.id ? 0.7 : pressed ? 0.92 : 1,
+              })}
+            >
+              <Text
+                style={[
+                  type.caption,
+                  {
+                    color: colors.accent,
+                    fontWeight: "700",
+                  },
+                ]}
+              >
+                {featuringId === item.id ? "Setting..." : "Feature"}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+        ListEmptyComponent={
+          !loading ? (
+            <Text style={[type.caption, { color: colors.textSecondary, marginTop: spacing.md }]}>
               {listEmptyText}
             </Text>
-          }
-        />
-      )}
-    </View>
+          ) : null
+        }
+      />
+    </KeyboardAvoidingView>
   );
 }

@@ -6,6 +6,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -26,7 +28,10 @@ import TastingSourceCard from "../../src/log/components/tasting/TastingSourceCar
 import { Pill } from "../../src/log/components/ui/Pill";
 import { type Reaction } from "../../src/log/components/ui/ReactionList";
 import { SectionGroupHeader } from "../../src/log/components/ui/SectionGroupHeader";
-import { useFlavorNodesEngine, type FlavorNode } from "../../src/log/hooks/useFlavorNodes";
+import {
+  useFlavorNodesEngine,
+  type FlavorNode,
+} from "../../src/log/hooks/useFlavorNodes";
 import { usePostSaveMetadata } from "../../src/log/hooks/usePostSaveMetadata";
 import { loadTastingById } from "../../src/log/services/tastingLoad.service";
 import { saveCloudTasting } from "../../src/log/services/tastingSave.service";
@@ -100,7 +105,8 @@ function GlassCard({
           backgroundColor: colors.glassSurface ?? colors.surface,
           borderRadius: radii.xxl ?? radii.xl,
           borderWidth: 1,
-          borderColor: colors.glassBorder ?? colors.borderSubtle ?? colors.divider,
+          borderColor:
+            colors.glassBorder ?? colors.borderSubtle ?? colors.divider,
           overflow: "hidden",
           padding: spacing.md,
         },
@@ -157,7 +163,10 @@ function ControlledSelect({
           gap: 10,
         })}
       >
-        <Text style={[type.body, { opacity: value ? 0.95 : 0.6 }]} numberOfLines={1}>
+        <Text
+          style={[type.body, { opacity: value ? 0.95 : 0.6 }]}
+          numberOfLines={1}
+        >
           {value ? value : placeholder}
         </Text>
         <Ionicons
@@ -198,10 +207,18 @@ function ControlledSelect({
                     paddingHorizontal: 12,
                     borderBottomWidth: 1,
                     borderBottomColor: colors.divider,
-                    backgroundColor: active ? colors.highlight : pressed ? colors.highlight : "transparent",
+                    backgroundColor: active
+                      ? colors.highlight
+                      : pressed
+                      ? colors.highlight
+                      : "transparent",
                   })}
                 >
-                  <Text style={[type.body, { fontWeight: active ? "900" : "800" }]}>{opt}</Text>
+                  <Text
+                    style={[type.body, { fontWeight: active ? "900" : "800" }]}
+                  >
+                    {opt}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -210,7 +227,9 @@ function ControlledSelect({
       ) : null}
 
       {!disabled && safeOptions.length === 0 ? (
-        <Text style={[type.microcopyItalic, { opacity: 0.7 }]}>No options available.</Text>
+        <Text style={[type.microcopyItalic, { opacity: 0.7 }]}>
+          No options available.
+        </Text>
       ) : null}
     </View>
   );
@@ -238,7 +257,9 @@ export default function CloudTastingScreen() {
   const [loading, setLoading] = useState(isExisting);
   const [saving, setSaving] = useState(false);
   const [locked, setLocked] = useState(isExisting);
-  const [sentimentById, setSentimentById] = useState<Record<string, "LIKE" | "NEUTRAL" | "DISLIKE">>({});
+  const [sentimentById, setSentimentById] = useState<
+    Record<string, "LIKE" | "NEUTRAL" | "DISLIKE">
+  >({});
 
   const [name, setName] = useState(routeWhiskeyName || "");
   const [rating, setRating] = useState<number | null>(null);
@@ -251,12 +272,11 @@ export default function CloudTastingScreen() {
   const [toastTitle, setToastTitle] = useState("");
   const [toastMessage, setToastMessage] = useState("");
 
-  // 👇 ADD THIS HERE
   function showToast(title: string, message?: string) {
     setToastTitle(title);
     setToastMessage(message ?? "");
     setToastVisible(true);
-}
+  }
 
   const [nose, setNose] = useState<Reaction>(null);
   const [taste, setTaste] = useState<Reaction>(null);
@@ -271,8 +291,17 @@ export default function CloudTastingScreen() {
 
   const [flavorTags, setFlavorTags] = useState<string[]>([]);
 
-  const [sourceType, setSourceType] = useState<"purchased" | "bar">("purchased");
+  const [sourceType, setSourceType] = useState<"purchased" | "bar">(
+    "purchased"
+  );
   const [barName, setBarName] = useState("");
+  const [storeName, setStoreName] = useState("");
+  const [sourceCity, setSourceCity] = useState("");
+  const [sourceState, setSourceState] = useState("");
+  const [pricePerOz, setPricePerOz] = useState("");
+  const [pricePerBottle, setPricePerBottle] = useState("");
+  const [bottleSizeMl, setBottleSizeMl] = useState("750");
+  const [pourSizeOz, setPourSizeOz] = useState("2");
 
   const [isSliding, setIsSliding] = useState(false);
   const startedRef = useRef(false);
@@ -355,7 +384,8 @@ export default function CloudTastingScreen() {
     !!whiskeyMeta?.region ||
     !!whiskeyMeta?.sub_region ||
     !!whiskeyMeta?.whiskey_type ||
-    (whiskeyMeta?.proof != null && Number.isFinite(Number(whiskeyMeta.proof))) ||
+    (whiskeyMeta?.proof != null &&
+      Number.isFinite(Number(whiskeyMeta.proof))) ||
     (whiskeyMeta?.age != null && Number.isFinite(Number(whiskeyMeta.age))) ||
     !!whiskeyMeta?.distillery;
 
@@ -386,7 +416,9 @@ export default function CloudTastingScreen() {
 
   const refineBreadcrumb = useMemo(() => {
     if (!refinePath.length) return "All";
-    const labels = refinePath.map((id) => safeText(byId.get(id)?.label)).filter(Boolean);
+    const labels = refinePath
+      .map((id) => safeText(byId.get(id)?.label))
+      .filter(Boolean);
     return labels.length ? labels.join(" › ") : "All";
   }, [refinePath, byId]);
 
@@ -408,7 +440,9 @@ export default function CloudTastingScreen() {
     setFlavorTags((prev) => {
       const has = prev.includes(t);
       const next = has ? prev.filter((x) => x !== t) : [...prev, t];
-      return next.filter((x) => !isFinishLabel(x) && normalizeKey(x) !== "dislikes");
+      return next.filter(
+        (x) => !isFinishLabel(x) && normalizeKey(x) !== "dislikes"
+      );
     });
   }
 
@@ -444,6 +478,10 @@ export default function CloudTastingScreen() {
         setPersonalNotes(loaded.personalNotes);
         setSourceType(loaded.sourceType);
         setBarName(loaded.barName);
+        setSourceCity("");
+        setSourceState("");
+        setPricePerOz("");
+        setPricePerBottle("");
 
         setLocked(true);
         setLoading(false);
@@ -485,7 +523,9 @@ export default function CloudTastingScreen() {
       try {
         const { data, error } = await supabase
           .from("whiskeys")
-          .select("distillery, whiskey_type, proof, age, category, region, sub_region")
+          .select(
+            "distillery, whiskey_type, proof, age, category, region, sub_region"
+          )
           .eq("id", wid)
           .maybeSingle();
 
@@ -501,8 +541,13 @@ export default function CloudTastingScreen() {
               region: cleanText(row.region),
               sub_region: cleanText(row.sub_region),
               proof:
-                row.proof == null || !Number.isFinite(Number(row.proof)) ? null : Number(row.proof),
-              age: row.age == null || !Number.isFinite(Number(row.age)) ? null : Number(row.age),
+                row.proof == null || !Number.isFinite(Number(row.proof))
+                  ? null
+                  : Number(row.proof),
+              age:
+                row.age == null || !Number.isFinite(Number(row.age))
+                  ? null
+                  : Number(row.age),
             }
           : null;
 
@@ -554,12 +599,22 @@ export default function CloudTastingScreen() {
             opacity: locked ? 0.6 : pressed ? 0.92 : 1,
           })}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+            }}
+          >
             <View style={{ flex: 1 }}>
               <Text
                 style={[
                   type.body,
-                  { fontWeight: active ? "900" : "800", opacity: active ? 1 : 0.92 },
+                  {
+                    fontWeight: active ? "900" : "800",
+                    opacity: active ? 1 : 0.92,
+                  },
                 ]}
                 numberOfLines={1}
               >
@@ -567,7 +622,10 @@ export default function CloudTastingScreen() {
               </Text>
 
               {showFamily ? (
-                <Text style={[type.microcopyItalic, { opacity: 0.68 }]} numberOfLines={1}>
+                <Text
+                  style={[type.microcopyItalic, { opacity: 0.68 }]}
+                  numberOfLines={1}
+                >
                   {fam}
                 </Text>
               ) : null}
@@ -598,7 +656,9 @@ export default function CloudTastingScreen() {
               opacity: locked ? 0.6 : 1,
             })}
           >
-            <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>More</Text>
+            <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
+              More
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -638,105 +698,108 @@ export default function CloudTastingScreen() {
   }, [analyticsNodeIds, sentimentById, taste]);
 
   async function onSave() {
-  if (saving) return;
+    if (saving) return;
 
-  setSaving(true);
-  try {
-    const result = await saveCloudTasting({
-      isExisting,
-      tastingId,
+    setSaving(true);
+    try {
+      const result = await saveCloudTasting({
+        isExisting,
+        tastingId,
 
-      name,
-      rating,
-      textureLevel,
-      proofIntensity,
-      flavorIntensity,
-      nose,
-      taste,
-      personalNotes,
+        name,
+        rating,
+        textureLevel,
+        proofIntensity,
+        flavorIntensity,
+        nose,
+        taste,
+        personalNotes,
 
-      whiskeyId,
-      flavorTags,
-      selectedNodeIds: analyticsNodeIds,
-      getTopLevelLabelForNode,
-      isFinishLabel,
-      sentimentById: analyticsSentimentById,
-      sourceType,
-      barName,
+        whiskeyId,
+        flavorTags,
+        selectedNodeIds: analyticsNodeIds,
+        getTopLevelLabelForNode,
+        isFinishLabel,
+        sentimentById: analyticsSentimentById,
 
-      lockName,
+        sourceType,
+        barName,
+        storeName,
 
-      replaceTastingFlavorNodes,
-      replaceTastingFlavorNodesWithSentiment,
-    });
+        sourceCity,
+        sourceState,
+        pricePerOz,
+        pricePerBottle,
+        bottleSizeMl,
+        pourSizeOz,
 
-    setLocked(true);
+        lockName,
 
-    // Existing tasting: stay here and show branded feedback
-    if (isExisting) {
-      showToast("Saved", "Your tasting has been saved.");
-      return;
-    }
+        replaceTastingFlavorNodes,
+        replaceTastingFlavorNodesWithSentiment,
+      });
 
-    // New tasting: continue post-save flow
-    if (result.whiskeyId) {
-      const to = await postSaveMeta.maybeOpenPostSaveMetadata(
-        result.whiskeyId,
-        `/whiskey/${encodeURIComponent(result.whiskeyId)}`
-      );
+      setLocked(true);
 
-if (to) {
- const toastUrl =
-  `${to}${String(to).includes("?") ? "&" : "?"}` +
-  `toastTitle=${encodeURIComponent("Saved")}&` +
-  `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
+      if (isExisting) {
+        showToast("Saved", "Your tasting has been saved.");
+        return;
+      }
 
-router.replace(toastUrl as any);
-  return;
-}
-    } else {
-      const to = await postSaveMeta.maybeOpenPostSaveMetadata(
-        "CUSTOM",
-        "/log",
-        {
+      if (result.whiskeyId) {
+        const to = await postSaveMeta.maybeOpenPostSaveMetadata(
+          result.whiskeyId,
+          `/whiskey/${encodeURIComponent(result.whiskeyId)}`
+        );
+
+        if (to) {
+          const toastUrl =
+            `${to}${String(to).includes("?") ? "&" : "?"}` +
+            `toastTitle=${encodeURIComponent("Saved")}&` +
+            `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
+
+          router.replace(toastUrl as any);
+          return;
+        }
+      } else {
+        const to = await postSaveMeta.maybeOpenPostSaveMetadata("CUSTOM", "/log", {
           isCustom: true,
           name: name,
           proof: "",
           whiskeyTypeId: null,
           distillery: "",
+        });
+
+        if (to) {
+          const toastUrl =
+            `${to}${String(to).includes("?") ? "&" : "?"}` +
+            `toastTitle=${encodeURIComponent("Saved")}&` +
+            `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
+
+          router.replace(toastUrl as any);
+          return;
         }
-      );
+      }
+    } catch (e: any) {
+      const msg = String(e?.message ?? e ?? "Save failed");
+      const isOffline = !!e?.isOffline;
 
- if (to) {
- const toastUrl =
-  `${to}${String(to).includes("?") ? "&" : "?"}` +
-  `toastTitle=${encodeURIComponent("Saved")}&` +
-  `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
-
-router.replace(toastUrl as any);
-  return;
-}
+      if (isOffline) {
+        Alert.alert(
+          "Not saved",
+          "You appear to be offline or your connection dropped. This tasting was not saved.\n\nReconnect and tap Retry.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Retry", onPress: () => onSave() },
+          ]
+        );
+      } else {
+        Alert.alert("Save failed", msg);
+      }
+    } finally {
+      setSaving(false);
     }
-  } catch (e: any) {
-    const msg = String(e?.message ?? e ?? "Save failed");
-    const isOffline = !!e?.isOffline;
-
-    if (isOffline) {
-      Alert.alert(
-        "Not saved",
-        "You appear to be offline or your connection dropped. This tasting was not saved.\n\nReconnect and tap Retry.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Retry", onPress: () => onSave() },
-        ]
-      );
-    } else {
-      Alert.alert("Save failed", msg);
-    }
-  } finally {
-    setSaving(false);
   }
-}
 
   // ====== SECTION: Render ======
   function onEdit() {
@@ -754,9 +817,16 @@ router.replace(toastUrl as any);
           headerLeft: () => (
             <Pressable
               onPress={() => router.back()}
-              style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}
+              style={{
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+              }}
             >
-              <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+              <Ionicons
+                name="chevron-back"
+                size={22}
+                color={colors.textPrimary}
+              />
             </Pressable>
           ),
           headerRight: () => {
@@ -781,261 +851,319 @@ router.replace(toastUrl as any);
         }}
       />
 
-      <ScrollView
-        style={{ flex: 1, backgroundColor: "transparent" }}
-        contentContainerStyle={{ paddingBottom: spacing.xl * 3 }}
-        keyboardShouldPersistTaps="handled"
-        scrollEnabled={!isSliding}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
       >
-        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl * 2, gap: spacing.lg }}>
-          {loading ? (
-            <View style={{ paddingVertical: spacing.xl, alignItems: "center" }}>
-              <ActivityIndicator />
-              <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.7 }]}>Loading…</Text>
-            </View>
-          ) : null}
+        <ScrollView
+          style={{ flex: 1, backgroundColor: "transparent" }}
+          contentContainerStyle={{ paddingBottom: spacing.xl * 6 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
+          scrollEnabled={!isSliding}
+        >
+          <View
+            style={{
+              paddingHorizontal: spacing.lg,
+              paddingTop: spacing.lg,
+              paddingBottom: spacing.xl * 2,
+              gap: spacing.lg,
+            }}
+          >
+            {loading ? (
+              <View style={{ paddingVertical: spacing.xl, alignItems: "center" }}>
+                <ActivityIndicator />
+                <Text style={[type.body, { marginTop: spacing.sm, opacity: 0.7 }]}>
+                  Loading…
+                </Text>
+              </View>
+            ) : null}
 
-          {/* Whiskey Name (Hero) */}
-          <View style={{ alignItems: "center", gap: spacing.sm }}>
-            <TextInput
-              value={name}
-              onChangeText={(t) => {
-                setName(t);
-                if (!lockName) setWhiskeyId(null);
-              }}
-              editable={!locked && !(!isExisting && lockName)}
-              placeholder="Whiskey name"
-              placeholderTextColor={colors.textSecondary}
-              autoCapitalize="words"
-              multiline
-              textAlign="center"
-              style={{
-                paddingVertical: 0,
-                paddingHorizontal: 0,
-                color: colors.textPrimary,
-                fontSize: 34,
-                lineHeight: 40,
-                fontWeight: "900",
-                fontFamily: type.screenTitle?.fontFamily ?? type.body.fontFamily,
-                opacity: locked ? 0.92 : 1,
-                width: "100%",
-              }}
-            />
-
-            <View
-              style={{
-                width: 120,
-                height: 4,
-                borderRadius: 999,
-                backgroundColor: colors.accent,
-                opacity: 0.9,
-              }}
-            />
-          </View>
-
-          {whiskeyId && whiskeyMeta && hasBottleDetails ? (
-            <BottleDetailsCard
-              detailsLabel="Bottle details"
-              rows={[
-                { label: "Distillery", value: whiskeyMeta?.distillery ? String(whiskeyMeta.distillery) : "" },
-                { label: "Category", value: whiskeyMeta?.category ? String(whiskeyMeta.category) : "" },
-                { label: "Region", value: whiskeyMeta?.region ? String(whiskeyMeta.region) : "" },
-                { label: "Sub-Region", value: whiskeyMeta?.sub_region ? String(whiskeyMeta.sub_region) : "" },
-                { label: "Style", value: whiskeyMeta?.whiskey_type ? String(whiskeyMeta.whiskey_type) : "" },
-                {
-                  label: "Proof",
-                  value:
-                    whiskeyMeta?.proof != null && Number.isFinite(Number(whiskeyMeta.proof))
-                      ? `${Math.round(Number(whiskeyMeta.proof))} proof`
-                      : "",
-                },
-                {
-                  label: "Age",
-                  value:
-                    whiskeyMeta?.age != null && Number.isFinite(Number(whiskeyMeta.age))
-                      ? `${Math.round(Number(whiskeyMeta.age))} yr`
-                      : "",
-                },
-              ]}
-              defaultOpen={false}
-            />
-          ) : null}
-
-          <View style={{ marginVertical: spacing.sm }}>
-            <View
-              style={{
-                height: 2,
-                marginTop: 4,
-                borderRadius: 999,
-                overflow: "hidden",
-                opacity: 0.95,
-              }}
-            >
-              <View
+            <View style={{ alignItems: "center", gap: spacing.sm }}>
+              <TextInput
+                value={name}
+                onChangeText={(t) => {
+                  setName(t);
+                  if (!lockName) setWhiskeyId(null);
+                }}
+                editable={!locked && !(!isExisting && lockName)}
+                placeholder="Whiskey name"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="words"
+                multiline
+                textAlign="center"
                 style={{
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: "25%",
-                  backgroundColor: colors.divider,
-                  opacity: 0.65,
+                  paddingVertical: 0,
+                  paddingHorizontal: 0,
+                  color: colors.textPrimary,
+                  fontSize: 34,
+                  lineHeight: 40,
+                  fontWeight: "900",
+                  fontFamily:
+                    type.screenTitle?.fontFamily ?? type.body.fontFamily,
+                  opacity: locked ? 0.92 : 1,
+                  width: "100%",
                 }}
               />
+
               <View
                 style={{
-                  position: "absolute",
-                  left: "25%",
-                  top: 0,
-                  bottom: 0,
-                  width: "50%",
+                  width: 120,
+                  height: 4,
+                  borderRadius: 999,
                   backgroundColor: colors.accent,
-                  opacity: 0.12,
-                }}
-              />
-              <View
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: "25%",
-                  backgroundColor: colors.divider,
-                  opacity: 0.65,
+                  opacity: 0.9,
                 }}
               />
             </View>
-          </View>
 
-          {/* Rating */}
-          <RatingSection
-            locked={locked}
-            rating={rating}
-            setRating={setRating}
-            onSlidingChange={(s: boolean) => setIsSliding(s)}
-          />
+            {whiskeyId && whiskeyMeta && hasBottleDetails ? (
+              <BottleDetailsCard
+                detailsLabel="Bottle details"
+                rows={[
+                  {
+                    label: "Distillery",
+                    value: whiskeyMeta?.distillery
+                      ? String(whiskeyMeta.distillery)
+                      : "",
+                  },
+                  {
+                    label: "Category",
+                    value: whiskeyMeta?.category
+                      ? String(whiskeyMeta.category)
+                      : "",
+                  },
+                  {
+                    label: "Region",
+                    value: whiskeyMeta?.region ? String(whiskeyMeta.region) : "",
+                  },
+                  {
+                    label: "Sub-Region",
+                    value: whiskeyMeta?.sub_region
+                      ? String(whiskeyMeta.sub_region)
+                      : "",
+                  },
+                  {
+                    label: "Style",
+                    value: whiskeyMeta?.whiskey_type
+                      ? String(whiskeyMeta.whiskey_type)
+                      : "",
+                  },
+                  {
+                    label: "Proof",
+                    value:
+                      whiskeyMeta?.proof != null &&
+                      Number.isFinite(Number(whiskeyMeta.proof))
+                        ? `${Math.round(Number(whiskeyMeta.proof))} proof`
+                        : "",
+                  },
+                  {
+                    label: "Age",
+                    value:
+                      whiskeyMeta?.age != null &&
+                      Number.isFinite(Number(whiskeyMeta.age))
+                        ? `${Math.round(Number(whiskeyMeta.age))} yr`
+                        : "",
+                  },
+                ]}
+                defaultOpen={false}
+              />
+            ) : null}
 
-          <View style={{ marginVertical: spacing.sm }}>
-            <View
-              style={{
-                height: 2,
-                marginTop: 4,
-                borderRadius: 999,
-                overflow: "hidden",
-                opacity: 0.95,
-              }}
-            >
+            <View style={{ marginVertical: spacing.sm }}>
               <View
                 style={{
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: "25%",
-                  backgroundColor: colors.divider,
-                  opacity: 0.65,
+                  height: 2,
+                  marginTop: 4,
+                  borderRadius: 999,
+                  overflow: "hidden",
+                  opacity: 0.95,
                 }}
-              />
-              <View
-                style={{
-                  position: "absolute",
-                  left: "25%",
-                  top: 0,
-                  bottom: 0,
-                  width: "50%",
-                  backgroundColor: colors.accent,
-                  opacity: 0.12,
-                }}
-              />
-              <View
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: "25%",
-                  backgroundColor: colors.divider,
-                  opacity: 0.65,
-                }}
-              />
+              >
+                <View
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: "25%",
+                    backgroundColor: colors.divider,
+                    opacity: 0.65,
+                  }}
+                />
+                <View
+                  style={{
+                    position: "absolute",
+                    left: "25%",
+                    top: 0,
+                    bottom: 0,
+                    width: "50%",
+                    backgroundColor: colors.accent,
+                    opacity: 0.12,
+                  }}
+                />
+                <View
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: "25%",
+                    backgroundColor: colors.divider,
+                    opacity: 0.65,
+                  }}
+                />
+              </View>
             </View>
-          </View>
 
-          <QuickNotesSection
-            locked={locked}
-            nose={nose}
-            setNose={setNose}
-            taste={taste}
-            setTaste={setTaste}
-          />
-
-          <TastingSignalsSection
-            locked={locked}
-            textureLevel={textureLevel}
-            proofIntensity={proofIntensity}
-            flavorIntensity={flavorIntensity}
-            setTextureLevel={setTextureLevel}
-            setProofIntensity={setProofIntensity}
-            setFlavorIntensity={setFlavorIntensity}
-          />
-
-          <FlavorNotesSection
-            locked={locked}
-            allTopLevelLabels={ALL_TOP_LEVEL_LABELS}
-            flavorTags={flavorTags}
-            toggleFlavor={toggleFlavor}
-            additionalNotesLine={additionalNotesLine}
-            openRefine={openRefine}
-            selectedNodeIds={selectedNodeIds}
-            selectedCountText={selectedCountText}
-            selectedNodeLabelsPreview={selectedNodeLabelsPreview}
-          />
-
-          {/* Personal Notes */}
-          <Card tight>
-            <Text style={type.sectionHeader}>Personal notes</Text>
-            <Text style={[type.microcopyItalic, { color: colors.textSecondary, marginTop: 2 }]}>
-              Add any freeform tasting thoughts, reminders, or details you want to remember.
-            </Text>
-
-            <TextInput
-              value={personalNotes}
-              onChangeText={setPersonalNotes}
-              editable={!locked}
-              placeholder="Write your tasting notes here..."
-              placeholderTextColor={colors.textSecondary}
-              multiline
-              textAlignVertical="top"
-              style={{
-                marginTop: spacing.md,
-                minHeight: 140,
-                paddingVertical: spacing.md,
-                paddingHorizontal: spacing.md,
-                borderRadius: radii.md,
-                borderWidth: 1,
-                borderColor: colors.divider,
-                backgroundColor: "transparent",
-                color: colors.textPrimary,
-                fontSize: 16,
-                lineHeight: 22,
-                fontFamily: type.body.fontFamily,
-                opacity: !locked ? 1 : 0.75,
-              }}
+            <RatingSection
+              locked={locked}
+              rating={rating}
+              setRating={setRating}
+              onSlidingChange={(s: boolean) => setIsSliding(s)}
             />
-          </Card>
 
-<TastingSourceCard
-  locked={locked}
-  sourceType={sourceType}
-  onChangeSourceType={setSourceType}
-  barName={barName}
-  onChangeBarName={setBarName}
-  barNameMissing={barNameMissing}
-/>
-        </View>
-      </ScrollView>
+            <View style={{ marginVertical: spacing.sm }}>
+              <View
+                style={{
+                  height: 2,
+                  marginTop: 4,
+                  borderRadius: 999,
+                  overflow: "hidden",
+                  opacity: 0.95,
+                }}
+              >
+                <View
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: "25%",
+                    backgroundColor: colors.divider,
+                    opacity: 0.65,
+                  }}
+                />
+                <View
+                  style={{
+                    position: "absolute",
+                    left: "25%",
+                    top: 0,
+                    bottom: 0,
+                    width: "50%",
+                    backgroundColor: colors.accent,
+                    opacity: 0.12,
+                  }}
+                />
+                <View
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: "25%",
+                    backgroundColor: colors.divider,
+                    opacity: 0.65,
+                  }}
+                />
+              </View>
+            </View>
 
-      {/* Refine modal */}
+            <QuickNotesSection
+              locked={locked}
+              nose={nose}
+              setNose={setNose}
+              taste={taste}
+              setTaste={setTaste}
+            />
+
+            <TastingSignalsSection
+              locked={locked}
+              textureLevel={textureLevel}
+              proofIntensity={proofIntensity}
+              flavorIntensity={flavorIntensity}
+              setTextureLevel={setTextureLevel}
+              setProofIntensity={setProofIntensity}
+              setFlavorIntensity={setFlavorIntensity}
+            />
+
+            <FlavorNotesSection
+              locked={locked}
+              allTopLevelLabels={ALL_TOP_LEVEL_LABELS}
+              flavorTags={flavorTags}
+              toggleFlavor={toggleFlavor}
+              additionalNotesLine={additionalNotesLine}
+              openRefine={openRefine}
+              selectedNodeIds={selectedNodeIds}
+              selectedCountText={selectedCountText}
+              selectedNodeLabelsPreview={selectedNodeLabelsPreview}
+            />
+
+            <Card tight>
+              <Text style={type.sectionHeader}>Personal notes</Text>
+              <Text
+                style={[
+                  type.microcopyItalic,
+                  { color: colors.textSecondary, marginTop: 2 },
+                ]}
+              >
+                Add any freeform tasting thoughts, reminders, or details you want
+                to remember.
+              </Text>
+
+              <TextInput
+                value={personalNotes}
+                onChangeText={setPersonalNotes}
+                editable={!locked}
+                placeholder="Write your tasting notes here..."
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                textAlignVertical="top"
+                style={{
+                  marginTop: spacing.md,
+                  minHeight: 140,
+                  paddingVertical: spacing.md,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radii.md,
+                  borderWidth: 1,
+                  borderColor: colors.divider,
+                  backgroundColor: "transparent",
+                  color: colors.textPrimary,
+                  fontSize: 16,
+                  lineHeight: 22,
+                  fontFamily: type.body.fontFamily,
+                  opacity: !locked ? 1 : 0.75,
+                }}
+              />
+            </Card>
+
+            <TastingSourceCard
+              locked={locked}
+              sourceType={sourceType}
+              onChangeSourceType={setSourceType}
+              barName={barName}
+              onChangeBarName={setBarName}
+              barNameMissing={barNameMissing}
+              city={sourceCity}
+              onChangeCity={setSourceCity}
+              state={sourceState}
+              onChangeState={setSourceState}
+              pricePerOz={pricePerOz}
+              onChangePricePerOz={setPricePerOz}
+              pricePerBottle={pricePerBottle}
+              onChangePricePerBottle={setPricePerBottle}
+              storeName={storeName}
+              onChangeStoreName={setStoreName}
+              bottleSizeMl={bottleSizeMl}
+              onChangeBottleSizeMl={setBottleSizeMl}
+              pourSizeOz={pourSizeOz}
+              onChangePourSizeOz={setPourSizeOz}
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
       <RefineModal
         visible={refineOpen}
         locked={locked}
@@ -1075,46 +1203,52 @@ router.replace(toastUrl as any);
         setSentimentById={setSentimentById}
       />
 
-     <MetadataModal
-  visible={postSaveMeta.metaOpen}
-  loading={postSaveMeta.metaLoading}
-  saving={postSaveMeta.metaSaving}
-  isCustom={postSaveMeta.metaIsCustom}
-  metaMissingKeys={postSaveMeta.metaMissingKeys}
-  onSkip={() => {
-    const to = postSaveMeta.finishPostSaveFlow();
-    if (to) {
-      const toastUrl =
-        `${to}${String(to).includes("?") ? "&" : "?"}` +
-        `toastTitle=${encodeURIComponent("Saved")}&` +
-        `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
+      <MetadataModal
+        visible={postSaveMeta.metaOpen}
+        loading={postSaveMeta.metaLoading}
+        saving={postSaveMeta.metaSaving}
+        isCustom={postSaveMeta.metaIsCustom}
+        metaMissingKeys={postSaveMeta.metaMissingKeys}
+        onSkip={() => {
+          const to = postSaveMeta.finishPostSaveFlow();
+          if (to) {
+            const toastUrl =
+              `${to}${String(to).includes("?") ? "&" : "?"}` +
+              `toastTitle=${encodeURIComponent("Saved")}&` +
+              `toastMessage=${encodeURIComponent(
+                "Your tasting has been saved."
+              )}`;
 
-      router.replace(toastUrl as any);
-    }
-  }}
-  onSave={async () => {
-    const to = await postSaveMeta.saveMetadataFromModal();
-    if (to) {
-      const toastUrl =
-        `${to}${String(to).includes("?") ? "&" : "?"}` +
-        `toastTitle=${encodeURIComponent("Saved")}&` +
-        `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
+            router.replace(toastUrl as any);
+          }
+        }}
+        onSave={async () => {
+          const to = await postSaveMeta.saveMetadataFromModal();
+          if (to) {
+            const toastUrl =
+              `${to}${String(to).includes("?") ? "&" : "?"}` +
+              `toastTitle=${encodeURIComponent("Saved")}&` +
+              `toastMessage=${encodeURIComponent(
+                "Your tasting has been saved."
+              )}`;
 
-      router.replace(toastUrl as any);
-      return;
-    }
+            router.replace(toastUrl as any);
+            return;
+          }
 
-    const fallback = postSaveMeta.finishPostSaveFlow();
-    if (fallback) {
-      const toastUrl =
-        `${fallback}${String(fallback).includes("?") ? "&" : "?"}` +
-        `toastTitle=${encodeURIComponent("Saved")}&` +
-        `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
+          const fallback = postSaveMeta.finishPostSaveFlow();
+          if (fallback) {
+            const toastUrl =
+              `${fallback}${String(fallback).includes("?") ? "&" : "?"}` +
+              `toastTitle=${encodeURIComponent("Saved")}&` +
+              `toastMessage=${encodeURIComponent(
+                "Your tasting has been saved."
+              )}`;
 
-      router.replace(toastUrl as any);
-    }
-  }}
-  fName={postSaveMeta.fName}
+            router.replace(toastUrl as any);
+          }
+        }}
+        fName={postSaveMeta.fName}
         setFName={postSaveMeta.setFName}
         fDistillery={postSaveMeta.fDistillery}
         setFDistillery={postSaveMeta.setFDistillery}
@@ -1144,12 +1278,13 @@ router.replace(toastUrl as any);
         onCategoryChange={postSaveMeta.onCategoryChange}
         onRegionChange={postSaveMeta.onRegionChange}
       />
+
       <AppToast
-  visible={toastVisible}
-  title={toastTitle}
-  message={toastMessage}
-  onHide={() => setToastVisible(false)}
-/>
+        visible={toastVisible}
+        title={toastTitle}
+        message={toastMessage}
+        onHide={() => setToastVisible(false)}
+      />
     </>
   );
 }

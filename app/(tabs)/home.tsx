@@ -319,64 +319,30 @@ function FeaturedBottleCard({
         A bottle worth your attention right now.
       </Text>
 
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => ({
+      <View
+        style={{
           borderRadius: radii.lg,
           borderWidth: 1,
-          borderColor: pressed
-            ? "rgba(190, 150, 99, 0.42)"
-            : "rgba(190, 150, 99, 0.34)",
-          backgroundColor: pressed
-            ? "rgba(190, 150, 99, 0.09)"
-            : "rgba(190, 150, 99, 0.05)",
-          paddingVertical: spacing.md,
+          borderColor: "rgba(190, 150, 99, 0.34)",
+          backgroundColor: "rgba(190, 150, 99, 0.05)",
+          paddingVertical: spacing.lg,
           paddingHorizontal: spacing.lg,
           gap: spacing.md,
           ...warmCardShadow,
-          opacity: pressed ? 0.97 : 1,
-        })}
+        }}
       >
-        {featureNote ? (
-          <Text
-            style={[
-              type.microcopyItalic,
-              {
-                fontSize: 17,
-                lineHeight: 24,
-                color: colors.textPrimary,
-                opacity: 0.9,
-              },
-            ]}
-          >
-            {featureNote}
-          </Text>
-        ) : null}
-
-        <View
-          style={{
-            width: "100%",
-            paddingVertical: 12,
-            paddingHorizontal: spacing.md,
-            borderRadius: 999,
-            alignItems: "center",
-            backgroundColor: "rgba(190, 150, 99, 0.10)",
-            borderWidth: 1,
-            borderColor: "rgba(190, 150, 99, 0.34)",
-            gap: 2,
-          }}
-        >
+        <View style={{ gap: 6, alignItems: "center" }}>
           <Text
             style={[
               type.body,
               {
                 color: colors.textPrimary,
-                fontSize: 18,
-                lineHeight: 24,
+                fontSize: 24,
+                lineHeight: 30,
                 textAlign: "center",
+                letterSpacing: 0.35,
               },
             ]}
-            numberOfLines={1}
           >
             {name}
           </Text>
@@ -387,30 +353,87 @@ function FeaturedBottleCard({
               {
                 color: colors.textSecondary,
                 textAlign: "center",
+                fontSize: 14,
+                lineHeight: 18,
               },
             ]}
-            numberOfLines={1}
           >
             {whiskeyType ?? "Whiskey"}
             {proof != null ? ` • ${proof} proof` : ""}
           </Text>
+        </View>
 
+        <View style={{ alignItems: "center", marginTop: spacing.xs }}>
+          <Pressable
+            onPress={onPress}
+            style={({ pressed }) => ({
+              width: "100%",
+              paddingVertical: 12,
+              borderRadius: 999,
+              alignItems: "center",
+              backgroundColor: pressed
+                ? "rgba(190, 150, 99, 0.16)"
+                : "rgba(190, 150, 99, 0.10)",
+              borderWidth: 1,
+              borderColor: "rgba(190, 150, 99, 0.34)",
+              opacity: pressed ? 0.96 : 1,
+            })}
+          >
+            <Text
+              style={[
+                type.caption,
+                {
+                  color: colors.accent,
+                  opacity: 0.96,
+                  letterSpacing: 0.25,
+                  fontWeight: "700",
+                },
+              ]}
+            >
+              Log today
+            </Text>
+          </Pressable>
+        </View>
+
+        <View
+          style={{
+            height: 1,
+            backgroundColor: "rgba(190, 150, 99, 0.18)",
+            marginTop: spacing.xs,
+          }}
+        />
+
+        <View style={{ gap: 6 }}>
           <Text
             style={[
               type.caption,
               {
                 color: colors.accent,
-                opacity: 0.96,
-                letterSpacing: 0.25,
                 fontWeight: "700",
-                marginTop: 4,
+                letterSpacing: 0.5,
+                textTransform: "uppercase",
               },
             ]}
           >
-            Log today
+            Featured Notes
+          </Text>
+
+          <Text
+            style={[
+              type.microcopyItalic,
+              {
+                fontSize: 16,
+                lineHeight: 23,
+                color: colors.textPrimary,
+                opacity: 0.88,
+              },
+            ]}
+          >
+            {featureNote ??
+              "A bottle worth revisiting right now — balanced, inviting, and easy to recommend."}
           </Text>
         </View>
-      </Pressable>
+      </View>
     </View>
   );
 }
