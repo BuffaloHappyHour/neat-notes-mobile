@@ -1,8 +1,14 @@
 // src/discover/hooks/useDiscover.ts
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { SectionKey, WhiskeyCardRow } from "../services/discover.service";
+import { supabase } from "../../../lib/supabase";
+import type {
+  AtHomeRow,
+  SectionKey,
+  WhiskeyCardRow,
+} from "../services/discover.service";
 import {
+  fetchAtHomeRows,
   fetchHighestBhhIds,
   fetchHighestCommunityIds,
   fetchNewestIds,
@@ -16,8 +22,7 @@ function parseMaybeNumber(v: string) {
   const t = String(v ?? "").trim();
   if (!t) return null;
   const n = Number(t);
-  if (!Number.isFinite(n)) return null;
-  return n;
+  return Number.isFinite(n) ? n : null;
 }
 
 export function useDiscover() {
@@ -39,12 +44,14 @@ export function useDiscover() {
   const [allTypes, setAllTypes] = useState<string[]>([]);
 
   // Pools (raw)
+  const [atHomePool, setAtHomePool] = useState<AtHomeRow[]>([]);
   const [trendingPool, setTrendingPool] = useState<WhiskeyCardRow[]>([]);
   const [recentPool, setRecentPool] = useState<WhiskeyCardRow[]>([]);
   const [highestPool, setHighestPool] = useState<WhiskeyCardRow[]>([]);
   const [newestPool, setNewestPool] = useState<WhiskeyCardRow[]>([]);
 
   // Display (filtered)
+  const [atHome, setAtHome] = useState<AtHomeRow[]>([]);
   const [trending, setTrending] = useState<WhiskeyCardRow[]>([]);
   const [recent, setRecent] = useState<WhiskeyCardRow[]>([]);
   const [highest, setHighest] = useState<WhiskeyCardRow[]>([]);
@@ -100,9 +107,28 @@ export function useDiscover() {
     return out;
   }
 
+  function applyTypeAndProofOnly(rows: WhiskeyCardRow[]) {
+    let out = [...rows];
+
+    if (selectedType) out = out.filter((r) => r.whiskeyType === selectedType);
+
+    if (minProof != null || maxProof != null) {
+      out = out.filter((r) => {
+        const p = r.proof;
+        if (p == null || !Number.isFinite(Number(p))) return false;
+        const pv = Number(p);
+        if (minProof != null && pv < minProof) return false;
+        if (maxProof != null && pv > maxProof) return false;
+        return true;
+      });
+    }
+
+    return out;
+  }
+
   async function loadTypes() {
     try {
-      const { data, error } = await (await import("../../../lib/supabase")).supabase
+      const { data, error } = await supabase
         .from("whiskeys")
         .select("whiskey_type")
         .limit(3000);
@@ -128,7 +154,6 @@ export function useDiscover() {
   async function loadSectionPools(opts?: { silent?: boolean }) {
     const silent = !!opts?.silent;
 
-    // guard: avoid overlapping fetches
     if (inFlightRef.current) return;
     inFlightRef.current = true;
 
@@ -140,13 +165,16 @@ export function useDiscover() {
     try {
       const POOL = 30;
 
-      const [trendIds, recentIds, newestIdsRaw] = await Promise.all([
+      const [{ data: authData }, trendIds, recentIds, newestIdsRaw] = await Promise.all([
+        supabase.auth.getUser(),
         fetchTrendingIds(POOL),
         fetchRecentIds(POOL),
         fetchNewestIds(POOL),
       ]);
 
-      // HIGHEST (keep your current threshold logic for now)
+      const userId = authData?.user?.id ?? null;
+
+      // HIGHEST
       const strictHigh = await fetchHighestCommunityIds(POOL, 5);
 
       let finalHighIds: string[] = [];
@@ -158,20 +186,22 @@ export function useDiscover() {
         else finalHighIds = await fetchHighestBhhIds(POOL);
       }
 
-      const [trendCards, recentCards, highCards, newestCards] = await Promise.all([
-        fetchWhiskeyCardsByIds(trendIds),
-        fetchWhiskeyCardsByIds(recentIds),
-        fetchWhiskeyCardsByIds(finalHighIds),
-        fetchWhiskeyCardsByIds(newestIdsRaw),
-      ]);
+      const [atHomeRows, trendCards, recentCards, highCards, newestCards] =
+        await Promise.all([
+          userId ? fetchAtHomeRows(6) : Promise.resolve([]),
+          fetchWhiskeyCardsByIds(trendIds),
+          fetchWhiskeyCardsByIds(recentIds),
+          fetchWhiskeyCardsByIds(finalHighIds),
+          fetchWhiskeyCardsByIds(newestIdsRaw),
+        ]);
 
+      setAtHomePool(atHomeRows);
       setTrendingPool(trendCards);
       setRecentPool(recentCards);
       setHighestPool(highCards);
-
-      // ✅ NEWEST should show “new”, even if unrated.
       setNewestPool(newestCards);
     } catch (e: any) {
+      setAtHomePool([]);
       setTrendingPool([]);
       setRecentPool([]);
       setHighestPool([]);
@@ -185,7 +215,6 @@ export function useDiscover() {
     }
   }
 
-  // ✅ Initial load only (prevents reload when returning to tab)
   useEffect(() => {
     if (didInitialLoadRef.current) return;
     didInitialLoadRef.current = true;
@@ -193,23 +222,16 @@ export function useDiscover() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ Filters now ONLY re-filter locally (no network)
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     debounceRef.current = setTimeout(() => {
-      // Trending/Recent/Highest keep “no filler”
-      setTrending(applyFilters(trendingPool).slice(0, 5));
-      setRecent(applyFilters(recentPool).slice(0, 5));
-      setHighest(applyFilters(highestPool).slice(0, 5));
+      let atHomeOut = [...atHomePool];
 
-      // ✅ NEWEST: apply only type/proof filters, NOT isViableCard
-      let newestOut = [...newestPool];
-
-      if (selectedType) newestOut = newestOut.filter((r) => r.whiskeyType === selectedType);
+      if (selectedType) atHomeOut = atHomeOut.filter((r) => r.whiskeyType === selectedType);
 
       if (minProof != null || maxProof != null) {
-        newestOut = newestOut.filter((r) => {
+        atHomeOut = atHomeOut.filter((r) => {
           const p = r.proof;
           if (p == null || !Number.isFinite(Number(p))) return false;
           const pv = Number(p);
@@ -219,14 +241,31 @@ export function useDiscover() {
         });
       }
 
-      setNewest(newestOut.slice(0, 5));
+      setAtHome(atHomeOut.slice(0, 3));
+
+      // Trending/Recent/Highest keep “no filler”
+      setTrending(applyFilters(trendingPool).slice(0, 5));
+      setRecent(applyFilters(recentPool).slice(0, 5));
+      setHighest(applyFilters(highestPool).slice(0, 5));
+
+      // Newest: apply only type/proof filters, NOT isViableCard
+      setNewest(applyTypeAndProofOnly(newestPool).slice(0, 5));
     }, 120);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trendingPool, recentPool, highestPool, newestPool, selectedType, minProofText, maxProofText]);
+  }, [
+    atHomePool,
+    trendingPool,
+    recentPool,
+    highestPool,
+    newestPool,
+    selectedType,
+    minProofText,
+    maxProofText,
+  ]);
 
   const libraryEmpty = useMemo(() => {
     return (
@@ -263,10 +302,10 @@ export function useDiscover() {
       section === "TRENDING"
         ? "Trending"
         : section === "RECENT"
-        ? "Recently Reviewed"
-        : section === "HIGHEST"
-        ? "Highest Rated"
-        : "Newest Additions";
+          ? "Recently Reviewed"
+          : section === "HIGHEST"
+            ? "Highest Rated"
+            : "Newest Additions";
     setSeeAllTitle(title);
 
     try {
@@ -289,23 +328,7 @@ export function useDiscover() {
       const cards = await fetchWhiskeyCardsByIds(ids);
 
       if (section === "NEWEST") {
-        // ✅ Newest: only type/proof filtering, not viability
-        let newestOut = [...cards];
-
-        if (selectedType) newestOut = newestOut.filter((r) => r.whiskeyType === selectedType);
-
-        if (minProof != null || maxProof != null) {
-          newestOut = newestOut.filter((r) => {
-            const p = r.proof;
-            if (p == null || !Number.isFinite(Number(p))) return false;
-            const pv = Number(p);
-            if (minProof != null && pv < minProof) return false;
-            if (maxProof != null && pv > maxProof) return false;
-            return true;
-          });
-        }
-
-        setSeeAllRows(newestOut);
+        setSeeAllRows(applyTypeAndProofOnly(cards));
       } else {
         setSeeAllRows(applyFilters(cards));
       }
@@ -341,6 +364,7 @@ export function useDiscover() {
     resetFilters,
     normalizeProofBoundsAndCloseFilters,
 
+    atHome,
     trending,
     recent,
     highest,

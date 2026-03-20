@@ -15,6 +15,10 @@ export type WhiskeyCardRow = {
   communityCount: number;
 
   bhhScore: number | null;
+
+  // Personal / optional
+  userTastingCount?: number;
+  userLastTastedAt?: string | null;
 };
 
 export type SectionKey = "TRENDING" | "RECENT" | "HIGHEST" | "NEWEST";
@@ -145,6 +149,160 @@ export async function fetchWhiskeyCardsByIds(idsInOrder: string[]): Promise<Whis
   return out;
 }
 
+/** ---------- Personal cards ---------- */
+
+export async function fetchYourRecentPourCards(
+  userId: string,
+  limit: number
+): Promise<WhiskeyCardRow[]> {
+  if (!isUuidLike(userId)) return [];
+
+  const { data, error } = await supabase
+    .from("tastings")
+    .select("whiskey_id, created_at")
+    .eq("user_id", userId)
+    .not("whiskey_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) throw new Error(error.message);
+
+  const rollup = new Map<string, { count: number; lastTastedAt: string | null }>();
+
+  (data as any[]).forEach((row) => {
+    const whiskeyId = row.whiskey_id ? String(row.whiskey_id) : "";
+    if (!isUuidLike(whiskeyId)) return;
+
+    const createdAt = row.created_at ? String(row.created_at) : null;
+    const existing = rollup.get(whiskeyId);
+
+    if (!existing) {
+      rollup.set(whiskeyId, {
+        count: 1,
+        lastTastedAt: createdAt,
+      });
+      return;
+    }
+
+    existing.count += 1;
+
+    if (
+      createdAt &&
+      (!existing.lastTastedAt || Date.parse(createdAt) > Date.parse(existing.lastTastedAt))
+    ) {
+      existing.lastTastedAt = createdAt;
+    }
+  });
+
+  const orderedIds = Array.from(rollup.entries())
+    .sort((a, b) => {
+      const aTime = a[1].lastTastedAt ? Date.parse(a[1].lastTastedAt) : 0;
+      const bTime = b[1].lastTastedAt ? Date.parse(b[1].lastTastedAt) : 0;
+      return bTime - aTime;
+    })
+    .slice(0, limit)
+    .map(([id]) => id);
+
+  const baseCards = await fetchWhiskeyCardsByIds(orderedIds);
+
+  return baseCards.map((card) => {
+    const personal = rollup.get(card.whiskeyId);
+
+    return {
+      ...card,
+      userTastingCount: personal?.count ?? 0,
+      userLastTastedAt: personal?.lastTastedAt ?? null,
+    };
+  });
+}
+export type AtHomeRow = {
+  whiskeyId: string;
+  whiskeyName: string;
+  whiskeyType: string | null;
+  proof: number | null;
+  rating: number | null;
+  lastTastedAt: string | null;
+};
+
+export async function fetchAtHomeRows(limit: number): Promise<AtHomeRow[]> {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("tastings")
+    .select("whiskey_id, rating, created_at, purchase_type")
+    .eq("user_id", user.id)
+    .eq("purchase_type", "retail_bottle")
+    .not("whiskey_id", "is", null)
+    .limit(1000);
+
+  if (error) throw new Error(error.message);
+
+  const rollup = new Map<
+    string,
+    { count: number; lastTastedAt: string | null; rating: number | null }
+  >();
+
+  (data as any[]).forEach((row) => {
+    const whiskeyId = row.whiskey_id ? String(row.whiskey_id) : "";
+    if (!isUuidLike(whiskeyId)) return;
+
+    const createdAt = row.created_at ? String(row.created_at) : null;
+    const rating =
+      row.rating == null || !Number.isFinite(Number(row.rating))
+        ? null
+        : Number(row.rating);
+
+    const existing = rollup.get(whiskeyId);
+
+    if (!existing) {
+      rollup.set(whiskeyId, {
+        count: 1,
+        lastTastedAt: createdAt,
+        rating,
+      });
+      return;
+    }
+
+    existing.count += 1;
+
+    if (
+      createdAt &&
+      (!existing.lastTastedAt || Date.parse(createdAt) > Date.parse(existing.lastTastedAt))
+    ) {
+      existing.lastTastedAt = createdAt;
+      existing.rating = rating ?? existing.rating;
+    }
+  });
+
+  const orderedIds = Array.from(rollup.entries())
+    .filter(([, v]) => v.count === 1)
+    .sort((a, b) => {
+      const aTime = a[1].lastTastedAt ? Date.parse(a[1].lastTastedAt) : 0;
+      const bTime = b[1].lastTastedAt ? Date.parse(b[1].lastTastedAt) : 0;
+      return aTime - bTime; // oldest first
+    })
+    .slice(0, limit)
+    .map(([id]) => id);
+
+  if (orderedIds.length === 0) return [];
+
+  const baseCards = await fetchWhiskeyCardsByIds(orderedIds);
+  const metaMap = new Map(rollup);
+
+  return baseCards.map((card) => {
+    const meta = metaMap.get(card.whiskeyId);
+
+    return {
+      whiskeyId: card.whiskeyId,
+      whiskeyName: card.whiskeyName,
+      whiskeyType: card.whiskeyType,
+      proof: card.proof,
+      rating: meta?.rating ?? null,
+      lastTastedAt: meta?.lastTastedAt ?? null,
+    };
+  });
+}
 /** ---------- Fetch section IDs ---------- */
 
 export async function fetchTrendingIds(limit: number): Promise<string[]> {
@@ -210,7 +368,7 @@ export async function fetchNewestIds(limit: number): Promise<string[]> {
  * Community “Highest” IDs only.
  * NOTE: This will return nothing for whiskies that do not have a stats row.
  */
-export async function fetchHighestCommunityIds(limit: number, minCount: number ): Promise<string[]> {
+export async function fetchHighestCommunityIds(limit: number, minCount: number): Promise<string[]> {
   const { data, error } = await supabase
     .from("whiskey_community_stats")
     .select("whiskey_id, community_avg, community_count")
@@ -218,7 +376,8 @@ export async function fetchHighestCommunityIds(limit: number, minCount: number )
     .not("community_avg", "is", null)
     .order("community_avg", { ascending: false })
     .limit(limit);
-    console.log("✅ fetchHighestCommunityIds called");
+  console.log("✅ fetchHighestCommunityIds called");
+
   if (error) throw new Error(error.message);
 
   return (data as any[]).map((r) => String(r.whiskey_id)).filter(isUuidLike);
@@ -257,9 +416,9 @@ export async function fetchHighestBhhIds(limit: number): Promise<string[]> {
  * - Otherwise relax to minCount=1 so "Highest Rated" isn't dead
  */
 async function pickCommunityMinCount(): Promise<number> {
-  const STRICT = 5;          // ✅ strict threshold
-  const RELAXED = 1;         // ✅ relaxed threshold
-  const NEED_AT_LEAST = 10;  // how many must qualify before we enforce strict
+  const STRICT = 5;
+  const RELAXED = 1;
+  const NEED_AT_LEAST = 10;
 
   const { count, error } = await supabase
     .from("whiskey_community_stats")

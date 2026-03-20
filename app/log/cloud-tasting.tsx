@@ -22,6 +22,7 @@ import FlavorNotesSection from "../../src/log/components/tasting/FlavorNotesSect
 import { QuickNotesSection } from "../../src/log/components/tasting/QuickNotesSection";
 import RatingSection from "../../src/log/components/tasting/RatingSection";
 import TastingSignalsSection from "../../src/log/components/tasting/TastingSignalsSection";
+import TastingSourceCard from "../../src/log/components/tasting/TastingSourceCard";
 import { Pill } from "../../src/log/components/ui/Pill";
 import { type Reaction } from "../../src/log/components/ui/ReactionList";
 import { SectionGroupHeader } from "../../src/log/components/ui/SectionGroupHeader";
@@ -1023,84 +1024,14 @@ router.replace(toastUrl as any);
             />
           </Card>
 
-          {/* Source */}
-          <Card tight>
-            <Text style={type.sectionHeader}>Where did you have this bottle?</Text>
-
-            <View style={{ flexDirection: "row", gap: spacing.md, marginTop: spacing.md }}>
-              <Pressable
-                disabled={locked}
-                onPress={() => setSourceType("purchased")}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: spacing.lg,
-                  borderRadius: radii.md,
-                  borderWidth: 1,
-                  borderColor: sourceType === "purchased" ? colors.accent : colors.divider,
-                  backgroundColor: sourceType === "purchased" ? colors.highlight : colors.surface,
-                  opacity: locked ? 0.6 : pressed ? 0.92 : 1,
-                  alignItems: "center",
-                  justifyContent: "center",
-                })}
-              >
-                <Text style={[type.button, { color: colors.textPrimary, textAlign: "center" }]}>
-                  Purchased Bottle
-                </Text>
-              </Pressable>
-
-              <Pressable
-                disabled={locked}
-                onPress={() => setSourceType("bar")}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: spacing.lg,
-                  borderRadius: radii.md,
-                  borderWidth: 1,
-                  borderColor: sourceType === "bar" ? colors.accent : colors.divider,
-                  backgroundColor: sourceType === "bar" ? colors.highlight : colors.surface,
-                  opacity: locked ? 0.6 : pressed ? 0.92 : 1,
-                  alignItems: "center",
-                  justifyContent: "center",
-                })}
-              >
-                <Text style={[type.button, { color: colors.textPrimary, textAlign: "center" }]}>
-                  Bar Pour
-                </Text>
-              </Pressable>
-            </View>
-
-            {sourceType === "bar" ? (
-              <View style={{ marginTop: spacing.md, gap: 6 }}>
-                <Text style={[type.body, { fontWeight: "900" }]}>Bar name (required)</Text>
-
-                <TextInput
-                  value={barName}
-                  onChangeText={setBarName}
-                  editable={!locked}
-                  placeholder="Enter bar name…"
-                  placeholderTextColor={colors.textSecondary}
-                  style={{
-                    paddingVertical: spacing.md,
-                    paddingHorizontal: spacing.md,
-                    borderRadius: radii.md,
-                    borderWidth: 1,
-                    borderColor: barNameMissing ? colors.accent : colors.divider,
-                    backgroundColor: "transparent",
-                    color: colors.textPrimary,
-                    fontSize: 16,
-                    fontFamily: type.body.fontFamily,
-                    opacity: !locked ? 1 : 0.75,
-                  }}
-                />
-
-                {barNameMissing ? (
-                  <Text style={[type.microcopyItalic, { opacity: 0.85, color: colors.accent }]}>
-                    Bar name is required for a Bar Pour.
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
-          </Card>
+<TastingSourceCard
+  locked={locked}
+  sourceType={sourceType}
+  onChangeSourceType={setSourceType}
+  barName={barName}
+  onChangeBarName={setBarName}
+  barNameMissing={barNameMissing}
+/>
         </View>
       </ScrollView>
 

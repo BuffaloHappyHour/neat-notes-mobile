@@ -60,6 +60,27 @@ export type AdminDashboardMetrics = {
     low_effort_tastings: number;
     pct_low_effort_tastings: number | null;
   };
+  insights: {
+    total_whiskeys: number;
+
+    whiskies_with_1_plus_tasting: number;
+    whiskies_with_1_plus_tasting_pct: number | null;
+
+    whiskies_with_5_plus_tastings: number;
+    whiskies_with_5_plus_tastings_pct: number | null;
+
+    whiskies_with_10_plus_tastings: number;
+    whiskies_with_10_plus_tastings_pct: number | null;
+
+    whiskies_with_5_plus_note_tastings: number;
+    whiskies_with_5_plus_note_tastings_pct: number | null;
+
+    whiskies_with_10_plus_note_tastings: number;
+    whiskies_with_10_plus_note_tastings_pct: number | null;
+
+    flavor_radar_ready_count: number;
+    flavor_radar_ready_pct: number | null;
+  };
   retention: {
     eligible_users_7d: number;
     retained_users_7d: number;

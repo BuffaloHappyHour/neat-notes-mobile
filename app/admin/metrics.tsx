@@ -39,6 +39,7 @@ type MetricsTab =
   | "pipeline"
   | "catalog"
   | "quality"
+  | "insights"
   | "retention";
 
 export default function AdminMetricsScreen() {
@@ -46,6 +47,7 @@ export default function AdminMetricsScreen() {
   const [data, setData] = useState<AdminDashboardMetrics | null>(null);
   const [error, setError] = useState<string>("");
   const [tab, setTab] = useState<MetricsTab>("overview");
+  const insights = data?.insights;
 
   const load = useCallback(async () => {
     setError("");
@@ -525,7 +527,92 @@ export default function AdminMetricsScreen() {
       </>
     );
   }
+function renderInsightsTab() {
+  return (
+    <>
+      <View style={{ flexDirection: "row", gap: spacing.md }}>
+        <View style={{ flex: 1 }}>
+          <HeroStat
+            label="5+ Tastings"
+            value={fmtPct(
+              insights?.whiskies_with_5_plus_tastings_pct != null
+                ? insights.whiskies_with_5_plus_tastings_pct * 100
+                : null
+            )}
+            subtitle={`${fmtCount(insights?.whiskies_with_5_plus_tastings)} whiskies`}
+            status={
+              insights?.whiskies_with_5_plus_tastings_pct != null &&
+              insights.whiskies_with_5_plus_tastings_pct >= 0.3
+                ? "good"
+                : insights?.whiskies_with_5_plus_tastings_pct != null &&
+                  insights.whiskies_with_5_plus_tastings_pct >= 0.1
+                ? "warn"
+                : "bad"
+            }
+          />
+        </View>
 
+        <View style={{ flex: 1 }}>
+          <HeroStat
+            label="Radar Ready"
+            value={fmtPct(
+              insights?.flavor_radar_ready_pct != null
+                ? insights.flavor_radar_ready_pct * 100
+                : null
+            )}
+            subtitle={`${fmtCount(insights?.flavor_radar_ready_count)} whiskies`}
+            status={
+              insights?.flavor_radar_ready_pct != null &&
+              insights.flavor_radar_ready_pct >= 0.2
+                ? "good"
+                : insights?.flavor_radar_ready_pct != null &&
+                  insights.flavor_radar_ready_pct >= 0.05
+                ? "warn"
+                : "bad"
+            }
+          />
+        </View>
+      </View>
+
+      <MetricsCard
+        title="Insight Readiness"
+        insight="This shows how much of your catalog can actually power product features like flavor radar and top tasting notes."
+        thresholdTitle="Insight thresholds"
+        thresholdDescription="These thresholds help you understand when features are worth shipping based on data density."
+        thresholdItems={[
+          { label: "5+ tastings", value: "Minimum for basic insights", tone: "warn" },
+          { label: "10+ tastings", value: "Stronger signal for features", tone: "good" },
+          { label: "Radar Ready", value: "10+ tastings with notes", tone: "good" },
+        ]}
+      >
+        <MetricRow
+          label="1+ tasting"
+          value={fmtCount(insights?.whiskies_with_1_plus_tasting)}
+        />
+        <MetricRow
+          label="5+ tastings"
+          value={fmtCount(insights?.whiskies_with_5_plus_tastings)}
+        />
+        <MetricRow
+          label="10+ tastings"
+          value={fmtCount(insights?.whiskies_with_10_plus_tastings)}
+        />
+        <MetricRow
+          label="5+ with notes"
+          value={fmtCount(insights?.whiskies_with_5_plus_note_tastings)}
+        />
+        <MetricRow
+          label="10+ with notes"
+          value={fmtCount(insights?.whiskies_with_10_plus_note_tastings)}
+        />
+        <MetricRowNoDivider
+          label="Flavor radar ready"
+          value={fmtCount(insights?.flavor_radar_ready_count)}
+        />
+      </MetricsCard>
+    </>
+  );
+}
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ padding: spacing.xl, gap: spacing.lg }}>
@@ -612,6 +699,11 @@ export default function AdminMetricsScreen() {
             active={tab === "retention"}
             onPress={() => setTab("retention")}
           />
+          <TabPill
+  label="Insights"
+  active={tab === "insights"}
+  onPress={() => setTab("insights")}
+/>
         </View>
 
         {error ? (
@@ -634,6 +726,7 @@ export default function AdminMetricsScreen() {
             {tab === "catalog" ? renderCatalogTab() : null}
             {tab === "quality" ? renderQualityTab() : null}
             {tab === "retention" ? renderRetentionTab() : null}
+            {tab === "insights" ? renderInsightsTab() : null}
           </>
         ) : null}
       </View>

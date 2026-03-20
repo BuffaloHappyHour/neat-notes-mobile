@@ -16,6 +16,7 @@ import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
+import { AtHomeShelf } from "../../src/discover/components/AtHomeShelf";
 import { DiscoverHeaderCard } from "../../src/discover/components/DiscoverHeaderCard";
 import { DiscoverModals } from "../../src/discover/components/DiscoverModals";
 import { SectionDivider } from "../../src/discover/components/SectionDivider";
@@ -48,12 +49,21 @@ export default function DiscoverTab() {
 
   const onRefresh = useMemo(
     () =>
-      logPressWrap("discover", "pull_to_refresh", withTick(() => d.refresh({ silent: true }))),
+      logPressWrap(
+        "discover",
+        "pull_to_refresh",
+        withTick(() => d.refresh({ silent: true }))
+      ),
     [d]
   );
 
   const onOpenFilters = useMemo(
-    () => logPressWrap("discover", "open_filters", withTick(() => d.setFilterOpen(true))),
+    () =>
+      logPressWrap(
+        "discover",
+        "open_filters",
+        withTick(() => d.setFilterOpen(true))
+      ),
     [d]
   );
 
@@ -100,7 +110,6 @@ export default function DiscoverTab() {
           />
         }
       >
-        {/* Header */}
         <View style={{ gap: spacing.xs }}>
           <Text style={[type.screenTitle, { fontSize: 34, lineHeight: 40 }]}>
             Discover
@@ -133,7 +142,16 @@ export default function DiscoverTab() {
           statusError={d.statusError}
         />
 
-        {/* Sections */}
+        {d.atHome.length > 0 ? (
+          <>
+            <AtHomeShelf
+              rows={d.atHome}
+              onPressRow={(row) => onPressRow(row.whiskeyId, "AT_HOME")}
+            />
+            <SectionDivider />
+          </>
+        ) : null}
+
         <SectionRow
           title="Trending"
           subtitle="Most tasted in the last 7 days (community)."
@@ -176,7 +194,6 @@ export default function DiscoverTab() {
           emptyMessage={emptyMessage}
         />
 
-        {/* Footer */}
         <View style={{ marginTop: spacing.lg, paddingTop: spacing.md }}>
           <Text
             style={[
@@ -200,7 +217,6 @@ export default function DiscoverTab() {
         seeAllLoading={d.seeAllLoading}
         seeAllError={d.seeAllError}
         onPressSeeAllRow={(r) => {
-          // log the click BEFORE we close (so we see it even if UI glitches)
           logPressWrap("discover", "see_all_open_whiskey", () => {}, {
             whiskeyId: r.whiskeyId,
             from: d.seeAllTitle,

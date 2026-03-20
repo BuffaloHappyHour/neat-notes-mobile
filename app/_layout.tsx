@@ -1,9 +1,10 @@
 // app/_layout.tsx
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { ImageBackground, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Purchases from "react-native-purchases";
 
 import {
   CormorantGaramond_400Regular,
@@ -18,7 +19,21 @@ import {
   useFonts as useMontserratFonts,
 } from "@expo-google-fonts/montserrat";
 
+import { Platform } from "react-native";
 import { colors } from "../lib/theme";
+
+useEffect(() => {
+  const apiKey =
+    Platform.OS === "android"
+      ? process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY
+      : process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY;
+
+  if (!apiKey) {
+    throw new Error("RevenueCat API key is missing for this platform.");
+  }
+
+  Purchases.configure({ apiKey });
+}, []);
 
 export default function RootLayout() {
   // Load fonts, but DO NOT block router startup on them
@@ -34,6 +49,7 @@ export default function RootLayout() {
   });
 
   const navTheme = useMemo(() => {
+  
     return {
       ...DarkTheme,
       colors: {

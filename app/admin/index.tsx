@@ -98,7 +98,14 @@ export default function AdminHomeScreen() {
 
   if (ok === false) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, padding: spacing.xl, gap: spacing.md }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          padding: spacing.xl,
+          gap: spacing.md,
+        }}
+      >
         <Text style={[type.screenTitle, { color: colors.textPrimary }]}>{title}</Text>
         <Text style={[type.body, { color: colors.textSecondary }]}>
           Your account isn’t marked as admin.
@@ -108,7 +115,14 @@ export default function AdminHomeScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background, padding: spacing.xl, gap: spacing.lg }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.background,
+        padding: spacing.xl,
+        gap: spacing.lg,
+      }}
+    >
       <View style={{ gap: 6 }}>
         <Text style={[type.screenTitle, { color: colors.textPrimary }]}>{title}</Text>
         <Text style={[type.microcopyItalic, { color: colors.textSecondary }]}>
@@ -129,6 +143,19 @@ export default function AdminHomeScreen() {
         icon={<Ionicons name="stats-chart-outline" size={20} color={colors.textPrimary} />}
         onPress={() => router.push("/admin/metrics")}
       />
+      <ActionCard
+  title="Catalog"
+  subtitle="Search, sort, and inspect the whiskey library."
+  icon={<Ionicons name="search-outline" size={20} color={colors.textPrimary} />}
+  onPress={() => router.push("/admin/catalog")}
+/>
+      <ActionCard
+        title="Featured Bottle"
+        subtitle="Choose the bottle, dates, and note shown on Home."
+        icon={<Ionicons name="sparkles-outline" size={20} color={colors.textPrimary} />}
+        onPress={() => router.push("/admin/featured")}
+      />
+
     </View>
   );
 }
