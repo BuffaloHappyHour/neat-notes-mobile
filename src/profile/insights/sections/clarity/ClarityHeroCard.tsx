@@ -6,7 +6,6 @@ import { radii } from "../../../../../lib/radii";
 import { spacing } from "../../../../../lib/spacing";
 import { colors } from "../../../../../lib/theme";
 import { type } from "../../../../../lib/typography";
-import type { PalateClarityResult } from "../../../../palate/palateClarity.service";
 
 import { ClarityMetricRow } from "./ClarityMetricRow";
 import { ClarityTierProgress } from "./ClarityTierProgress";
@@ -33,11 +32,35 @@ type FactorInput = {
   pct: number;
 };
 
+type SummaryInput = {
+  clarityIndex: number;
+  tastingCount: number;
+  tierLabel: string;
+  confidenceLabel: string;
+};
+
+function tierIndexFromLabel(label: string) {
+  switch (label) {
+    case "Developing":
+      return 2;
+    case "Defining":
+      return 3;
+    case "Refining":
+      return 4;
+    case "Signature":
+    case "Signature Palate":
+      return 5;
+    case "Emerging":
+    default:
+      return 1;
+  }
+}
+
 export function ClarityHeroCard({
-  clarity,
+  summary,
   factors,
 }: {
-  clarity: PalateClarityResult | null;
+  summary: SummaryInput;
   factors: {
     depth: FactorInput;
     diversity: FactorInput;
@@ -45,13 +68,7 @@ export function ClarityHeroCard({
     confidence: FactorInput;
   };
 }) {
-  if (!clarity) return null;
-
-  const score = Math.round(clarity.clarityIndex);
-
-  const delta30d = 0;
-  const deltaLabel = delta30d >= 0 ? `+${delta30d}` : `${delta30d}`;
-  const deltaColor = delta30d >= 0 ? colors.success : colors.danger;
+  const score = Math.round(summary.clarityIndex);
 
   const tierLabels = [
     "Emerging",
@@ -92,16 +109,16 @@ export function ClarityHeroCard({
         </View>
 
         <View style={{ alignItems: "flex-end" }}>
-          <Text style={type.caption}>Last 30 days</Text>
-          <Text style={[type.caption, { marginTop: 6, color: deltaColor }]}>
-            {deltaLabel} points
+          <Text style={type.caption}>Last 90 days</Text>
+          <Text style={[type.caption, { marginTop: 6, color: colors.textSecondary }]}>
+            {summary.tastingCount} tastings
           </Text>
         </View>
       </View>
 
       <ClarityTierProgress
         tierLabels={tierLabels}
-        tierIndex={clarity.meta.tierIndex}
+        tierIndex={tierIndexFromLabel(summary.tierLabel)}
       />
 
       <SubCard>
@@ -134,10 +151,9 @@ export function ClarityHeroCard({
       </SubCard>
 
       <Text style={[type.microcopyItalic, { marginTop: spacing.md }]}>
-        You have logged {clarity.meta.totalTastings} tastings, with{" "}
-        {clarity.meta.refinedTastingsAllTime} using refined notes. Your current
-        tier is {clarity.meta.tierLabel.toLowerCase()} with{" "}
-        {clarity.meta.confidenceLevel} confidence.
+        Your recent clarity is {score}/100 across {summary.tastingCount} tastings.
+        Your current tier is {summary.tierLabel.toLowerCase()} with{" "}
+        {summary.confidenceLabel.toLowerCase()} confidence.
       </Text>
     </Card>
   );

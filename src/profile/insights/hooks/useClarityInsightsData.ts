@@ -3,7 +3,7 @@ import { supabase } from "../../../../lib/supabase";
 
 type MiniChartDatum = {
   label: string;
-  value: number; // 0..1
+  value: number;
   tastingId?: string;
 };
 
@@ -24,6 +24,13 @@ type DriverDetail = {
 
 type ClarityInsightsData = {
   loading: boolean;
+  metrics: UserMetrics90dRow | null;
+  summary: {
+    clarityIndex: number;
+    tastingCount: number;
+    tierLabel: string;
+    confidenceLabel: string;
+  };
   factors: {
     depth: { status: string; pct: number };
     diversity: { status: string; pct: number };
@@ -39,65 +46,106 @@ type ClarityInsightsData = {
   };
 };
 
-type TastingRow = {
-  id: string;
-  whiskey_name: string | null;
-  created_at: string | null;
-  rating: number | null;
-  nose_reaction: string | null;
-  taste_reaction: string | null;
-  source_type: string | null;
-  flavor_tags: string[] | null;
-  texture_level: number | null;
-  proof_intensity: number | null;
-  flavor_intensity: number | null;
+type UserMetrics90dRow = {
+  user_id: string;
+  period_start: string;
+  period_end: string;
+  tasting_count: number;
+  palate_clarity_0_100: number;
+  depth_0_100: number;
+  diversity_0_100: number;
+  consistency_0_100: number;
+  confidence_0_100: number;
+  radar_l1_pct: Record<string, number> | null;
+  top_traits_l1: string[] | null;
+  avoided_traits_l1: string[] | null;
+  radar_prev_l1_pct: Record<string, number> | null;
+biggest_riser_l1: string | null;
+biggest_riser_delta: number | null;
+biggest_drop_l1: string | null;
+biggest_drop_delta: number | null;
+most_stable_l1: string | null;
+most_stable_delta: number | null;
+texture_pref: number | null;
+proof_pref: number | null;
+flavor_pref: number | null;
+preference_signal_count: number | null;
+top_category: string | null;
 };
 
-type SelectionRow = {
-  tasting_id: string;
-  flavor_node_id: string;
-  sentiment: string | null;
-};
+function makeDriverDetail(
+  title: string,
+  subtitle: string,
+  stats: { label: string; value: string }[],
+  progressLabel: string,
+  progressValue: number,
+  progressValueText: string,
+  chipsTitle: string,
+  chips: string[],
+  miniChartTitle: string,
+  miniChartData: MiniChartDatum[],
+  footerLabel: string,
+  footerValue: string
+): DriverDetail {
+  return {
+    title,
+    subtitle,
+    stats,
+    progressLabel,
+    progressValue,
+    progressValueText,
+    chipsTitle,
+    chips,
+    miniChartTitle,
+    miniChartData,
+    footerLabel,
+    footerValue,
+  };
+}
 
-type FlavorNodeRow = {
-  id: string;
-  parent_id: string | null;
-  level: number;
-  label: string;
-};
+function initialState(): ClarityInsightsData {
+  const blank = makeDriverDetail(
+    "Loading",
+    "Building your recent clarity view.",
+    [],
+    "Progress",
+    0,
+    "0%",
+    "Signals",
+    [],
+    "Recent signals",
+    [],
+    "Next step",
+    "Log more tastings with structured inputs."
+  );
 
-const EMPTY_DRIVER: DriverDetail = {
-  title: "Unavailable",
-  subtitle: "Log more tastings to generate this insight.",
-  stats: [],
-  progressLabel: "Progress",
-  progressValue: 0,
-  progressValueText: "0%",
-  chipsTitle: "Signals",
-  chips: [],
-  miniChartTitle: "Recent pours",
-  miniChartData: [],
-  footerLabel: "Next step",
-  footerValue: "Log more tastings with full structured inputs.",
-};
-
-export function useClarityInsightsData(): ClarityInsightsData {
-  const [state, setState] = useState<ClarityInsightsData>({
+  return {
     loading: true,
+    metrics: null,
+    summary: {
+      clarityIndex: 0,
+      tastingCount: 0,
+      tierLabel: "Emerging",
+      confidenceLabel: "Building",
+    },
     factors: {
-      depth: { status: "Building", pct: 0.12 },
-      diversity: { status: "Building", pct: 0.12 },
-      consistency: { status: "Building", pct: 0.12 },
-      confidence: { status: "Building", pct: 0.12 },
+      depth: { status: "Building", pct: 0 },
+      diversity: { status: "Building", pct: 0 },
+      consistency: { status: "Building", pct: 0 },
+      confidence: { status: "Building", pct: 0 },
     },
     details: {
-      depth: EMPTY_DRIVER,
-      diversity: EMPTY_DRIVER,
-      consistency: EMPTY_DRIVER,
-      confidence: EMPTY_DRIVER,
-      pathToDistinct: EMPTY_DRIVER,
+      depth: blank,
+      diversity: blank,
+      consistency: blank,
+      confidence: blank,
+      pathToDistinct: blank,
     },
-  });
+  };
+}
+
+export function useClarityInsightsData(): ClarityInsightsData {
+  const [state, setState] = useState<ClarityInsightsData>(initialState());
 
   useEffect(() => {
     async function load() {
@@ -105,274 +153,178 @@ export function useClarityInsightsData(): ClarityInsightsData {
       const user = sessionData.session?.user;
 
       if (!user?.id) {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-        }));
-        return;
-      }
-
-      const [{ data: tastings, error: tastingsErr }, { data: selections, error: selectionsErr }, { data: nodes, error: nodesErr }] =
-        await Promise.all([
-          supabase
-            .from("tastings")
-            .select(
-              "id, whiskey_name, created_at, rating, nose_reaction, taste_reaction, source_type, flavor_tags, texture_level, proof_intensity, flavor_intensity"
-            )
-            .order("created_at", { ascending: false })
-            .eq("user_id", user.id),
-          supabase
-            .from("tasting_flavor_selections_v2")
-            .select("tasting_id, flavor_node_id, sentiment")
-            .eq("user_id", user.id),
-          supabase.from("flavor_nodes_v2").select("id,parent_id,level,label"),
-        ]);
-
-      if (tastingsErr || selectionsErr || nodesErr || !tastings || !selections || !nodes) {
-        console.error("Failed to load clarity insights data", {
-          tastingsErr,
-          selectionsErr,
-          nodesErr,
-        });
         setState((prev) => ({ ...prev, loading: false }));
         return;
       }
 
-      const tastingRows = tastings as TastingRow[];
-      const selectionRows = selections as SelectionRow[];
-      const nodeRows = nodes as FlavorNodeRow[];
+      const { data, error } = await supabase
+        .from("user_metrics_90d_v3")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
 
-      if (!tastingRows.length) {
+      if (error || !data) {
+        console.error("Failed to load clarity metrics", error);
         setState((prev) => ({ ...prev, loading: false }));
         return;
       }
 
-      const byNodeId = new Map<string, FlavorNodeRow>();
-      nodeRows.forEach((n) => byNodeId.set(n.id, n));
+      const metrics = data as UserMetrics90dRow;
+      console.log("90d metrics:", metrics);
 
-      const tastingById = new Map<string, TastingRow>();
-      tastingRows.forEach((t) => tastingById.set(t.id, t));
+      const depthPct = clamp01((metrics.depth_0_100 ?? 0) / 100);
+      const diversityPct = clamp01((metrics.diversity_0_100 ?? 0) / 100);
+      const consistencyPct = clamp01((metrics.consistency_0_100 ?? 0) / 100);
+      const confidencePct = clamp01((metrics.confidence_0_100 ?? 0) / 100);
+      const clarityPct = clamp01((metrics.palate_clarity_0_100 ?? 0) / 100);
 
-      const selectionsByTasting = new Map<string, SelectionRow[]>();
-      selectionRows.forEach((row) => {
-        const arr = selectionsByTasting.get(row.tasting_id) ?? [];
-        arr.push(row);
-        selectionsByTasting.set(row.tasting_id, arr);
-      });
+      const topTraits = (metrics.top_traits_l1 ?? []).map(prettyTrait);
+      const avoidedTraits = (metrics.avoided_traits_l1 ?? []).map(prettyTrait);
 
-      const recent = tastingRows.slice(0, 5);
-
-      const refinedCounts = tastingRows.map((t) => {
-        const rows = selectionsByTasting.get(t.id) ?? [];
-        return {
-          tastingId: t.id,
-          whiskeyName: shortenWhiskeyName(t.whiskey_name ?? "Unknown"),
-          refinedCount: rows.length,
-          l1Families: uniqueTopFamilies(rows, byNodeId),
-          rating: numericOrNull(t.rating),
-          structuredCount: countStructuredSignals(t),
-          reactionAligned: isReactionAligned(t),
-          categoryLabel: sourceTypeLabel(t.source_type),
-        };
-      });
-
-      const totalTastings = tastingRows.length;
-      const tastingsWithRefined = refinedCounts.filter((x) => x.refinedCount > 0).length;
-      const avgRefined = average(refinedCounts.map((x) => x.refinedCount));
-      const tastingsWithFivePlus = refinedCounts.filter((x) => x.refinedCount >= 5).length;
-
-      const allFamilies = refinedCounts.flatMap((x) => x.l1Families);
-      const familyCounts = countStrings(allFamilies);
-      const topFamilies = topKeys(familyCounts, 3);
-
-      const distinctCategoryCount = uniqueCount(refinedCounts.map((x) => x.categoryLabel).filter(Boolean));
-      const distinctFamilyCount = Object.keys(familyCounts).length;
-
-      const ratingAlignedCount = refinedCounts.filter((x) => x.reactionAligned).length;
-      const recentActive = tastingRows.filter((t) => daysAgo(t.created_at) <= 30).length;
-      const avgStructured = average(refinedCounts.map((x) => x.structuredCount));
-
-      const depthPct = clamp01(
-        (tastingsWithRefined / totalTastings) * 0.45 +
-          clamp01(avgRefined / 5) * 0.35 +
-          (tastingsWithFivePlus / totalTastings) * 0.2
+      const radarEntries = Object.entries(metrics.radar_l1_pct ?? {}).sort(
+        (a, b) => b[1] - a[1]
       );
 
-      const diversityPct = clamp01(
-        clamp01(distinctCategoryCount / 6) * 0.4 +
-          clamp01(distinctFamilyCount / 10) * 0.4 +
-          clamp01(uniqueCount(tastingRows.map((t) => t.source_type ?? "")) / 2) * 0.2
-      );
-
-      const consistencyPct = clamp01(
-        (ratingAlignedCount / totalTastings) * 0.55 +
-          clamp01(avgStructured / 5) * 0.2 +
-          clamp01(recentCountWithRepeatedPatterns(refinedCounts) / 5) * 0.25
-      );
-
-      const confidencePct = clamp01(
-        clamp01(totalTastings / 40) * 0.5 +
-          clamp01(recentActive / 10) * 0.25 +
-          clamp01(avgStructured / 5) * 0.25
-      );
-
-      const factors = {
-        depth: { status: statusLabel(depthPct), pct: depthPct },
-        diversity: { status: statusLabel(diversityPct), pct: diversityPct },
-        consistency: { status: statusLabel(consistencyPct), pct: consistencyPct },
-        confidence: { status: statusLabel(confidencePct), pct: confidencePct },
-      };
-
-      const details = {
-        depth: {
-          title: "Depth",
-          subtitle:
-            "Depth grows when you refine beyond broad tags and describe pours with richer, more specific flavor language.",
-          stats: [
-            { label: "Refined-note tastings", value: `${tastingsWithRefined} of ${totalTastings}` },
-            { label: "Avg. refined notes per tasting", value: avgRefined.toFixed(1) },
-            { label: "Tastings with 5+ flavor notes", value: `${tastingsWithFivePlus}` },
-          ],
-          progressLabel: "Refined-note coverage",
-          progressValue: tastingsWithRefined / totalTastings,
-          progressValueText: `${Math.round((tastingsWithRefined / totalTastings) * 100)}%`,
-          chipsTitle: "Most-used refined families",
-          chips: topFamilies.length ? topFamilies : ["Building..."],
-          miniChartTitle: "Refined-note depth across recent pours",
-          miniChartData: recent.map((t) => {
-            const rc = refinedCounts.find((x) => x.tastingId === t.id);
-            return {
-              label: shortenWhiskeyName(t.whiskey_name ?? "Unknown"),
-              value: clamp01((rc?.refinedCount ?? 0) / 5),
-              tastingId: t.id,
-            };
-          }),
-          footerLabel: "What’s making depth strong",
-          footerValue:
-            tastingsWithRefined >= totalTastings * 0.65
-              ? "You refine beyond broad flavor tags in most recent tastings."
-              : "Use refined notes more often to make your palate language feel more specific.",
-        },
-        diversity: {
-          title: "Diversity",
-          subtitle:
-            "Diversity improves when your logs span more styles, source types, and flavor families instead of clustering tightly.",
-          stats: [
-            { label: "Distinct source patterns", value: `${uniqueCount(tastingRows.map((t) => t.source_type ?? ""))}` },
-            { label: "Distinct flavor families used", value: `${distinctFamilyCount}` },
-            { label: "Distinct tasting categories", value: `${distinctCategoryCount}` },
-          ],
-          progressLabel: "Flavor-family spread",
-          progressValue: clamp01(distinctFamilyCount / 10),
-          progressValueText: statusLabel(diversityPct),
-          chipsTitle: "Most explored families",
-          chips: topFamilies.length ? topFamilies : ["Building..."],
-          miniChartTitle: "Flavor-family spread across recent pours",
-          miniChartData: recent.map((t) => {
-            const rc = refinedCounts.find((x) => x.tastingId === t.id);
-            return {
-              label: shortenWhiskeyName(t.whiskey_name ?? "Unknown"),
-              value: clamp01((rc?.l1Families.length ?? 0) / 4),
-              tastingId: t.id,
-            };
-          }),
-          footerLabel: "What’s limiting diversity",
-          footerValue:
-            distinctFamilyCount < 6
-              ? "Your logs still cluster into a smaller set of familiar flavor families."
-              : "Your flavor spread is broadening across multiple tasting styles.",
-        },
-        consistency: {
-          title: "Consistency",
-          subtitle:
-            "Consistency strengthens when your reactions, ratings, and note patterns align across similar pours.",
-          stats: [
-            { label: "Reaction-aligned tastings", value: `${ratingAlignedCount} of ${totalTastings}` },
-            { label: "Avg. structured signals per tasting", value: avgStructured.toFixed(1) },
-            { label: "Repeated family patterns", value: `${recentCountWithRepeatedPatterns(refinedCounts)}` },
-          ],
-          progressLabel: "Reaction + rating alignment",
-          progressValue: ratingAlignedCount / totalTastings,
-          progressValueText: `${Math.round((ratingAlignedCount / totalTastings) * 100)}%`,
-          chipsTitle: "Most repeated patterns",
-          chips: topFamilies.slice(0, 3).length ? topFamilies.slice(0, 3) : ["Building..."],
-          miniChartTitle: "Structured consistency across recent pours",
-          miniChartData: recent.map((t) => {
-            const rc = refinedCounts.find((x) => x.tastingId === t.id);
-            return {
-              label: shortenWhiskeyName(t.whiskey_name ?? "Unknown"),
-              value: clamp01((rc?.structuredCount ?? 0) / 5),
-              tastingId: t.id,
-            };
-          }),
-          footerLabel: "Strongest repeated signal",
-          footerValue:
-            topFamilies[0]
-              ? `${topFamilies[0]} shows up repeatedly in your recent flavor language.`
-              : "Repeated tasting patterns will emerge as you log more pours.",
-        },
-        confidence: {
-          title: "Confidence",
-          subtitle:
-            "Confidence grows as your tasting history gets larger, more recent, and more consistently structured.",
-          stats: [
-            { label: "Total tastings logged", value: `${totalTastings}` },
-            { label: "Recent tastings in last 30 days", value: `${recentActive}` },
-            { label: "Avg. structured signals used", value: avgStructured.toFixed(1) },
-          ],
-          progressLabel: "Confidence foundation",
-          progressValue: confidencePct,
-          progressValueText: statusLabel(confidencePct),
-          chipsTitle: "Strongest confidence signals",
-          chips: ["Rating", "Quick Reactions", "Flavor Notes", "Signals"].slice(
-            0,
-            Math.max(2, Math.round(avgStructured))
-          ),
-          miniChartTitle: "Recent activity by pour",
-          miniChartData: recent.map((t) => ({
-            label: shortenWhiskeyName(t.whiskey_name ?? "Unknown"),
-            value: clamp01(countStructuredSignals(t) / 5),
-            tastingId: t.id,
-          })),
-          footerLabel: "What improves confidence fastest",
-          footerValue:
-            totalTastings < 25
-              ? "More tastings with full structured inputs will raise confidence fastest."
-              : "Continue logging consistently to strengthen confidence further.",
-        },
-        pathToDistinct: {
-          title: "Path to Distinct",
-          subtitle:
-            "The next tier comes from combining stronger note depth, broader variety, and more repeatable tasting structure.",
-          stats: [
-            { label: "Need more category variety", value: missingTarget(distinctCategoryCount, 6) },
-            { label: "Need more refined-note depth", value: missingTarget(tastingsWithFivePlus, 8) },
-            { label: "Need stronger consistency", value: missingTarget(Math.round(consistencyPct * 10), 7) },
-          ],
-          progressLabel: "Progress toward Distinct",
-          progressValue: clamp01((depthPct + diversityPct + consistencyPct + confidencePct) / 4),
-          progressValueText: `${Math.round(
-            ((depthPct + diversityPct + consistencyPct + confidencePct) / 4) * 100
-          )}%`,
-          chipsTitle: "Best next moves",
-          chips: ["Try 2 new styles", "Use refined notes", "Log full signals"],
-          miniChartTitle: "Tier-up drivers",
-          miniChartData: [
-            { label: "Depth", value: depthPct },
-            { label: "Diversity", value: diversityPct },
-            { label: "Consistency", value: consistencyPct },
-            { label: "Confidence", value: confidencePct },
-          ],
-          footerLabel: "Fastest way to improve",
-          footerValue:
-            "Log 5 varied pours with refined notes and full structured signals to push toward Distinct.",
-        },
-      };
+      const topRadarData: MiniChartDatum[] = radarEntries.slice(0, 5).map(([label, value]) => ({
+        label: prettyTrait(label),
+        value: clamp01(value),
+      }));
 
       setState({
         loading: false,
-        factors,
-        details,
+        metrics,
+        summary: {
+          clarityIndex: metrics.palate_clarity_0_100 ?? 0,
+          tastingCount: metrics.tasting_count ?? 0,
+          tierLabel: toTierLabel(metrics.palate_clarity_0_100 ?? 0),
+          confidenceLabel: statusLabel(confidencePct),
+        },
+        factors: {
+          depth: { status: statusLabel(depthPct), pct: depthPct },
+          diversity: { status: statusLabel(diversityPct), pct: diversityPct },
+          consistency: { status: statusLabel(consistencyPct), pct: consistencyPct },
+          confidence: { status: statusLabel(confidencePct), pct: confidencePct },
+        },
+        details: {
+          depth: makeDriverDetail(
+            "Depth",
+            "Depth reflects how specific and refined your recent flavor selections have been.",
+            [
+              { label: "Depth score", value: `${metrics.depth_0_100}/100` },
+              { label: "90-day tastings", value: `${metrics.tasting_count}` },
+              { label: "Window", value: "Last 90 days" },
+            ],
+            "Recent depth",
+            depthPct,
+            `${metrics.depth_0_100}%`,
+            "Top recent traits",
+            topTraits.length ? topTraits : ["Building..."],
+            "Recent flavor radar leaders",
+            topRadarData,
+            "What this means",
+            depthPct >= 0.7
+              ? "Your recent logs show highly specific flavor language."
+              : "Your recent logs show some specificity, with room to sharpen flavor detail."
+          ),
+          diversity: makeDriverDetail(
+            "Diversity",
+            "Diversity reflects how broad your recent flavor and whiskey-style exploration has been.",
+            [
+              { label: "Diversity score", value: `${metrics.diversity_0_100}/100` },
+              { label: "Top traits", value: `${topTraits.length}` },
+              { label: "Avoided traits", value: `${avoidedTraits.length}` },
+            ],
+            "Recent diversity",
+            diversityPct,
+            `${metrics.diversity_0_100}%`,
+            "Most present traits",
+            topTraits.length ? topTraits : ["Building..."],
+            "Trait spread",
+            topRadarData,
+            "What this means",
+            diversityPct >= 0.7
+              ? "Your recent palate covers a wide range of flavor territory."
+              : "Your recent logs are still clustering into narrower flavor territory."
+          ),
+          consistency: makeDriverDetail(
+            "Consistency",
+            "Consistency reflects how repeatable your recent likes and dislikes have been across flavor families.",
+            [
+              { label: "Consistency score", value: `${metrics.consistency_0_100}/100` },
+              { label: "Top repeated traits", value: `${topTraits.slice(0, 3).length}` },
+              { label: "Avoided traits", value: `${avoidedTraits.length}` },
+            ],
+            "Recent consistency",
+            consistencyPct,
+            `${metrics.consistency_0_100}%`,
+            "Repeated signals",
+            topTraits.slice(0, 3).length ? topTraits.slice(0, 3) : ["Building..."],
+            "Consistency-related trait presence",
+            topRadarData,
+            "What this means",
+            consistencyPct >= 0.7
+              ? "Your recent preferences are highly repeatable."
+              : "Your recent preferences are still shifting, which lowers consistency for now."
+          ),
+          confidence: makeDriverDetail(
+            "Confidence",
+            "Confidence reflects how much structured recent signal the model has to work with.",
+            [
+              { label: "Confidence score", value: `${metrics.confidence_0_100}/100` },
+              { label: "90-day tastings", value: `${metrics.tasting_count}` },
+              { label: "Window", value: "Last 90 days" },
+            ],
+            "Signal confidence",
+            confidencePct,
+            `${metrics.confidence_0_100}%`,
+            "Signals informing confidence",
+            ["90-day window", "Trait selections", "Structured logging"],
+            "Most informative recent traits",
+            topRadarData,
+            "What this means",
+            confidencePct >= 0.7
+              ? "Your recent tasting history gives the model strong confidence."
+              : "The model has a usable recent signal, but more structured activity would strengthen confidence."
+          ),
+          pathToDistinct: makeDriverDetail(
+            "Path to Distinct",
+            "This shows how your recent palate signal is building across the four core drivers.",
+           [
+  {
+    label: "Biggest rise",
+    value: metrics.biggest_riser_l1
+      ? prettyTrait(metrics.biggest_riser_l1)
+      : "—",
+  },
+  {
+    label: "Biggest drop",
+    value: metrics.biggest_drop_l1
+      ? prettyTrait(metrics.biggest_drop_l1)
+      : "—",
+  },
+  {
+    label: "Most stable",
+    value: metrics.most_stable_l1
+      ? prettyTrait(metrics.most_stable_l1)
+      : "—",
+  },
+],
+            "Overall recent clarity",
+            clarityPct,
+            `${metrics.palate_clarity_0_100}%`,
+            "Best next moves",
+            bestNextMoves(metrics),
+            "Driver balance",
+            [
+              { label: "Depth", value: depthPct },
+              { label: "Diversity", value: diversityPct },
+              { label: "Consistency", value: consistencyPct },
+              { label: "Confidence", value: confidencePct },
+            ],
+            "Current read",
+            buildCurrentRead(metrics)
+          ),
+        },
       });
     }
 
@@ -382,113 +334,8 @@ export function useClarityInsightsData(): ClarityInsightsData {
   return state;
 }
 
-function shortenWhiskeyName(name: string) {
-  const cleaned = name.replace(/\b(year|years|scotch|whisky|whiskey)\b/gi, "").trim();
-  const parts = cleaned.split(/\s+/).filter(Boolean);
-  return parts.slice(0, 2).join(" ");
-}
-
-function numericOrNull(value: number | null | undefined) {
-  return value == null || !Number.isFinite(Number(value)) ? null : Number(value);
-}
-
-function countStructuredSignals(t: TastingRow) {
-  let count = 0;
-  if (numericOrNull(t.rating) != null) count += 1;
-  if (t.nose_reaction) count += 1;
-  if (t.taste_reaction) count += 1;
-  if ((t.flavor_tags ?? []).length > 0) count += 1;
-  if (numericOrNull(t.texture_level) != null) count += 1;
-  if (numericOrNull(t.proof_intensity) != null) count += 1;
-  if (numericOrNull(t.flavor_intensity) != null) count += 1;
-  return count;
-}
-
-function isReactionAligned(t: TastingRow) {
-  const rating = numericOrNull(t.rating);
-  if (rating == null) return false;
-
-  const positive = t.nose_reaction === "Enjoyed" || t.taste_reaction === "Enjoyed";
-  const negative = t.nose_reaction === "Not for me" || t.taste_reaction === "Not for me";
-
-  if (positive && rating >= 70) return true;
-  if (negative && rating <= 55) return true;
-  if (!positive && !negative && rating >= 56 && rating <= 75) return true;
-
-  return false;
-}
-
-function sourceTypeLabel(sourceType: string | null) {
-  if (sourceType === "bar") return "Bar Pour";
-  if (sourceType === "purchased") return "Purchased Bottle";
-  return "Other";
-}
-
-function uniqueTopFamilies(rows: SelectionRow[], byNodeId: Map<string, FlavorNodeRow>) {
-  const set = new Set<string>();
-
-  for (const row of rows) {
-    const label = findL1Label(row.flavor_node_id, byNodeId);
-    if (label) set.add(label);
-  }
-
-  return [...set];
-}
-
-function findL1Label(nodeId: string, byNodeId: Map<string, FlavorNodeRow>) {
-  let cur = byNodeId.get(nodeId);
-  let guard = 0;
-
-  while (cur && guard++ < 10) {
-    if (cur.level === 1) return cur.label;
-    if (!cur.parent_id) return null;
-    cur = byNodeId.get(cur.parent_id);
-  }
-
-  return null;
-}
-
-function average(nums: number[]) {
-  if (!nums.length) return 0;
-  return nums.reduce((sum, n) => sum + n, 0) / nums.length;
-}
-
-function countStrings(items: string[]) {
-  const out: Record<string, number> = {};
-  items.forEach((item) => {
-    out[item] = (out[item] ?? 0) + 1;
-  });
-  return out;
-}
-
-function topKeys(map: Record<string, number>, take: number) {
-  return Object.entries(map)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, take)
-    .map(([key]) => key);
-}
-
-function uniqueCount(items: string[]) {
-  return new Set(items.filter(Boolean)).size;
-}
-
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
-}
-
-function daysAgo(dateStr: string | null) {
-  if (!dateStr) return 9999;
-  const then = new Date(dateStr).getTime();
-  const now = Date.now();
-  return Math.floor((now - then) / (1000 * 60 * 60 * 24));
-}
-
-function recentCountWithRepeatedPatterns(
-  rows: {
-    l1Families: string[];
-  }[]
-) {
-  return rows.filter((r) => r.l1Families.length >= 2).length;
 }
 
 function statusLabel(pct: number) {
@@ -497,7 +344,42 @@ function statusLabel(pct: number) {
   return "Building";
 }
 
-function missingTarget(current: number, target: number) {
-  if (current >= target) return "Complete";
-  return `${target - current} more`;
+function toTierLabel(score: number) {
+  if (score >= 80) return "Signature";
+  if (score >= 65) return "Refining";
+  if (score >= 50) return "Defining";
+  if (score >= 30) return "Developing";
+  return "Emerging";
+}
+
+function prettyTrait(value: string) {
+  return value
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function bestNextMoves(metrics: UserMetrics90dRow) {
+  const moves: string[] = [];
+
+  if ((metrics.consistency_0_100 ?? 0) < 45) moves.push("Log consistently");
+  if ((metrics.confidence_0_100 ?? 0) < 45) moves.push("Use structured notes");
+  if ((metrics.depth_0_100 ?? 0) < 60) moves.push("Get more specific");
+  if ((metrics.diversity_0_100 ?? 0) < 60) moves.push("Explore new styles");
+
+  return moves.length ? moves.slice(0, 3) : ["Keep logging", "Stay consistent", "Trust the signal"];
+}
+
+function buildCurrentRead(metrics: UserMetrics90dRow) {
+  const parts: string[] = [];
+
+  if ((metrics.diversity_0_100 ?? 0) >= 70) parts.push("broad");
+  if ((metrics.depth_0_100 ?? 0) >= 55) parts.push("expressive");
+  if ((metrics.consistency_0_100 ?? 0) < 45) parts.push("still forming");
+  if ((metrics.confidence_0_100 ?? 0) < 50) parts.push("gaining confidence");
+
+  if (!parts.length) {
+    return "Your recent palate signal is building steadily.";
+  }
+
+  return `Your recent palate is ${parts.join(", ")}.`;
 }

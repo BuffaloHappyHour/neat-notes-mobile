@@ -17,7 +17,9 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://vfqbioksbylatydjqdhg.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZmcWJpb2tzYnlsYXR5ZGpxZGhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5ODcxMTQsImV4cCI6MjA4NjU2MzExNH0.ebCX2AibgTY4Q1SkLf98tchLZU2U7TS5DwoKerBig7c"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZmcWJpb2tzYnlsYXR5ZGpxZGhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5ODcxMTQsImV4cCI6MjA4NjU2MzExNH0.ebCX2AibgTY4Q1SkLf98tchLZU2U7TS5DwoKerBig7c",
+        "EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY": "goog_wyrGwNUsciVDREPADabTFVqBtjm",
+        "EXPO_PUBLIC_REVENUECAT_APPLE_KEY": "appl_akKXYnucVKEFuqqFRyrUSjvlbxo"
       }
     },
     "production": {
@@ -25,7 +27,9 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://vfqbioksbylatydjqdhg.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZmcWJpb2tzYnlsYXR5ZGpxZGhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5ODcxMTQsImV4cCI6MjA4NjU2MzExNH0.ebCX2AibgTY4Q1SkLf98tchLZU2U7TS5DwoKerBig7c"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZmcWJpb2tzYnlsYXR5ZGpxZGhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5ODcxMTQsImV4cCI6MjA4NjU2MzExNH0.ebCX2AibgTY4Q1SkLf98tchLZU2U7TS5DwoKerBig7c",
+        "EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY": "goog_wyrGwNUsciVDREPADabTFVqBtjm",
+        "EXPO_PUBLIC_REVENUECAT_APPLE_KEY": "appl_akKXYnucVKEFuqqFRyrUSjvlbxo"
       }
     }
   },

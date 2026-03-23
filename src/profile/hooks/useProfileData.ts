@@ -12,11 +12,31 @@ import { type MixRow, type RecentRow, type TopRow } from "../types";
 import { MIX_DEFAULT_ALPHAS, safeLabel } from "../utils";
 
 type ClarityInputRow = {
-  rating: number | null;
-  created_at: string | null;
-  category: string | null;
-  proof: number | null;
-  hasRefinedNotes: boolean;
+  user_id: string;
+  period_start: string | null;
+  period_end: string | null;
+  tasting_count: number;
+  palate_clarity_0_100: number;
+  depth_0_100: number;
+  diversity_0_100: number;
+  consistency_0_100: number;
+  confidence_0_100: number;
+  texture_pref: number;
+  proof_pref: number;
+  flavor_pref: number;
+  preference_signal_count: number;
+  radar_l1_pct: Record<string, number> | null;
+  radar_l1_affinity: Record<string, number> | null;
+  radar_prev_l1_pct: Record<string, number> | null;
+  biggest_riser_l1: string | null;
+  biggest_riser_delta: number | null;
+  biggest_drop_l1: string | null;
+  biggest_drop_delta: number | null;
+  most_stable_l1: string | null;
+  most_stable_delta: number | null;
+  top_traits_l1: string[] | null;
+  avoided_traits_l1: string[] | null;
+  top_category: string | null;
 };
 
 function normId(v: any) {
@@ -122,10 +142,10 @@ export function useProfileData() {
     const mixPromise = supabase.from("tastings").select("whiskey_id").limit(3000);
 
     const clarityPromise = supabase
-      .from("tastings")
-      .select("rating, created_at, flavor_tags, whiskey_id")
-      .order("created_at", { ascending: false })
-      .limit(3000);
+      .from("user_metrics_lifetime_v1")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .limit(1);
 
     const [profileRes, countRes, ratingsRes, top5Res, recentRes, mixRes, clarityRes] =
       await Promise.allSettled([
@@ -195,52 +215,13 @@ export function useProfileData() {
       if (clarityRes.status !== "fulfilled") throw new Error("Clarity query promise rejected.");
 
       const { data: rows, error } = clarityRes.value as any;
-      if (error) throw new Error(error.message || "Unknown error loading clarity data.");
-      if (!Array.isArray(rows)) throw new Error("Clarity query returned no array.");
+      if (error) throw new Error(error.message || "Unknown error loading lifetime clarity data.");
+      if (!Array.isArray(rows)) throw new Error("Lifetime clarity query returned no array.");
 
-      const whiskeyIdsRaw = (rows as any[])
-        .map((r) => r?.whiskey_id)
-        .filter(Boolean);
-
-      const uniqueIds = Array.from(new Set(whiskeyIdsRaw.map((id) => normId(id)).filter(Boolean)));
-
-      const whiskeyToCategory = new Map<string, string>();
-      const whiskeyToProof = new Map<string, number | null>();
-
-      if (uniqueIds.length > 0) {
-        const { data: wRows, error: wErr } = await supabase
-          .from("whiskeys")
-          .select("id, category, proof")
-          .in("id", uniqueIds)
-          .limit(4000);
-
-        if (wErr) throw new Error(wErr.message);
-
-        (wRows as any[]).forEach((w) => {
-          const id = normId(w?.id);
-          if (!id) return;
-          whiskeyToCategory.set(id, safeLabel(w?.category) || "Unknown");
-          whiskeyToProof.set(id, asFiniteNumber(w?.proof));
-        });
-      }
-
-      const mapped: ClarityInputRow[] = (rows as any[]).map((t) => {
-        const wid = normId(t?.whiskey_id);
-        const cat = wid ? whiskeyToCategory.get(wid) ?? null : null;
-        const proof = wid ? whiskeyToProof.get(wid) ?? null : null;
-
-        return {
-          rating: asFiniteNumber(t?.rating),
-          created_at: t?.created_at ? String(t.created_at) : null,
-          category: cat ? safeLabel(cat) : null,
-          proof,
-          hasRefinedNotes: Array.isArray(t?.flavor_tags) && t.flavor_tags.length > 0,
-        };
-      });
-
-      setClarityInput(mapped);
+      setClarityInput((rows as ClarityInputRow[]) ?? []);
+      console.log("lifetime clarity:", rows);
     } catch (e: any) {
-      console.warn("Clarity input build failed:", String(e?.message ?? e));
+      console.warn("Lifetime clarity load failed:", String(e?.message ?? e));
       setClarityInput([]);
     }
 

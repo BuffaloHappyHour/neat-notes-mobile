@@ -16,7 +16,6 @@ import { RecentEntriesCard } from "../../src/profile/components/RecentEntriesCar
 import { SignInCard } from "../../src/profile/components/SignInCard";
 import { TastingActionsSheet } from "../../src/profile/components/TastingActionsSheet";
 import { YourStatsCard } from "../../src/profile/components/YourStatsCard";
-import { usePalateClarity } from "../../src/profile/hooks/usePalateClarity";
 import { useProfileData } from "../../src/profile/hooks/useProfileData";
 
 function GlassCard({
@@ -158,9 +157,17 @@ export default function ProfileTab() {
     deleteFromActions,
   } = useProfileData();
 
-  const clarity = usePalateClarity(clarityInput);
   const isEarlyUser = (tastingCount ?? 0) < 3;
   const hasAnyTastings = (tastingCount ?? 0) > 0;
+
+  const lifetimeClarity = clarityInput?.[0] ?? null;
+
+ const confidenceLevel: "high" | "medium" | "low" =
+  ((lifetimeClarity as any)?.confidence_0_100 ?? 0) > 70
+    ? "high"
+    : ((lifetimeClarity as any)?.confidence_0_100 ?? 0) > 40
+      ? "medium"
+      : "low";
 
   if (loading) {
     return (
@@ -220,29 +227,29 @@ export default function ProfileTab() {
                   totalTastings={tastingCount ?? 0}
                   tastingGoal={3}
                 />
-              ) : clarity ? (
-                <PalateClarityCard
-                  clarityIndex={clarity.clarityIndex}
-                  tierLabel={clarity.meta.tierLabel}
-                  confidenceLevel={clarity.meta.confidenceLevel}
-                  totalTastings={clarity.meta.totalTastings}
-                  daysSinceLastTasting={clarity.meta.daysSinceLastTasting}
-                />
+              ) : lifetimeClarity ? (
+               <PalateClarityCard
+  clarityIndex={Number((lifetimeClarity as any)?.palate_clarity_0_100 ?? 0)}
+  tierLabel="Lifetime"
+  confidenceLevel={confidenceLevel}
+  totalTastings={Number((lifetimeClarity as any)?.tasting_count ?? 0)}
+  daysSinceLastTasting={0}
+/>
               ) : null}
             </View>
 
-  {isEarlyUser ? (
-  <InsightsCTA
-    compact
-    isPremium={isPremium}
-    onPress={() => router.push("/insights" as any)}
-  />
-) : (
-  <InsightsCTA
-    isPremium={isPremium}
-    onPress={() => router.push("/insights" as any)}
-  />
-)}
+            {isEarlyUser ? (
+              <InsightsCTA
+                compact
+                isPremium={isPremium}
+                onPress={() => router.push("/insights" as any)}
+              />
+            ) : (
+              <InsightsCTA
+                isPremium={isPremium}
+                onPress={() => router.push("/insights" as any)}
+              />
+            )}
 
             <View style={{ gap: spacing.sm }}>
               <View style={{ gap: 8 }}>

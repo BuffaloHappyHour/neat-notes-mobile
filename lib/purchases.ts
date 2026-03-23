@@ -1,34 +1,36 @@
-import Purchases from "react-native-purchases";
+import Purchases, { type PurchasesPackage } from "react-native-purchases";
 
-import { syncPremiumStatusFromRevenueCat } from "./premiumSync";
+const PREMIUM_ENTITLEMENT_ID = "premium";
 
 export async function getCurrentOffering() {
   const offerings = await Purchases.getOfferings();
+
+  console.log(
+    "RC offerings.current identifier:",
+    offerings.current?.identifier ?? null,
+  );
+  console.log(
+    "RC availablePackages:",
+    offerings.current?.availablePackages?.map((pkg) => ({
+      packageIdentifier: pkg.identifier,
+      productIdentifier: pkg.product.identifier,
+      title: pkg.product.title,
+      priceString: pkg.product.priceString,
+    })) ?? [],
+  );
+
   return offerings.current ?? null;
 }
 
-export async function purchaseCurrentPackage() {
-  const current = await getCurrentOffering();
-
-  if (!current || !current.availablePackages.length) {
-    throw new Error("No subscription package is currently available.");
-  }
-
-  const pkg = current.availablePackages[0];
-  await Purchases.purchasePackage(pkg);
-
-  const hasPremium = await syncPremiumStatusFromRevenueCat();
-
-  if (!hasPremium) {
-    throw new Error("Purchase completed, but premium access was not confirmed.");
-  }
-
-  return true;
+export async function purchasePackage(pkg: PurchasesPackage) {
+  const result = await Purchases.purchasePackage(pkg);
+  return result.customerInfo;
 }
 
 export async function restoreMyPurchases() {
-  await Purchases.restorePurchases();
+  const customerInfo = await Purchases.restorePurchases();
 
-  const hasPremium = await syncPremiumStatusFromRevenueCat();
-  return hasPremium;
+  return Boolean(
+    customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID],
+  );
 }

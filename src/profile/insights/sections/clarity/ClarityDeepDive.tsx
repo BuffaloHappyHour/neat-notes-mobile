@@ -5,6 +5,7 @@ import { spacing } from "../../../../../lib/spacing";
 import { type } from "../../../../../lib/typography";
 import type { PalateClarityResult } from "../../../../palate/palateClarity.service";
 
+import { colors } from "@/lib/theme";
 import { useClarityInsightsData } from "../../hooks/useClarityInsightsData";
 import { ClarityDriverDashboard } from "./ClarityDriverDashboard";
 import {
@@ -60,7 +61,26 @@ export default function ClarityDeepDive({
 return (
   <View style={{ gap: spacing.lg }}>
 
-    <ClarityHeroCard clarity={clarity} factors={clarityDetails.factors} />
+    <ClarityHeroCard summary={clarityDetails.summary} factors={clarityDetails.factors} />
+<Text
+  style={[
+    type.microcopyItalic,
+    {
+      opacity: 0.7,
+      marginTop: spacing.sm,
+    },
+  ]}
+>
+  Your lifetime clarity reflects your full tasting history, while insights below focus on your recent activity.
+</Text>
+<View
+  style={{
+    height: 1,
+    backgroundColor: colors.divider,
+    opacity: 0.5,
+    marginTop: spacing.sm,
+  }}
+/>
 
       <DetailBlock
         title="What shapes your clarity"

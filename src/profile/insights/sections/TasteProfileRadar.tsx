@@ -5,6 +5,7 @@ import { radii } from "../../../../lib/radii";
 import { spacing } from "../../../../lib/spacing";
 import { colors } from "../../../../lib/theme";
 import { type } from "../../../../lib/typography";
+import { shareInsight } from "../utils/shareInsight";
 
 import { RadarChart } from "../components/RadarChart";
 import { useInsightsData } from "../hooks/useInsightsData";
@@ -27,25 +28,30 @@ function TraitPill({ text }: { text: string }) {
 }
 
 export default function TasteProfileRadar() {
-  // TEMP: placeholder values (0..1). We'll wire real data after UI locks.
   const { axes, topTraits, avoidedTraits, sentence, loading } = useInsightsData();
 
-  // TEMP: pretend locked state (we’ll hook into premium later)
   const isLocked = false;
+
+  const traitText =
+    topTraits.length >= 2
+      ? `${topTraits[0]} and ${topTraits[1]}`
+      : topTraits[0] ?? "balanced flavors";
+
+  const avoidedText =
+    avoidedTraits.length > 0
+      ? ` while steering away from ${avoidedTraits.slice(0, 2).join(" and ")}`
+      : "";
+
+  const shareText = `My whiskey taste profile in Neat Notes leans ${traitText.toLowerCase()}${avoidedText.toLowerCase()}.`;
 
   return (
     <View style={{ gap: spacing.lg }}>
-      {/* Radar itself should feel calm + visual-first */}
       <View style={{ marginHorizontal: -spacing.lg }}>
-  <RadarChart axes={axes} size={350} levels={4} showLabels />
-</View>
+        <RadarChart axes={axes} size={350} levels={4} showLabels />
+      </View>
 
-      {/* Interpretation line (Apple Health vibe: 1 sentence) */}
-      <Text style={type.microcopyItalic}>
-       {sentence}
-      </Text>
+      <Text style={type.microcopyItalic}>{sentence}</Text>
 
-      {/* Traits card — subtle surface inside the section */}
       <View
         style={{
           borderRadius: radii.xl,
@@ -57,7 +63,6 @@ export default function TasteProfileRadar() {
         }}
       >
         <View style={{ flexDirection: "row", gap: spacing.lg }}>
-          {/* Top Traits */}
           <View style={{ flex: 1, gap: spacing.sm }}>
             <Text style={type.labelCaps}>Top traits</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
@@ -67,7 +72,6 @@ export default function TasteProfileRadar() {
             </View>
           </View>
 
-          {/* Avoided */}
           <View style={{ flex: 1, gap: spacing.sm }}>
             <Text style={type.labelCaps}>Avoided</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
@@ -78,7 +82,18 @@ export default function TasteProfileRadar() {
           </View>
         </View>
 
-        {/* Share CTA (kept subtle) */}
+        <Pressable
+          onPress={() => shareInsight(shareText)}
+          style={{
+            marginTop: spacing.md,
+            alignSelf: "flex-start",
+          }}
+        >
+          <Text style={[type.caption, { opacity: 0.8 }]}>
+            Share your taste profile →
+          </Text>
+        </Pressable>
+
         <Pressable
           disabled={isLocked}
           onPress={() => {}}
