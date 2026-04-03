@@ -1,12 +1,13 @@
 // src/logTab/components/SearchSection.tsx
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useMemo, useRef } from "react";
 import {
-    ActivityIndicator,
-    Pressable,
-    ScrollView,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 import { radii } from "../../../lib/radii";
@@ -25,6 +26,7 @@ export function SearchSection({
   query,
   onChangeQuery,
   onClear,
+  onScanPress,
   suggestions,
   loading,
   helperLine,
@@ -37,6 +39,7 @@ export function SearchSection({
   query: string;
   onChangeQuery: (v: string) => void;
   onClear: () => void;
+  onScanPress: () => void;
 
   suggestions: Suggestion[];
   loading: boolean;
@@ -54,7 +57,6 @@ export function SearchSection({
   const surface = (colors as any).glassRaised ?? colors.surfaceRaised ?? colors.surface;
   const sunken = (colors as any).glassSunken ?? colors.surfaceSunken ?? colors.background;
   const border = (colors as any).glassBorder ?? colors.divider;
-  const divider = (colors as any).glassDivider ?? colors.divider;
 
   const showSuggestions = suggestions.length > 0;
   const showNoMatches = hasEnoughQuery && !loading && suggestions.length === 0;
@@ -79,14 +81,12 @@ export function SearchSection({
         gap: spacing.md,
       }}
     >
-      {/* Header */}
       <View style={{ gap: 4 }}>
-  <Text style={[type.sectionHeader, { fontSize: 18 }]}>
-    Start typing to search
-  </Text>
-</View>
+        <Text style={[type.sectionHeader, { fontSize: 18 }]}>
+          Start typing to search
+        </Text>
+      </View>
 
-      {/* Input well */}
       <View
         style={{
           borderWidth: 1,
@@ -121,6 +121,29 @@ export function SearchSection({
           }}
         />
 
+        <Pressable
+          onPress={onScanPress}
+          hitSlop={10}
+          style={({ pressed }) => ({
+            width: 40,
+            height: 40,
+            borderRadius: 999,
+            borderWidth: 0.8,
+            borderColor: border,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: pressed ? surface : "transparent",
+            opacity: pressed ? 0.9 : 1,
+            ...shadows.card,
+          })}
+        >
+          <MaterialCommunityIcons
+            name="barcode-scan"
+            size={20}
+            color={colors.accent}
+          />
+        </Pressable>
+
         {query.length > 0 ? (
           <Pressable
             onPress={() => {
@@ -132,30 +155,33 @@ export function SearchSection({
               paddingHorizontal: 10,
               paddingVertical: 8,
               borderRadius: 999,
-              borderWidth: .8,
+              borderWidth: 0.8,
               borderColor: border,
               backgroundColor: pressed ? surface : "transparent",
               opacity: pressed ? 0.9 : 1,
               ...shadows.card,
             })}
           >
-            <Text style={[type.caption, { fontWeight: "900", opacity: 0.9 }]}>Clear</Text>
+            <Text style={[type.caption, { fontWeight: "900", opacity: 0.9 }]}>
+              Clear
+            </Text>
           </Pressable>
         ) : null}
       </View>
 
-      {/* Helper line (your existing messaging) */}
-      <Text style={[type.body, { opacity: 0.7, fontSize: 12 }]}>{helperLine}</Text>
+      <Text style={[type.body, { opacity: 0.7, fontSize: 12 }]}>
+        {helperLine}
+      </Text>
 
-      {/* Loading */}
       {loading ? (
         <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
           <ActivityIndicator />
-          <Text style={[type.body, { opacity: 0.7, fontSize: 12 }]}>Searching…</Text>
+          <Text style={[type.body, { opacity: 0.7, fontSize: 12 }]}>
+            Searching…
+          </Text>
         </View>
       ) : null}
 
-      {/* Suggestions */}
       {showSuggestions ? (
         <ScrollView
           style={{
@@ -193,7 +219,10 @@ export function SearchSection({
                 {s.whiskeyName}
               </Text>
 
-              <Text style={[type.microcopyItalic, { opacity: 0.75, fontSize: 12 }]} numberOfLines={1}>
+              <Text
+                style={[type.microcopyItalic, { opacity: 0.75, fontSize: 12 }]}
+                numberOfLines={1}
+              >
                 Tap to view profile
                 {typeof s.bhhScore === "number" ? ` • BHH ${Math.round(s.bhhScore)}` : ""}
                 {idx === 0 ? " • Top match" : ""}
@@ -207,7 +236,6 @@ export function SearchSection({
         </Text>
       ) : null}
 
-      {/* Actions */}
       <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: 2 }}>
         <Pressable
           onPress={onCustom}

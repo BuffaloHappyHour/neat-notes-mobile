@@ -4,12 +4,13 @@ module.exports = {
   expo: {
     name: IS_DEV_CLIENT ? "Neat Notes Dev" : "Neat Notes",
     slug: "neat-notes",
-    version: "1.0.4",
+    version: "1.0.5",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: IS_DEV_CLIENT ? "neatnotesdev" : "neatnotes",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
+
     ios: {
       supportsTablet: true,
       bundleIdentifier: IS_DEV_CLIENT
@@ -20,11 +21,11 @@ module.exports = {
         ITSAppUsesNonExemptEncryption: false,
       },
     },
+
     android: {
       package: IS_DEV_CLIENT
         ? "com.neatnotesapp.neatnotes.dev"
         : "com.neatnotesapp.neatnotes",
-      versionCode: 9,
       adaptiveIcon: {
         backgroundColor: "#000000",
         foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -33,12 +34,20 @@ module.exports = {
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
     },
+
     web: {
       output: "static",
       favicon: "./assets/images/favicon.png",
     },
+
     plugins: [
       "expo-router",
+      [
+        "expo-camera",
+        {
+          cameraPermission: "Allow Neat Notes to access your camera",
+        },
+      ],
       [
         "expo-splash-screen",
         {
@@ -60,10 +69,12 @@ module.exports = {
         },
       ],
     ],
+
     experiments: {
       typedRoutes: true,
       reactCompiler: true,
     },
+
     extra: {
       router: {},
       eas: {

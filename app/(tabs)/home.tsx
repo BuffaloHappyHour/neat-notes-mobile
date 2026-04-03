@@ -1,7 +1,8 @@
-import { router } from "expo-router";
-import React, { useEffect, useMemo } from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
+import { clearActiveEventId, getActiveEventId } from "../../lib/eventStorage";
 import { radii } from "../../lib/radii";
 import { shadows } from "../../lib/shadows";
 import { spacing } from "../../lib/spacing";
@@ -107,6 +108,153 @@ function ActionBodyCard({
         ) : null}
       </View>
     </Pressable>
+  );
+}
+
+function ActiveEventCard({
+  eventName,
+  onView,
+  onLeave,
+}: {
+  eventName: string;
+  onView: () => void;
+  onLeave: () => void;
+}) {
+  return (
+    <View style={{ gap: 6 }}>
+      <Text
+        style={[
+          type.sectionHeader,
+          { fontSize: 25, lineHeight: 30, color: colors.textPrimary },
+        ]}
+      >
+        Active Event
+      </Text>
+
+      <Pressable
+        onPress={onView}
+        style={({ pressed }) => ({
+          borderRadius: radii.lg,
+          borderWidth: 1,
+          borderColor: pressed
+            ? "rgba(190, 150, 99, 0.42)"
+            : "rgba(190, 150, 99, 0.34)",
+          backgroundColor: pressed
+            ? "rgba(190, 150, 99, 0.08)"
+            : "rgba(190, 150, 99, 0.05)",
+          paddingVertical: spacing.lg,
+          paddingHorizontal: spacing.lg,
+          gap: spacing.md,
+          ...warmCardShadow,
+          opacity: pressed ? 0.97 : 1,
+        })}
+      >
+        <View style={{ gap: 6 }}>
+          <Text
+            style={[
+              type.caption,
+              {
+                color: colors.accent,
+                fontWeight: "700",
+                letterSpacing: 0.5,
+                textTransform: "uppercase",
+              },
+            ]}
+          >
+            Checked In
+          </Text>
+
+          <Text
+            style={[
+              type.sectionHeader,
+              {
+                fontSize: 22,
+                lineHeight: 28,
+                color: colors.textPrimary,
+              },
+            ]}
+          >
+            {eventName}
+          </Text>
+
+          <Text
+            style={[
+              type.microcopyItalic,
+              {
+                fontSize: 15,
+                lineHeight: 21,
+                opacity: 0.84,
+                color: colors.textPrimary,
+              },
+            ]}
+          >
+            New tastings will be tagged to this event automatically.
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          <Pressable
+            onPress={onView}
+            style={({ pressed }) => ({
+              flex: 1,
+              paddingVertical: 11,
+              borderRadius: 999,
+              alignItems: "center",
+              backgroundColor: pressed
+                ? "rgba(190, 150, 99, 0.16)"
+                : "rgba(190, 150, 99, 0.10)",
+              borderWidth: 1,
+              borderColor: "rgba(190, 150, 99, 0.34)",
+              opacity: pressed ? 0.96 : 1,
+            })}
+          >
+            <Text
+              style={[
+                type.caption,
+                {
+                  color: colors.accent,
+                  opacity: 0.96,
+                  letterSpacing: 0.25,
+                  fontWeight: "700",
+                },
+              ]}
+            >
+              View Event
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={onLeave}
+            style={({ pressed }) => ({
+              flex: 1,
+              paddingVertical: 11,
+              borderRadius: 999,
+              alignItems: "center",
+              backgroundColor: pressed
+                ? "rgba(255,255,255,0.08)"
+                : "rgba(255,255,255,0.04)",
+              borderWidth: 1,
+              borderColor: colors.glassBorder,
+              opacity: pressed ? 0.96 : 1,
+            })}
+          >
+            <Text
+              style={[
+                type.caption,
+                {
+                  color: colors.textPrimary,
+                  opacity: 0.96,
+                  letterSpacing: 0.25,
+                  fontWeight: "700",
+                },
+              ]}
+            >
+              Leave Event
+            </Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    </View>
   );
 }
 
@@ -536,12 +684,17 @@ export default function HomeTab() {
     useHomeStats();
 
   const [featured, setFeatured] = React.useState<{
-  whiskeyId: string;
-  name: string;
-  type: string | null;
-  proof: number | null;
-  featureNote: string | null;
-} | null>(null);
+    whiskeyId: string;
+    name: string;
+    type: string | null;
+    proof: number | null;
+    featureNote: string | null;
+  } | null>(null);
+
+  const [activeEvent, setActiveEvent] = React.useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const logPress = (action: string, href?: string) => {
     void logClientEvent("press", {
@@ -554,12 +707,43 @@ export default function HomeTab() {
     });
   };
 
+  const loadActiveEvent = useCallback(async () => {
+    const eventId = await getActiveEventId();
+
+    if (!eventId) {
+      setActiveEvent(null);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("events")
+      .select("id, name")
+      .eq("id", eventId)
+      .maybeSingle();
+
+    if (error || !data) {
+      setActiveEvent(null);
+      return;
+    }
+
+    setActiveEvent({
+      id: data.id,
+      name: data.name,
+    });
+  }, []);
+
   useEffect(() => {
     void logClientEvent("screen_view", {
       screen: "home",
       detail: { ts: Date.now() },
     });
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadActiveEvent();
+    }, [loadActiveEvent])
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -568,48 +752,49 @@ export default function HomeTab() {
       const { data, error } = await supabase
         .from("featured_whiskeys")
         .select(
-  `
-  feature_note,
-  whiskey:whiskeys (
-    id,
-    display_name,
-    whiskey_type,
-    proof
-  )
-`
-)
+          `
+          feature_note,
+          whiskey:whiskeys (
+            id,
+            display_name,
+            whiskey_type,
+            proof
+          )
+        `
+        )
         .eq("is_active", true)
         .lte("start_date", new Date().toISOString())
         .gte("end_date", new Date().toISOString())
         .order("start_date", { ascending: false })
         .limit(1)
         .maybeSingle();
-console.log("featured_whiskeys result", { data, error });
-if (!isMounted || error || !data?.whiskey) return;
 
-const whiskeyRaw = Array.isArray(data.whiskey) ? data.whiskey[0] : data.whiskey;
-if (!whiskeyRaw) return;
+      console.log("featured_whiskeys result", { data, error });
+      if (!isMounted || error || !data?.whiskey) return;
 
-const whiskey = whiskeyRaw as {
-  id: string;
-  display_name: string;
-  whiskey_type: string | null;
-  proof: number | null;
-};
+      const whiskeyRaw = Array.isArray(data.whiskey) ? data.whiskey[0] : data.whiskey;
+      if (!whiskeyRaw) return;
 
-setFeatured({
-  featureNote: data.feature_note ?? null,
-  whiskeyId: whiskey.id,
-  name: whiskey.display_name,
-  type: whiskey.whiskey_type,
-  proof:
-    whiskey.proof == null || !Number.isFinite(Number(whiskey.proof))
-      ? null
-      : Number(whiskey.proof),
-});
+      const whiskey = whiskeyRaw as {
+        id: string;
+        display_name: string;
+        whiskey_type: string | null;
+        proof: number | null;
+      };
+
+      setFeatured({
+        featureNote: data.feature_note ?? null,
+        whiskeyId: whiskey.id,
+        name: whiskey.display_name,
+        type: whiskey.whiskey_type,
+        proof:
+          whiskey.proof == null || !Number.isFinite(Number(whiskey.proof))
+            ? null
+            : Number(whiskey.proof),
+      });
     }
 
-    loadFeatured();
+    void loadFeatured();
 
     return () => {
       isMounted = false;
@@ -713,6 +898,29 @@ setFeatured({
     [featured]
   );
 
+  const goEvent = useMemo(
+    () =>
+      withTick(() => {
+        if (!activeEvent) return;
+        logPress("home_active_event_view", `/event/${activeEvent.id}`);
+router.push({
+  pathname: "/event/[id]",
+  params: { id: activeEvent.id },
+});
+      }),
+    [activeEvent]
+  );
+
+  const leaveEvent = useMemo(
+    () =>
+      withTick(async () => {
+        logPress("home_active_event_leave");
+        await clearActiveEventId();
+        setActiveEvent(null);
+      }),
+    []
+  );
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: "transparent" }}
@@ -801,6 +1009,14 @@ setFeatured({
           />
         </View>
 
+        {activeEvent ? (
+          <ActiveEventCard
+            eventName={activeEvent.name}
+            onView={goEvent}
+            onLeave={leaveEvent}
+          />
+        ) : null}
+
         {!isAuthed ? (
           <View style={{ gap: spacing.xs }}>
             <Text
@@ -841,12 +1057,12 @@ setFeatured({
 
         {featured ? (
           <FeaturedBottleCard
-  name={featured.name}
-  whiskeyType={featured.type}
-  proof={featured.proof}
-  featureNote={featured.featureNote}
-  onPress={goFeatured}
-/>
+            name={featured.name}
+            whiskeyType={featured.type}
+            proof={featured.proof}
+            featureNote={featured.featureNote}
+            onPress={goFeatured}
+          />
         ) : null}
 
         <View style={{ marginTop: spacing.sm }}>

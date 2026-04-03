@@ -11,7 +11,7 @@ import React, { useEffect, useMemo } from "react";
 import { ImageBackground, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Purchases from "react-native-purchases";
-import { syncPremiumStatusFromRevenueCat } from "../lib/premiumSync";
+import { supabase } from "../lib/supabase";
 
 import {
   Montserrat_400Regular,
@@ -35,15 +35,21 @@ export default function RootLayout() {
         throw new Error("RevenueCat API key is missing for this platform.");
       }
 
-      Purchases.configure({ apiKey });
+if (!Purchases.isConfigured()) {
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
 
-      try {
-        if (mounted) {
-          await syncPremiumStatusFromRevenueCat();
-        }
-      } catch (e) {
-        console.warn("RevenueCat premium sync failed:", e);
-      }
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  Purchases.configure({
+    apiKey,
+    appUserID: session?.user?.id,
+  });
+}
     }
 
     setupRevenueCat();
@@ -98,6 +104,7 @@ export default function RootLayout() {
             }}
           >
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="scan" options={{ headerShown: false }} />
           </Stack>
         </ImageBackground>
       </ThemeProvider>

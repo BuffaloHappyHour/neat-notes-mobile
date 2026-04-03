@@ -16,9 +16,12 @@ import {
   View,
 } from "react-native";
 
+import { syncPremiumStatusFromRevenueCat } from "../lib/premiumSync";
+
 import { fetchMyProfile, upsertMyProfile } from "../lib/cloudProfile";
 import { supabase } from "../lib/supabase";
 
+import Purchases from "react-native-purchases";
 import { radii } from "../lib/radii";
 import { shadows } from "../lib/shadows";
 import { spacing } from "../lib/spacing";
@@ -330,6 +333,33 @@ export default function SignInScreen() {
     setPassword("");
     setJustSignedUpEmail("");
 
+const {
+  data: { session },
+} = await supabase.auth.getSession();
+
+if (session?.user?.id) {
+  const configured = await Purchases.isConfigured();
+
+  if (!configured) {
+    const apiKey =
+      Platform.OS === "android"
+        ? process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY
+        : process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY;
+
+    if (!apiKey) {
+      throw new Error("RevenueCat API key is missing for this platform.");
+    }
+
+    await Purchases.configure({
+      apiKey,
+      appUserID: session.user.id,
+    });
+  } else {
+    await Purchases.logIn(session.user.id);
+  }
+}
+await syncPremiumStatusFromRevenueCat();
+
     await loadSessionOnce();
 
     const nm = nameInput.trim();
@@ -493,12 +523,13 @@ export default function SignInScreen() {
             <ThemedButton
               label={busy ? "Working…" : "Sign Out"}
               onPress={async () => {
-                if (busy) return;
-                setBusy(true);
-                const { error } = await supabase.auth.signOut();
-                setBusy(false);
-                if (error) return Alert.alert("Sign out failed", error.message);
-                await loadSessionOnce();
+if (busy) return;
+setBusy(true);
+await Purchases.logOut();
+const { error } = await supabase.auth.signOut();
+setBusy(false);
+if (error) return Alert.alert("Sign out failed", error.message);
+await loadSessionOnce();
               }}
               disabled={busy}
               tone="secondary"

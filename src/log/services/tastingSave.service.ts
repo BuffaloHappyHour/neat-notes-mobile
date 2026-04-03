@@ -1,6 +1,8 @@
 import { trackTastingSaved, trackTastingSaveFailed } from "../../../lib/analytics";
+import { getActiveEventId } from "../../../lib/eventStorage";
 import { hapticError, hapticSuccess } from "../../../lib/haptics";
 import { supabase } from "../../../lib/supabase";
+
 
 import {
   clamp100,
@@ -201,6 +203,8 @@ export async function saveCloudTasting(params: {
       venueId = data;
     }
   }
+const activeEventId = await getActiveEventId();
+
   const { data: sessionData } = await supabase.auth.getSession();
   const recordedBy = sessionData.session?.user?.id ?? null;
 
@@ -232,6 +236,7 @@ export async function saveCloudTasting(params: {
       p_recorded_by: recordedBy,
     });
   }
+
   const payload: any = {
     whiskey_name: safeName,
     whiskey_id: safeWhiskeyId,
@@ -247,6 +252,7 @@ export async function saveCloudTasting(params: {
     bar_name: sourceType === "bar" ? String(barName ?? "").trim() : null,
     personal_notes: finalPersonalNotes,
     venue_id: venueId,
+    event_id: activeEventId,
 
     source_name_snapshot:
       sourceType === "bar"
@@ -262,15 +268,15 @@ export async function saveCloudTasting(params: {
         ? Number(safePricePerOz || 0) || null
         : Number(safePricePerBottle || 0) || null,
 
-   source_pour_size_oz:
-  sourceType === "bar"
-    ? Number(safePourSizeOz || 1) // default 1oz
-    : null,
+    source_pour_size_oz:
+      sourceType === "bar"
+        ? Number(safePourSizeOz || 1)
+        : null,
 
-source_bottle_size_ml:
-  sourceType === "purchased"
-    ? Number(safeBottleSizeMl || 750) // default 750ml
-    : null,
+    source_bottle_size_ml:
+      sourceType === "purchased"
+        ? Number(safeBottleSizeMl || 750)
+        : null,
   };
 
   const safeSentimentById: Record<string, ReviewSentiment> = {};

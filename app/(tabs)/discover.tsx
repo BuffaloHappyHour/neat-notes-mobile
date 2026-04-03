@@ -1,4 +1,3 @@
-// app/(tabs)/discover.tsx
 import { router } from "expo-router";
 import React, { useMemo } from "react";
 import {
@@ -6,7 +5,7 @@ import {
   ScrollView,
   Text,
   View,
-  useWindowDimensions,
+  useWindowDimensions
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -133,6 +132,7 @@ export default function DiscoverTab() {
             }}
           />
         </View>
+
 
         <DiscoverHeaderCard
           onOpenFilters={onOpenFilters}

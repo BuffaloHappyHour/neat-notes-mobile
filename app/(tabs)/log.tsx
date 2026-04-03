@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,13 +17,9 @@ import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
+import { withSuccess, withTick } from "../../lib/hapticsPress";
 import { SearchSection } from "../../src/logTab/components/SearchSection";
 import { useRecentTastings } from "../../src/logTab/hooks/useRecentTastings";
-
-// ✅ HAPTICS
-import { withSuccess, withTick } from "../../lib/hapticsPress";
-
-/* ------------------- Helpers ------------------- */
 
 function isUuid(v: string) {
   const s = String(v ?? "").trim();
@@ -40,15 +36,11 @@ function formatWhen(v: string | null | undefined) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/* ------------------- Types ------------------- */
-
 type Suggestion = {
   whiskeyId: string;
   whiskeyName: string;
   bhhScore: number | null;
 };
-
-/* ------------------- UI ------------------- */
 
 function SoftDivider() {
   return (
@@ -215,30 +207,157 @@ function RecentRow({
   );
 }
 
-/* ------------------- Screen ------------------- */
-
 export default function LogTab() {
+  const { barcode } = useLocalSearchParams<{ barcode?: string }>();
+
+  const [barcodeLookupStatus, setBarcodeLookupStatus] = useState<
+    "idle" | "loading" | "not_found" | "found"
+  >("idle");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Suggestion | null>(null);
-
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput | null>(null);
+  const autoHandledBarcodeRef = useRef<string | null>(null);
 
-  // ✅ Recent tastings: cached + no refresh on every tab switch
   const recent = useRecentTastings({ staleMs: 60_000 });
 
   const qTrim = query.trim();
   const hasEnoughQuery = qTrim.length >= 2;
 
+  useEffect(() => {
+    if (!barcode) return;
+    console.log("[log] barcode param:", barcode);
+  }, [barcode]);
+
+  useEffect(() => {
+    if (!barcode) {
+      setBarcodeLookupStatus("idle");
+      autoHandledBarcodeRef.current = null;
+      return;
+    }
+
+    const code = String(barcode).trim();
+    if (!code) {
+      setBarcodeLookupStatus("idle");
+      autoHandledBarcodeRef.current = null;
+      return;
+    }
+
+    setSelected(null);
+    setBarcodeLookupStatus("loading");
+    setQuery(code);
+
+    const runLookup = async () => {
+      console.log("[log] VERSION: barcode-db-check");
+
+      try {
+        const { data: barcodeMatch, error: barcodeErr } = await supabase
+          .from("whiskey_barcodes")
+          .select(
+            `
+            whiskey_id,
+            confidence,
+            verified,
+            whiskeys!inner (
+              id,
+              display_name,
+              is_active
+            )
+          `
+          )
+          .eq("barcode", code)
+          .order("verified", { ascending: false })
+          .order("confidence", { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (barcodeErr) {
+          console.log("[log] whiskey_barcodes lookup error:", barcodeErr);
+        }
+
+        const matchedWhiskey = (barcodeMatch as any)?.whiskeys;
+        const matchedWhiskeyId = matchedWhiskey?.id ? String(matchedWhiskey.id) : "";
+        const matchedWhiskeyName = matchedWhiskey?.display_name
+          ? String(matchedWhiskey.display_name)
+          : "";
+
+        if (
+          barcodeMatch &&
+          matchedWhiskey &&
+          matchedWhiskeyId &&
+          matchedWhiskeyName &&
+          matchedWhiskey?.is_active !== false
+        ) {
+          console.log("[log] barcode mapping found:", barcodeMatch);
+
+          setBarcodeLookupStatus("found");
+          setQuery(matchedWhiskeyName);
+          setSuggestions([
+            {
+              whiskeyId: matchedWhiskeyId,
+              whiskeyName: matchedWhiskeyName,
+              bhhScore: null,
+            },
+          ]);
+
+          if (autoHandledBarcodeRef.current !== code) {
+            autoHandledBarcodeRef.current = code;
+            router.replace(`/whiskey/${encodeURIComponent(matchedWhiskeyId)}?intent=log`);
+          }
+
+          return;
+        }
+
+        const res = await fetch(
+          "https://vfqbioksbylatydjqdhg.supabase.co/functions/v1/lookup-upc",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "",
+              Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ""}`,
+            },
+            body: JSON.stringify({ barcode: code }),
+          }
+        );
+
+        const data = await res.json();
+        console.log("[log] lookup-upc response:", data);
+
+        if (data?.found) {
+          setBarcodeLookupStatus("found");
+        } else {
+          setBarcodeLookupStatus("not_found");
+          setQuery("");
+          setSuggestions([]);
+        }
+      } catch (err) {
+        console.log("[log] barcode lookup flow failed:", err);
+        setBarcodeLookupStatus("not_found");
+        setQuery("");
+        setSuggestions([]);
+      }
+    };
+
+    runLookup();
+  }, [barcode]);
+
   const helperLine = useMemo(() => {
+    if (barcodeLookupStatus === "loading") return "Checking barcode…";
+    if (barcodeLookupStatus === "not_found") {
+      return "We couldn’t identify this bottle automatically yet. Search below or add a custom bottle.";
+    }
+    if (barcodeLookupStatus === "found") {
+      return "Barcode recognized. Opening bottle…";
+    }
     if (!hasEnoughQuery) return "Start typing a bottle name to search.";
     if (selected) return "Tap Continue to open the whiskey profile.";
     if (suggestions.length > 0) return "Tap a result, or press Continue to open the top match.";
     return "No matches. Tap Add custom entry to log it anyway.";
-  }, [hasEnoughQuery, selected, suggestions.length]);
+  }, [barcodeLookupStatus, hasEnoughQuery, selected, suggestions.length]);
 
   const canContinue = useMemo(() => {
     if (!hasEnoughQuery) return false;
@@ -248,12 +367,18 @@ export default function LogTab() {
   function onType(text: string) {
     setQuery(text);
     setSelected(null);
+    if (barcodeLookupStatus !== "found") {
+      setBarcodeLookupStatus("idle");
+    }
   }
 
   const clearQuery = withTick(() => {
     setQuery("");
     setSelected(null);
     setSuggestions([]);
+    if (barcodeLookupStatus !== "found") {
+      setBarcodeLookupStatus("idle");
+    }
     setTimeout(() => inputRef.current?.focus?.(), 50);
   });
 
@@ -273,9 +398,36 @@ export default function LogTab() {
     router.push(`/log/cloud-tasting?whiskeyName=${encodeURIComponent(n)}&lockName=0` as any);
   }
 
-  const onPickSuggestion = withTick((s: Suggestion) => {
+  const onPickSuggestion = withTick(async (s: Suggestion) => {
     setQuery(s.whiskeyName);
     setSelected(s);
+    setBarcodeLookupStatus("idle");
+
+    if (barcode) {
+      try {
+        const code = String(barcode).trim();
+
+        if (code) {
+          const { data, error } = await supabase.rpc("save_barcode_mapping", {
+            p_barcode: code,
+            p_whiskey_id: s.whiskeyId,
+            p_source: "user_confirmed",
+            p_confidence: 0.7,
+            p_verified: false,
+            p_barcode_format: null,
+          });
+
+          if (error) {
+            console.log("[log] save_barcode_mapping error:", error);
+          } else {
+            console.log("[log] save_barcode_mapping success:", data);
+          }
+        }
+      } catch (err) {
+        console.log("[log] save_barcode_mapping failed:", err);
+      }
+    }
+
     goToWhiskeyProfile(s.whiskeyId);
   });
 
@@ -434,7 +586,6 @@ export default function LogTab() {
         keyboardDismissMode="on-drag"
         nestedScrollEnabled
       >
-        {/* Header */}
         <View style={{ gap: spacing.xs }}>
           <Text style={[type.screenTitle, { fontSize: 34, lineHeight: 40 }]}>
             What are you drinking?
@@ -459,6 +610,7 @@ export default function LogTab() {
           onPick={onPickSuggestion}
           onCustom={onUseCustom}
           onContinue={onContinue}
+          onScanPress={() => router.push("/scan" as any)}
         />
 
         <SoftDivider />
