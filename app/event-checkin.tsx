@@ -16,7 +16,7 @@ type EventRow = {
 };
 
 export default function EventCheckinScreen() {
-  const { event_id } = useLocalSearchParams<{ event_id?: string }>();
+  const { id } = useLocalSearchParams<{ id?: string }>();
 
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -26,7 +26,7 @@ export default function EventCheckinScreen() {
     let mounted = true;
 
     async function loadEvent() {
-      if (!event_id || typeof event_id !== "string") {
+      if (!id || typeof id !== "string") {
         if (mounted) setLoading(false);
         return;
       }
@@ -34,7 +34,7 @@ export default function EventCheckinScreen() {
       const { data, error } = await supabase
         .from("events")
         .select("id, name")
-        .eq("id", event_id)
+        .eq("id", id)
         .maybeSingle();
 
       if (!mounted) return;
@@ -53,7 +53,7 @@ export default function EventCheckinScreen() {
     return () => {
       mounted = false;
     };
-  }, [event_id]);
+  }, [id]);
 
   const handleCheckIn = async () => {
     if (!event?.id) return;

@@ -1,33 +1,19 @@
-import { Stack, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { Stack, router, useLocalSearchParams } from "expo-router";
+import React, { useMemo } from "react";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { useEventPageData } from "../../../src/events/hooks/useEventPageData";
 
-import { radii } from "../../lib/radii";
-import { shadows } from "../../lib/shadows";
-import { spacing } from "../../lib/spacing";
-import { supabase } from "../../lib/supabase";
-import { colors } from "../../lib/theme";
-import { type } from "../../lib/typography";
+import { radii } from "../../../lib/radii";
+import { shadows } from "../../../lib/shadows";
+import { spacing } from "../../../lib/spacing";
+import { colors } from "../../../lib/theme";
+import { type } from "../../../lib/typography";
 
-type EventHeader = {
-  id: string;
-  name: string;
-  starts_at: string | null;
-  ends_at: string | null;
-};
-
-type RecentTastingRow = {
-  id: string;
-  whiskey_name: string | null;
-  rating: number | null;
-  created_at: string;
-};
-
-type TopWhiskeyRow = {
-  whiskey_name: string;
-  avg_rating: number;
-  tasting_count: number;
-};
+import type {
+  MostRatedWhiskeyRow,
+  RecentTastingRow,
+  TopWhiskeyRow,
+} from "../../../src/events/hooks/useEventPageData";
 
 const warmCardShadow = {
   ...shadows.card,
@@ -297,73 +283,94 @@ function TopWhiskeyRowCard({ row }: { row: TopWhiskeyRow }) {
   );
 }
 
+function MostRatedWhiskeyRowCard({ row }: { row: MostRatedWhiskeyRow }) {
+  return (
+    <View
+      style={{
+        borderRadius: radii.lg,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        backgroundColor: colors.glassRaised,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.md,
+        flexDirection: "row",
+        alignItems: "center",
+      }}
+    >
+      <View style={{ flex: 1, paddingRight: spacing.md }}>
+        <Text
+          style={[
+            type.body,
+            {
+              fontSize: 16.5,
+              lineHeight: 21,
+              color: colors.textPrimary,
+            },
+          ]}
+        >
+          {row.whiskey_name}
+        </Text>
+
+        <Text
+          style={[
+            type.microcopyItalic,
+            {
+              marginTop: 3,
+              fontSize: 13.5,
+              lineHeight: 18,
+              color: colors.textPrimary,
+              opacity: 0.78,
+            },
+          ]}
+        >
+          {row.tasting_count} {row.tasting_count === 1 ? "rating" : "ratings"}
+          {row.avg_rating != null ? ` • Avg ${row.avg_rating.toFixed(1)}` : ""}
+        </Text>
+      </View>
+
+      <View
+        style={{
+          minWidth: 64,
+          paddingVertical: 7,
+          paddingHorizontal: 10,
+          borderRadius: 999,
+          alignItems: "center",
+          backgroundColor: colors.accentSoft,
+          borderWidth: 1,
+          borderColor: colors.glassBorderStrong,
+        }}
+      >
+        <Text
+          style={[
+            type.caption,
+            {
+              color: colors.accent,
+              letterSpacing: 0.2,
+            },
+          ]}
+        >
+          {row.tasting_count}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export default function EventPage() {
   const params = useLocalSearchParams();
   const eventId = useMemo(() => {
     return typeof params.id === "string" ? params.id : "";
   }, [params.id]);
 
-  const [loading, setLoading] = useState(true);
-  const [event, setEvent] = useState<EventHeader | null>(null);
-  const [recent, setRecent] = useState<RecentTastingRow[]>([]);
-  const [topWhiskies, setTopWhiskies] = useState<TopWhiskeyRow[]>([]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadEventPage() {
-      if (!eventId) {
-        if (mounted) setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-
-      const [{ data: eventData }, { data: recentData }, { data: topData }] =
-        await Promise.all([
-          supabase
-            .from("events")
-            .select("id, name, starts_at, ends_at")
-            .eq("id", eventId)
-            .maybeSingle(),
-          supabase
-            .from("tastings")
-            .select("id, whiskey_name, rating, created_at")
-            .eq("event_id", eventId)
-            .order("created_at", { ascending: false })
-            .limit(12),
-          supabase.rpc("event_top_whiskies", {
-            p_event_id: eventId,
-            p_limit: 10,
-          }),
-        ]);
-
-      if (!mounted) return;
-
-      setEvent((eventData as EventHeader | null) ?? null);
-      setRecent((recentData as RecentTastingRow[] | null) ?? []);
-      setTopWhiskies((topData as TopWhiskeyRow[] | null) ?? []);
-      setLoading(false);
-    }
-
-    void loadEventPage();
-
-    return () => {
-      mounted = false;
-    };
-  }, [eventId]);
-
-  const summary = useMemo(() => {
-    const tastingCount = recent.length;
-    const uniqueNames = new Set(
-      recent.map((r) => (r.whiskey_name ?? "").trim()).filter(Boolean)
-    ).size;
-
-    return {
-      tastingCount,
-      uniqueNames,
-    };
-  }, [recent]);
+  const {
+    loading,
+    event,
+    recent,
+    topWhiskies,
+    mostRatedWhiskies,
+    canViewHostAnalytics,
+    summary,
+  } = useEventPageData(eventId);
 
   if (loading) {
     return (
@@ -457,35 +464,35 @@ export default function EventPage() {
         }}
       >
         <View style={{ marginBottom: spacing.sm }}>
-         <Text
-  style={[
-    type.screenTitle,
-    {
-      fontSize: 31,
-      lineHeight: 36,
-      color: colors.textPrimary,
-      textAlign: "center",
-    },
-  ]}
->
-  {event.name}
-</Text>
+          <Text
+            style={[
+              type.screenTitle,
+              {
+                fontSize: 31,
+                lineHeight: 36,
+                color: colors.textPrimary,
+                textAlign: "center",
+              },
+            ]}
+          >
+            {event.name}
+          </Text>
 
-<Text
-  style={[
-    type.microcopyItalic,
-    {
-      marginTop: 6,
-      fontSize: 16,
-      lineHeight: 21,
-      color: colors.textPrimary,
-      opacity: 0.82,
-      textAlign: "center",
-    },
-  ]}
->
-  See what people are tasting right now.
-</Text>
+          <Text
+            style={[
+              type.microcopyItalic,
+              {
+                marginTop: 6,
+                fontSize: 16,
+                lineHeight: 21,
+                color: colors.textPrimary,
+                opacity: 0.82,
+                textAlign: "center",
+              },
+            ]}
+          >
+            See what people are tasting right now.
+          </Text>
 
           <View
             style={{
@@ -496,6 +503,51 @@ export default function EventPage() {
             }}
           />
         </View>
+
+        {canViewHostAnalytics ? (
+          <View style={{ marginBottom: spacing.sm }}>
+            <Pressable
+              onPress={() => router.push(`/event/${eventId}/host` as any)}
+              style={({ pressed }) => ({
+                borderRadius: radii.lg,
+                borderWidth: 1,
+                borderColor: colors.glassBorderStrong,
+                backgroundColor: pressed ? colors.accentSoft : colors.accentFaint,
+                paddingVertical: spacing.md,
+                paddingHorizontal: spacing.lg,
+                ...warmCardShadow,
+                opacity: pressed ? 0.96 : 1,
+              })}
+            >
+              <Text
+                style={[
+                  type.caption,
+                  {
+                    color: colors.accent,
+                    letterSpacing: 0.5,
+                    textTransform: "uppercase",
+                  },
+                ]}
+              >
+                Host Access
+              </Text>
+
+              <Text
+                style={[
+                  type.body,
+                  {
+                    marginTop: 4,
+                    fontSize: 16,
+                    lineHeight: 21,
+                    color: colors.textPrimary,
+                  },
+                ]}
+              >
+                Open Host View for event analytics →
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {recent.length > 0 ? (
           <View
@@ -600,6 +652,75 @@ export default function EventPage() {
             )}
           </SectionCard>
         </View>
+
+        {topWhiskies.length > 0 || mostRatedWhiskies.length > 0 ? (
+          <View style={{ marginBottom: spacing.sm }}>
+            <SectionCard
+              title="What People Are Trying"
+              subtitle="See what is earning the strongest reactions so far."
+            >
+              {topWhiskies.length > 0 ? (
+                <View style={{ marginBottom: mostRatedWhiskies.length > 0 ? spacing.md : 0 }}>
+                  <Text
+                    style={[
+                      type.caption,
+                      {
+                        marginBottom: spacing.sm,
+                        color: colors.accent,
+                        letterSpacing: 0.5,
+                        textTransform: "uppercase",
+                      },
+                    ]}
+                  >
+                    Highest Rated
+                  </Text>
+
+                  {topWhiskies.slice(0, 3).map((row, index) => (
+                    <View
+                      key={`highest-${row.whiskey_name}-${index}`}
+                      style={{
+                        marginBottom:
+                          index === Math.min(topWhiskies.length, 3) - 1 ? 0 : spacing.sm,
+                      }}
+                    >
+                      <TopWhiskeyRowCard row={row} />
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {mostRatedWhiskies.length > 0 ? (
+                <View>
+                  <Text
+                    style={[
+                      type.caption,
+                      {
+                        marginBottom: spacing.sm,
+                        color: colors.accent,
+                        letterSpacing: 0.5,
+                        textTransform: "uppercase",
+                      },
+                    ]}
+                  >
+                    Most Rated
+                  </Text>
+
+                  {mostRatedWhiskies.map((row, index) => (
+                    <View
+                      key={`most-rated-${row.whiskey_name}-${index}`}
+                      style={{
+                        marginBottom:
+                          index === mostRatedWhiskies.length - 1 ? 0 : spacing.sm,
+                      }}
+                    >
+                      <MostRatedWhiskeyRowCard row={row} />
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </SectionCard>
+          </View>
+        ) : null}
 
         <SectionCard
           title="Top Rated at This Event"

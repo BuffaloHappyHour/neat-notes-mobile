@@ -39,16 +39,11 @@ export function PalateClarityCard(props: Props) {
   const tastingGoal = isPending ? props.tastingGoal ?? 3 : null;
   const totalTastings = isPending ? props.totalTastings ?? 0 : props.totalTastings;
 
-  const lastPourShort =
-    daysSinceLastTasting == null
-      ? isPending && totalTastings === 0
-        ? "Not yet"
-        : "Today"
-      : daysSinceLastTasting === 0
-      ? "Today"
-      : daysSinceLastTasting === 1
-      ? "1 day ago"
-      : `${daysSinceLastTasting} days ago`;
+  const lastPourShort = formatLastPourLabel(
+    daysSinceLastTasting,
+    isPending,
+    totalTastings
+  );
 
   const shareText = buildClarityShareText({
     score,
@@ -289,6 +284,28 @@ function StatCol({ label, value }: { label: string; value: string }) {
   );
 }
 
+function formatLastPourLabel(
+  daysSinceLastTasting: number | null,
+  isPending: boolean,
+  totalTastings: number
+) {
+  if (daysSinceLastTasting == null) {
+    return isPending && totalTastings === 0 ? "Not yet" : "—";
+  }
+
+  if (daysSinceLastTasting <= 0) return "Today";
+  if (daysSinceLastTasting === 1) return "Yesterday";
+  if (daysSinceLastTasting < 7) return `${daysSinceLastTasting} days ago`;
+
+  const weeks = Math.floor(daysSinceLastTasting / 7);
+  if (daysSinceLastTasting < 30) {
+    return weeks === 1 ? "1 week ago" : `${weeks} weeks ago`;
+  }
+
+  const months = Math.floor(daysSinceLastTasting / 30);
+  return months <= 1 ? "1 month ago" : `${months} months ago`;
+}
+
 function capitalize(s: string) {
   if (!s) return s;
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -307,5 +324,5 @@ function buildClarityShareText({
     return "I’m building my Palate Clarity in Neat Notes.";
   }
 
-  return `My Palate Clarity is ${score}/100 in Neat Notes — ${statusText} with ${confidenceText.toLowerCase()} confidence.`;
+  return `My Lifetime Palate Clarity is ${score}/100 in Neat Notes — ${statusText} with ${confidenceText.toLowerCase()} confidence.`;
 }

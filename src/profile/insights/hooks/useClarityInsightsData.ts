@@ -60,17 +60,17 @@ type UserMetrics90dRow = {
   top_traits_l1: string[] | null;
   avoided_traits_l1: string[] | null;
   radar_prev_l1_pct: Record<string, number> | null;
-biggest_riser_l1: string | null;
-biggest_riser_delta: number | null;
-biggest_drop_l1: string | null;
-biggest_drop_delta: number | null;
-most_stable_l1: string | null;
-most_stable_delta: number | null;
-texture_pref: number | null;
-proof_pref: number | null;
-flavor_pref: number | null;
-preference_signal_count: number | null;
-top_category: string | null;
+  biggest_riser_l1: string | null;
+  biggest_riser_delta: number | null;
+  biggest_drop_l1: string | null;
+  biggest_drop_delta: number | null;
+  most_stable_l1: string | null;
+  most_stable_delta: number | null;
+  texture_pref: number | null;
+  proof_pref: number | null;
+  flavor_pref: number | null;
+  preference_signal_count: number | null;
+  top_category: string | null;
 };
 
 function makeDriverDetail(
@@ -158,7 +158,7 @@ export function useClarityInsightsData(): ClarityInsightsData {
       }
 
       const { data, error } = await supabase
-        .from("user_metrics_90d_v3")
+        .from("user_metrics_90d_v4")
         .select("*")
         .eq("user_id", user.id)
         .single();
@@ -185,10 +185,12 @@ export function useClarityInsightsData(): ClarityInsightsData {
         (a, b) => b[1] - a[1]
       );
 
-      const topRadarData: MiniChartDatum[] = radarEntries.slice(0, 5).map(([label, value]) => ({
-        label: prettyTrait(label),
-        value: clamp01(value),
-      }));
+      const topRadarData: MiniChartDatum[] = radarEntries
+        .slice(0, 5)
+        .map(([label, value]) => ({
+          label: prettyTrait(label),
+          value: clamp01(value),
+        }));
 
       setState({
         loading: false,
@@ -248,7 +250,7 @@ export function useClarityInsightsData(): ClarityInsightsData {
           ),
           consistency: makeDriverDetail(
             "Consistency",
-            "Consistency reflects how repeatable your recent likes and dislikes have been across flavor families.",
+            "Consistency reflects how repeatable your recent likes and dislikes have been across flavor patterns.",
             [
               { label: "Consistency score", value: `${metrics.consistency_0_100}/100` },
               { label: "Top repeated traits", value: `${topTraits.slice(0, 3).length}` },
@@ -264,7 +266,7 @@ export function useClarityInsightsData(): ClarityInsightsData {
             "What this means",
             consistencyPct >= 0.7
               ? "Your recent preferences are highly repeatable."
-              : "Your recent preferences are still shifting, which lowers consistency for now."
+              : "Your recent preferences are still taking shape, but your detailed flavor patterns are becoming clearer."
           ),
           confidence: makeDriverDetail(
             "Confidence",
@@ -289,26 +291,26 @@ export function useClarityInsightsData(): ClarityInsightsData {
           pathToDistinct: makeDriverDetail(
             "Path to Distinct",
             "This shows how your recent palate signal is building across the four core drivers.",
-           [
-  {
-    label: "Biggest rise",
-    value: metrics.biggest_riser_l1
-      ? prettyTrait(metrics.biggest_riser_l1)
-      : "—",
-  },
-  {
-    label: "Biggest drop",
-    value: metrics.biggest_drop_l1
-      ? prettyTrait(metrics.biggest_drop_l1)
-      : "—",
-  },
-  {
-    label: "Most stable",
-    value: metrics.most_stable_l1
-      ? prettyTrait(metrics.most_stable_l1)
-      : "—",
-  },
-],
+            [
+              {
+                label: "Biggest rise",
+                value: metrics.biggest_riser_l1
+                  ? prettyTrait(metrics.biggest_riser_l1)
+                  : "—",
+              },
+              {
+                label: "Biggest drop",
+                value: metrics.biggest_drop_l1
+                  ? prettyTrait(metrics.biggest_drop_l1)
+                  : "—",
+              },
+              {
+                label: "Most stable",
+                value: metrics.most_stable_l1
+                  ? prettyTrait(metrics.most_stable_l1)
+                  : "—",
+              },
+            ],
             "Overall recent clarity",
             clarityPct,
             `${metrics.palate_clarity_0_100}%`,
@@ -366,7 +368,9 @@ function bestNextMoves(metrics: UserMetrics90dRow) {
   if ((metrics.depth_0_100 ?? 0) < 60) moves.push("Get more specific");
   if ((metrics.diversity_0_100 ?? 0) < 60) moves.push("Explore new styles");
 
-  return moves.length ? moves.slice(0, 3) : ["Keep logging", "Stay consistent", "Trust the signal"];
+  return moves.length
+    ? moves.slice(0, 3)
+    : ["Keep logging", "Stay consistent", "Trust the signal"];
 }
 
 function buildCurrentRead(metrics: UserMetrics90dRow) {

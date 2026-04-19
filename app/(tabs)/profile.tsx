@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import React from "react";
+import React, { useMemo } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
 import { radii } from "../../lib/radii";
@@ -162,12 +162,27 @@ export default function ProfileTab() {
 
   const lifetimeClarity = clarityInput?.[0] ?? null;
 
- const confidenceLevel: "high" | "medium" | "low" =
-  ((lifetimeClarity as any)?.confidence_0_100 ?? 0) > 70
-    ? "high"
-    : ((lifetimeClarity as any)?.confidence_0_100 ?? 0) > 40
+  const confidenceLevel: "high" | "medium" | "low" =
+    ((lifetimeClarity as any)?.confidence_0_100 ?? 0) > 70
+      ? "high"
+      : ((lifetimeClarity as any)?.confidence_0_100 ?? 0) > 40
       ? "medium"
       : "low";
+
+  // ✅ NEW — backend-driven freshness
+  const lifetimeLastTastingAt = (lifetimeClarity as any)?.last_tasting_at ?? null;
+
+  const lifetimeDaysSinceLastTasting = useMemo(() => {
+    if (!lifetimeLastTastingAt) return null;
+
+    return Math.max(
+      0,
+      Math.floor(
+        (Date.now() - new Date(lifetimeLastTastingAt).getTime()) /
+          (1000 * 60 * 60 * 24)
+      )
+    );
+  }, [lifetimeLastTastingAt]);
 
   if (loading) {
     return (
@@ -228,13 +243,17 @@ export default function ProfileTab() {
                   tastingGoal={3}
                 />
               ) : lifetimeClarity ? (
-               <PalateClarityCard
-  clarityIndex={Number((lifetimeClarity as any)?.palate_clarity_0_100 ?? 0)}
-  tierLabel="Lifetime"
-  confidenceLevel={confidenceLevel}
-  totalTastings={Number((lifetimeClarity as any)?.tasting_count ?? 0)}
-  daysSinceLastTasting={0}
-/>
+                <PalateClarityCard
+                  clarityIndex={Number(
+                    (lifetimeClarity as any)?.palate_clarity_0_100 ?? 0
+                  )}
+                  tierLabel="Lifetime"
+                  confidenceLevel={confidenceLevel}
+                  totalTastings={Number(
+                    (lifetimeClarity as any)?.tasting_count ?? 0
+                  )}
+                  daysSinceLastTasting={lifetimeDaysSinceLastTasting} // ✅ FIXED
+                />
               ) : null}
             </View>
 
@@ -253,7 +272,13 @@ export default function ProfileTab() {
 
             <View style={{ gap: spacing.sm }}>
               <View style={{ gap: 8 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing.sm,
+                  }}
+                >
                   <View
                     style={{
                       width: 8,
@@ -263,7 +288,9 @@ export default function ProfileTab() {
                       opacity: 0.85,
                     }}
                   />
-                  <Text style={[type.sectionHeader, { fontSize: 26 }]}>Journal Snapshot</Text>
+                  <Text style={[type.sectionHeader, { fontSize: 26 }]}>
+                    Journal Snapshot
+                  </Text>
                 </View>
               </View>
 
@@ -281,7 +308,13 @@ export default function ProfileTab() {
             {hasAnyTastings ? (
               <View style={{ gap: spacing.sm }}>
                 <View style={{ gap: 8 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: spacing.sm,
+                    }}
+                  >
                     <View
                       style={{
                         width: 10,
@@ -291,10 +324,17 @@ export default function ProfileTab() {
                         opacity: 0.82,
                       }}
                     />
-                    <Text style={[type.sectionHeader, { fontSize: 28 }]}>What you drink most</Text>
+                    <Text style={[type.sectionHeader, { fontSize: 28 }]}>
+                      What you drink most
+                    </Text>
                   </View>
 
-                  <Text style={[type.caption, { color: colors.textSecondary, opacity: 0.9 }]}>
+                  <Text
+                    style={[
+                      type.caption,
+                      { color: colors.textSecondary, opacity: 0.9 },
+                    ]}
+                  >
                     Your category mix, based on logged pours.
                   </Text>
                 </View>
