@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
-import type { PurchasesPackage } from "react-native-purchases";
+import Purchases, { type PurchasesPackage } from "react-native-purchases";
 
 import { router } from "expo-router";
 import {
@@ -15,6 +15,7 @@ import {
   purchasePackage,
   restoreMyPurchases,
 } from "../../../lib/purchases";
+import { syncPremiumStatusFromRevenueCat } from "../../../lib/premiumSync";
 import { spacing } from "../../../lib/spacing";
 import { colors } from "../../../lib/theme";
 import { type } from "../../../lib/typography";
@@ -306,6 +307,9 @@ function PackageOption({
       try {
         setPackagesLoading(true);
 
+        const configured = await Purchases.isConfigured();
+        if (!configured) return;
+
         const offering = await getCurrentOffering();
         if (!active) return;
 
@@ -356,6 +360,7 @@ async function handleUnlockInsights() {
     setPurchaseLoading(true);
 
     await purchasePackage(selectedPackage); // ✅ REAL CALL
+    await syncPremiumStatusFromRevenueCat();
 
 router.replace("/insights");
 
@@ -377,6 +382,7 @@ async function handleRestorePurchases() {
     setRestoreLoading(true);
 
     const restored = await restoreMyPurchases(); // ✅ REAL CALL
+    await syncPremiumStatusFromRevenueCat();
 
 router.replace("/insights");
 

@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 
+import Purchases from "react-native-purchases";
 import { fetchMyProfile, upsertMyProfile } from "../lib/cloudProfile";
 import { supabase } from "../lib/supabase";
 
@@ -29,11 +30,17 @@ import { hapticError, hapticSuccess, invalidateHapticsCache } from "../lib/hapti
 import { withDanger, withTick, withTickError } from "../lib/hapticsPress";
 
 /* ---------- Store compliance URLs ---------- */
-
 const PRIVACY_URL = "https://buffalohappyhour.org/neat-notes-privacy/";
 
-/* ---------- UI helpers ---------- */
+/* ---------- Phone helpers ---------- */
+function formatPhoneForSupabase(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return `+${digits}`;
+}
 
+/* ---------- UI helpers ---------- */
 type InputProps = React.ComponentProps<typeof TextInput>;
 
 function ThemedInput(props: InputProps & { disabled?: boolean }) {
@@ -100,7 +107,6 @@ function Card({
         </View>
         {right ? <View style={{ paddingTop: 2 }}>{right}</View> : null}
       </View>
-
       {children}
     </View>
   );
@@ -203,7 +209,6 @@ function ToggleRow({
       }}
     >
       <Text style={[type.body, { fontWeight: "900", flex: 1 }]}>{label}</Text>
-
       <Pressable
         onPress={onToggle}
         disabled={disabled}
@@ -229,37 +234,37 @@ function ToggleRow({
 }
 
 /* ---------- Screen ---------- */
-
 export default function AccountSettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-
   const [statusLine, setStatusLine] = useState("");
-
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [email, setEmail] = useState("");
+  const [linkedPhone, setLinkedPhone] = useState("");
 
-  // Unified name = profiles.display_name (also mirrored to auth username)
   const [nameUnified, setNameUnified] = useState("");
   const [privateName, setPrivateName] = useState("");
-
   const [editingAccount, setEditingAccount] = useState(false);
   const [nameUnifiedInput, setNameUnifiedInput] = useState("");
   const [privateNameInput, setPrivateNameInput] = useState("");
 
-  // Password change
   const [editingPassword, setEditingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Haptics
   const [hapticsEnabled, setHapticsEnabledState] = useState(true);
   const [hapticsLoaded, setHapticsLoaded] = useState(false);
 
-  // ✅ Privacy: anonymous sharing + notice seen
   const [shareAnonymously, setShareAnonymously] = useState(true);
   const [shareNoticeSeen, setShareNoticeSeen] = useState(false);
   const [shareLoaded, setShareLoaded] = useState(false);
+
+  // Phone linking state
+  type PhoneStep = "idle" | "enterPhone" | "enterOtp";
+  const [phoneStep, setPhoneStep] = useState<PhoneStep>("idle");
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneOtp, setPhoneOtp] = useState("");
+  const [pendingPhone, setPendingPhone] = useState("");
 
   const passwordValid =
     newPassword.trim().length >= 8 && newPassword.trim() === confirmPassword.trim();
@@ -285,16 +290,14 @@ export default function AccountSettingsScreen() {
     if (!session?.user) {
       setIsSignedIn(false);
       setEmail("");
+      setLinkedPhone("");
       setNameUnified("");
       setPrivateName("");
       setHapticsEnabledState(true);
       setHapticsLoaded(true);
-
-      // defaults (opt-in by default)
       setShareAnonymously(true);
       setShareNoticeSeen(false);
       setShareLoaded(true);
-
       setLoading(false);
       router.replace("/(tabs)/profile");
       return;
@@ -302,8 +305,8 @@ export default function AccountSettingsScreen() {
 
     setIsSignedIn(true);
     setEmail(session.user.email ?? "");
+    setLinkedPhone(session.user.phone ?? "");
 
-    // Fallback name from auth metadata if profile is empty
     const meta: any = session.user.user_metadata ?? {};
     const metaUsername = String(meta.username ?? meta.user_name ?? meta.name ?? "").trim();
     const emailFallback = session.user.email ? String(session.user.email).split("@")[0] : "";
@@ -311,23 +314,18 @@ export default function AccountSettingsScreen() {
 
     try {
       const p: any = await fetchMyProfile();
-
       const unified = String(p?.display_name ?? "").trim() || baseNameFallback;
       const pn = String(p?.first_name ?? "").trim();
-
       setNameUnified(unified);
       setPrivateName(pn);
-
       setNameUnifiedInput(unified);
       setPrivateNameInput(pn);
 
       const enabled = typeof p?.haptics_enabled === "boolean" ? p.haptics_enabled : true;
       setHapticsEnabledState(enabled);
 
-      // ✅ anonymous sharing (opt-in default)
       const share = typeof p?.share_anonymously === "boolean" ? p.share_anonymously : true;
       const seen = typeof p?.share_notice_seen === "boolean" ? p.share_notice_seen : false;
-
       setShareAnonymously(share);
       setShareNoticeSeen(seen);
       setShareLoaded(true);
@@ -335,8 +333,6 @@ export default function AccountSettingsScreen() {
       setNameUnified(baseNameFallback);
       setNameUnifiedInput(baseNameFallback);
       setHapticsEnabledState(true);
-
-      // defaults
       setShareAnonymously(true);
       setShareNoticeSeen(false);
       setShareLoaded(true);
@@ -349,6 +345,76 @@ export default function AccountSettingsScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  /* ---- Phone linking: send OTP ---- */
+  const sendPhoneLinkOtp = useCallback(async () => {
+    if (busy) return;
+    const formatted = formatPhoneForSupabase(phoneInput);
+
+    if (formatted.length < 10) {
+      return Alert.alert("Invalid number", "Please enter a valid US phone number.");
+    }
+
+    setBusy(true);
+
+    const { error } = await supabase.auth.updateUser({ phone: formatted });
+
+    setBusy(false);
+
+    if (error) {
+      const code = (error as any).code ?? "";
+      const msg = error.message?.toLowerCase() ?? "";
+      if (code === "23505" || msg.includes("duplicate") || msg.includes("unique")) {
+        Alert.alert(
+          "Phone Already Linked",
+          "This phone number is already associated with another account. Sign in with your email instead."
+        );
+        setPhoneStep("idle");
+        setPhoneInput("");
+        return;
+      }
+      return Alert.alert("Error", error.message);
+    }
+
+    setPendingPhone(formatted);
+    setPhoneOtp("");
+    setPhoneStep("enterOtp");
+  }, [busy, phoneInput]);
+
+  /* ---- Phone linking: verify OTP ---- */
+  const verifyPhoneLinkOtp = useCallback(async () => {
+    if (busy) return;
+
+    if (phoneOtp.length !== 6) {
+      return Alert.alert("Invalid code", "Please enter the 6-digit code we sent you.");
+    }
+
+    setBusy(true);
+
+    const { error } = await supabase.auth.verifyOtp({
+      phone: pendingPhone,
+      token: phoneOtp,
+      type: "phone_change",
+    });
+
+    setBusy(false);
+
+    if (error) {
+      return Alert.alert(
+        "Incorrect code",
+        "That code didn't match. Please check and try again."
+      );
+    }
+
+    setLinkedPhone(pendingPhone);
+    setPhoneStep("idle");
+    setPhoneInput("");
+    setPhoneOtp("");
+    setPendingPhone("");
+    setStatusLine("Phone number linked.");
+    setTimeout(() => setStatusLine(""), 1500);
+    await hapticSuccess();
+  }, [busy, phoneOtp, pendingPhone]);
 
   const startEditAccount = useCallback(
     withTick(() => {
@@ -387,25 +453,17 @@ export default function AccountSettingsScreen() {
           return;
         }
 
-        await upsertMyProfile({
-          display_name: unified,
-          first_name: pn,
-        });
+        await upsertMyProfile({ display_name: unified, first_name: pn });
 
-        // mirror into auth metadata so any metadata reads stay consistent
         try {
           await supabase.auth.updateUser({ data: { username: unified, name: unified } });
-        } catch {
-          // non-blocking
-        }
+        } catch {}
 
         setNameUnified(unified);
         setPrivateName(pn);
-
         setEditingAccount(false);
         setStatusLine("Saved.");
         setTimeout(() => setStatusLine(""), 900);
-
         await hapticSuccess();
       } catch (e: any) {
         setStatusLine("");
@@ -443,10 +501,8 @@ export default function AccountSettingsScreen() {
   const submitPasswordChange = useCallback(
     withTickError(async () => {
       if (busy) return;
-
       const pw = newPassword.trim();
       const pw2 = confirmPassword.trim();
-
       if (pw.length < 8) return Alert.alert("Password", "Please use at least 8 characters.");
       if (pw !== pw2) return Alert.alert("Password", "Passwords do not match.");
 
@@ -454,7 +510,6 @@ export default function AccountSettingsScreen() {
       setStatusLine("Updating password…");
 
       const { error } = await supabase.auth.updateUser({ password: pw });
-
       setBusy(false);
 
       if (error) {
@@ -479,18 +534,15 @@ export default function AccountSettingsScreen() {
       if (busy) return;
       setBusy(true);
       setStatusLine("Signing out…");
-
+      await Purchases.logOut();
       const { error } = await supabase.auth.signOut();
-
       setBusy(false);
-
       if (error) {
         setStatusLine("");
         Alert.alert("Sign out failed", error.message);
         await hapticError();
         return;
       }
-
       setStatusLine("");
       router.replace("/(tabs)/profile");
     }),
@@ -499,11 +551,9 @@ export default function AccountSettingsScreen() {
 
   const deleteAllTastings = useCallback(() => {
     if (busy) return;
-
     supabase.auth.getSession().then(({ data }) => {
       const session = data.session;
       if (!session?.user) return;
-
       Alert.alert(
         "Delete all pours?",
         "This is permanent.\n\nAll of your tasting records for this account will be deleted and cannot be recovered.",
@@ -517,22 +567,19 @@ export default function AccountSettingsScreen() {
                 try {
                   setBusy(true);
                   setStatusLine("Deleting…");
-
                   const { error } = await supabase
                     .from("tastings")
                     .delete()
                     .eq("user_id", session.user.id);
-
                   if (error) throw new Error(error.message);
-
                   setStatusLine("Deleted.");
                   setTimeout(() => setStatusLine(""), 1200);
                   await hapticSuccess();
                 } catch {
                   setStatusLine("");
                   Alert.alert(
-                    "Couldn’t delete yet",
-                    "Your security rules may not allow deletes yet. We can enable this when you’re ready."
+                    "Couldn't delete yet",
+                    "Your security rules may not allow deletes yet. We can enable this when you're ready."
                   );
                   await hapticError();
                 } finally {
@@ -548,27 +595,19 @@ export default function AccountSettingsScreen() {
   const toggleHaptics = useCallback(
     withTickError(async () => {
       if (!hapticsLoaded || busy) return;
-
       const { data } = await supabase.auth.getSession();
-      const session = data.session;
-      const user = session?.user;
+      const user = data.session?.user;
       if (!user?.id) return;
-
       const next = !hapticsEnabled;
-
       setBusy(true);
       try {
         const { error } = await supabase
           .from("profiles")
           .update({ haptics_enabled: next })
           .eq("id", user.id);
-
         if (error) throw new Error(error.message);
-
         setHapticsEnabledState(next);
         invalidateHapticsCache();
-
-        // no extra tick here; withTick already handled the press feedback
       } catch (e: any) {
         Alert.alert("Haptics", String(e?.message ?? e));
         await hapticError();
@@ -579,30 +618,19 @@ export default function AccountSettingsScreen() {
     [hapticsLoaded, busy, hapticsEnabled]
   );
 
-  // ✅ Privacy toggle: anonymous sharing
   const toggleShareAnonymously = useCallback(
     withTickError(async () => {
       if (!shareLoaded || busy) return;
-
       const { data } = await supabase.auth.getSession();
-      const session = data.session;
-      const user = session?.user;
+      const user = data.session?.user;
       if (!user?.id) return;
-
       const next = !shareAnonymously;
-
       setBusy(true);
       try {
-        const payload: any = {
-          share_anonymously: next,
-        };
-
-        // Any interaction counts as "notice seen"
+        const payload: any = { share_anonymously: next };
         if (!shareNoticeSeen) payload.share_notice_seen = true;
-
         const { error } = await supabase.from("profiles").update(payload).eq("id", user.id);
         if (error) throw new Error(error.message);
-
         setShareAnonymously(next);
         if (!shareNoticeSeen) setShareNoticeSeen(true);
       } catch (e: any) {
@@ -615,28 +643,21 @@ export default function AccountSettingsScreen() {
     [shareLoaded, busy, shareAnonymously, shareNoticeSeen]
   );
 
-  // ✅ Mark notice seen
   const markShareNoticeSeen = useCallback(
     withTickError(async () => {
       if (busy) return;
-
       const { data } = await supabase.auth.getSession();
-      const session = data.session;
-      const user = session?.user;
+      const user = data.session?.user;
       if (!user?.id) return;
-
       setBusy(true);
       try {
         const { error } = await supabase
           .from("profiles")
           .update({ share_notice_seen: true })
           .eq("id", user.id);
-
         if (error) throw new Error(error.message);
-
         setShareNoticeSeen(true);
-      } catch (e: any) {
-        // non-blocking: still hide locally if they tapped
+      } catch {
         setShareNoticeSeen(true);
       } finally {
         setBusy(false);
@@ -646,7 +667,9 @@ export default function AccountSettingsScreen() {
   );
 
   const signedInPill = useMemo(() => {
-    return isSignedIn ? <Pill label="Signed in" tone="good" /> : <Pill label="Signed out" tone="muted" />;
+    return isSignedIn
+      ? <Pill label="Signed in" tone="good" />
+      : <Pill label="Signed out" tone="muted" />;
   }, [isSignedIn]);
 
   if (loading) {
@@ -688,8 +711,11 @@ export default function AccountSettingsScreen() {
           paddingBottom: spacing.xl * 3,
         }}
       >
-        {statusLine ? <Text style={[type.microcopyItalic, { opacity: 0.9 }]}>{statusLine}</Text> : null}
+        {statusLine ? (
+          <Text style={[type.microcopyItalic, { opacity: 0.9 }]}>{statusLine}</Text>
+        ) : null}
 
+        {/* ── Account Management ── */}
         <Card
           title="Account Management"
           subtitle="Everything in one place. Edit intentionally."
@@ -711,7 +737,6 @@ export default function AccountSettingsScreen() {
                   tone="secondary"
                   icon={<Ionicons name="create-outline" size={18} color={colors.textPrimary} />}
                 />
-
                 {!editingPassword ? (
                   <ThemedButton
                     label="Change password"
@@ -733,7 +758,6 @@ export default function AccountSettingsScreen() {
                 autoCapitalize="words"
                 disabled={busy}
               />
-
               <Text style={[type.body, { fontWeight: "900" }]}>Private name (optional)</Text>
               <ThemedInput
                 placeholder="e.g., Derek"
@@ -742,7 +766,6 @@ export default function AccountSettingsScreen() {
                 autoCapitalize="words"
                 disabled={busy}
               />
-
               <View style={{ flexDirection: "row", gap: spacing.md, marginTop: spacing.sm }}>
                 <View style={{ flex: 1 }}>
                   <ThemedButton label="Cancel" onPress={cancelEditAccount} disabled={busy} tone="secondary" />
@@ -757,10 +780,8 @@ export default function AccountSettingsScreen() {
           {editingPassword ? (
             <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
               <View style={{ height: 1, backgroundColor: colors.divider, opacity: 0.9 }} />
-
               <Text style={[type.sectionHeader, { fontSize: 18 }]}>Password</Text>
               <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>Minimum 8 characters.</Text>
-
               <ThemedInput
                 placeholder="New password"
                 value={newPassword}
@@ -777,7 +798,6 @@ export default function AccountSettingsScreen() {
                 autoCapitalize="none"
                 disabled={busy}
               />
-
               <View style={{ flexDirection: "row", gap: spacing.md }}>
                 <View style={{ flex: 1 }}>
                   <ThemedButton label="Cancel" onPress={cancelChangePassword} disabled={busy} tone="secondary" />
@@ -795,6 +815,114 @@ export default function AccountSettingsScreen() {
           ) : null}
         </Card>
 
+        {/* ── Phone Number ── */}
+        <Card
+          title="Phone Number"
+          subtitle={
+            linkedPhone
+              ? "Your phone number is linked. You can sign in with it anytime."
+              : "Link your phone for faster sign-in — no password needed."
+          }
+          right={
+            linkedPhone
+              ? <Pill label="Linked" tone="good" />
+              : <Pill label="Not linked" tone="muted" />
+          }
+        >
+          {linkedPhone ? (
+            <InfoRow
+              label="Linked number"
+              value={linkedPhone.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3")}
+            />
+          ) : phoneStep === "idle" ? (
+            <ThemedButton
+              label="Add Phone Number"
+              onPress={() => {
+                setPhoneInput("");
+                setPhoneStep("enterPhone");
+              }}
+              disabled={busy}
+              tone="secondary"
+              icon={<Ionicons name="phone-portrait-outline" size={18} color={colors.textPrimary} />}
+            />
+          ) : phoneStep === "enterPhone" ? (
+            <View style={{ gap: spacing.md }}>
+              <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
+                Enter your US phone number. We'll send a verification code.
+              </Text>
+              <ThemedInput
+                placeholder="Phone number"
+                value={phoneInput}
+                onChangeText={setPhoneInput}
+                keyboardType="phone-pad"
+                returnKeyType="done"
+                onSubmitEditing={sendPhoneLinkOtp}
+                disabled={busy}
+                autoFocus
+              />
+              <View style={{ flexDirection: "row", gap: spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <ThemedButton
+                    label="Cancel"
+                    onPress={() => {
+                      setPhoneStep("idle");
+                      setPhoneInput("");
+                    }}
+                    disabled={busy}
+                    tone="secondary"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <ThemedButton
+                    label={busy ? "Sending…" : "Send Code"}
+                    onPress={sendPhoneLinkOtp}
+                    disabled={busy}
+                    tone="primary"
+                  />
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={{ gap: spacing.md }}>
+              <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
+                Enter the 6-digit code sent to {pendingPhone}.
+              </Text>
+              <ThemedInput
+                placeholder="6-digit code"
+                value={phoneOtp}
+                onChangeText={(v) => setPhoneOtp(v.replace(/\D/g, "").slice(0, 6))}
+                keyboardType="number-pad"
+                returnKeyType="done"
+                onSubmitEditing={verifyPhoneLinkOtp}
+                disabled={busy}
+                autoFocus
+              />
+              <View style={{ flexDirection: "row", gap: spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <ThemedButton
+                    label="Back"
+                    onPress={() => {
+                      setPhoneStep("enterPhone");
+                      setPhoneOtp("");
+                    }}
+                    disabled={busy}
+                    tone="secondary"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <ThemedButton
+                    label={busy ? "Verifying…" : "Verify Code"}
+                    onPress={verifyPhoneLinkOtp}
+                    disabled={busy || phoneOtp.length !== 6}
+                    tone={phoneOtp.length === 6 ? "primary" : "secondary"}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
+        </Card>
+
+        {/* ── Haptics ── */}
         <Card title="Haptics" subtitle="Intentional feedback for key actions. Toggle anytime.">
           <ToggleRow
             label="Intentional touch vibrations"
@@ -803,10 +931,13 @@ export default function AccountSettingsScreen() {
             disabled={busy || !hapticsLoaded}
           />
           {!hapticsEnabled ? (
-            <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>Vibrations are off — saves won’t buzz.</Text>
+            <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
+              Vibrations are off — saves won't buzz.
+            </Text>
           ) : null}
         </Card>
 
+        {/* ── Privacy & Data ── */}
         <Card title="Privacy & Data" subtitle="Control whether your tastings contribute to community insights.">
           {!shareNoticeSeen ? (
             <View
@@ -821,10 +952,9 @@ export default function AccountSettingsScreen() {
             >
               <Text style={[type.body, { fontWeight: "900" }]}>Anonymous community sharing</Text>
               <Text style={[type.microcopyItalic, { opacity: 0.82, lineHeight: 20 }]}>
-                When enabled, your rating, tasting notes, dislikes, and the review date may be used to build community
-                averages and trending insights. Your identity is never shown.
+                When enabled, your rating, tasting notes, dislikes, and the review date may be used
+                to build community averages and trending insights. Your identity is never shown.
               </Text>
-
               <ThemedButton
                 label="Got it"
                 onPress={markShareNoticeSeen}
@@ -843,7 +973,7 @@ export default function AccountSettingsScreen() {
           />
 
           <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
-            If turned off, your future tastings won’t be included in community stats.
+            If turned off, your future tastings won't be included in community stats.
           </Text>
 
           <View style={{ height: 1, backgroundColor: colors.divider, opacity: 0.9 }} />
@@ -870,6 +1000,7 @@ export default function AccountSettingsScreen() {
           </Text>
         </Card>
 
+        {/* ── Application Feedback ── */}
         <Card title="Application Feedback" subtitle="Help shape Neat Notes. Report bugs or share ideas.">
           <ThemedButton
             label="Submit Feedback"
@@ -877,11 +1008,9 @@ export default function AccountSettingsScreen() {
               try {
                 const { data } = await supabase.auth.getSession();
                 const userId = data.session?.user?.id ?? "not-signed-in";
-
                 const appVersion = Constants.expoConfig?.version ?? "unknown";
                 const platform = Platform.OS;
                 const timestamp = new Date().toISOString();
-
                 const subject = encodeURIComponent("Neat Notes Application Feedback");
                 const body = encodeURIComponent(
 `Please describe the issue or feedback below:
@@ -896,9 +1025,7 @@ Timestamp: ${timestamp}
 Additional Notes:
 `
                 );
-
                 const mailtoUrl = `mailto:contact@buffalohappyhour.com?subject=${subject}&body=${body}`;
-
                 await Linking.openURL(mailtoUrl);
               } catch {
                 Alert.alert("Error", "Unable to open email client.");
@@ -909,6 +1036,7 @@ Additional Notes:
           />
         </Card>
 
+        {/* ── Danger Zone ── */}
         <Card title="Danger Zone" subtitle="Irreversible actions. Pour carefully.">
           <ThemedButton
             label={busy ? "Working…" : "Delete all pours"}
@@ -917,7 +1045,6 @@ Additional Notes:
             tone="danger"
             icon={<Ionicons name="trash-outline" size={18} color={colors.textPrimary} />}
           />
-
           <ThemedButton
             label={busy ? "Working…" : "Sign Out"}
             onPress={signOut}

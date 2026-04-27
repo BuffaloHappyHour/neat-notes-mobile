@@ -22,9 +22,7 @@ import {
 import { colors } from "../lib/theme";
 
 export default function RootLayout() {
-    useEffect(() => {
-    let mounted = true;
-
+  useEffect(() => {
     async function setupRevenueCat() {
       const apiKey =
         Platform.OS === "android"
@@ -32,31 +30,31 @@ export default function RootLayout() {
           : process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY;
 
       if (!apiKey) {
-        throw new Error("RevenueCat API key is missing for this platform.");
+        console.error("RevenueCat API key is missing for this platform.");
+        return;
       }
 
-if (!Purchases.isConfigured()) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+      // ✅ Await isConfigured() — it returns a Promise in newer RC SDK versions
+      const alreadyConfigured = await Purchases.isConfigured();
+      if (alreadyConfigured) return;
 
-  if (error) {
-    throw new Error(error.message);
-  }
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
 
-  Purchases.configure({
-    apiKey,
-    appUserID: session?.user?.id,
-  });
-}
+      if (error) {
+        console.error("Supabase session error during RC setup:", error.message);
+        // Still configure without a user ID — RC works anonymously
+      }
+
+      Purchases.configure({
+        apiKey,
+        appUserID: session?.user?.id ?? null,
+      });
     }
 
     setupRevenueCat();
-
-    return () => {
-      mounted = false;
-    };
   }, []);
 
   useCormorantFonts({
