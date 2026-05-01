@@ -210,10 +210,6 @@ function formatPhoneForSupabase(raw: string): string {
 type Mode =
   | "signin"
   | "signup"
-  | "signupVerifyChoice"
-  | "signupPhoneInput"
-  | "signupOtpEntry"
-  | "signupName"
   | "signedIn"
   | "phoneSignin"
   | "otpEntry";
@@ -228,9 +224,7 @@ export default function SignInScreen() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [nameInput, setNameInput] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [justSignedUpEmail, setJustSignedUpEmail] = useState<string>("");
   const [signupEmail, setSignupEmail] = useState<string>("");
 
   // Phone auth state
@@ -238,17 +232,8 @@ export default function SignInScreen() {
   const [otp, setOtp] = useState("");
   const [pendingPhone, setPendingPhone] = useState("");
 
-  // Holds the email account's user id during SMS signup verification
-  const [pendingUserId, setPendingUserId] = useState<string>("");
-
   const titleText = useMemo(() => {
-    if (
-      mode === "signup" ||
-      mode === "signupVerifyChoice" ||
-      mode === "signupPhoneInput" ||
-      mode === "signupOtpEntry" ||
-      mode === "signupName"
-    )
+    if (mode === "signup")
       return "Create Account";
     if (mode === "signedIn") return "Account";
     if (mode === "phoneSignin") return "Sign In";
@@ -265,7 +250,6 @@ export default function SignInScreen() {
   };
 
   async function finishSignIn(userId: string) {
-    await Purchases.logIn(userId);
     await syncPremiumStatusFromRevenueCat();
     await loadSessionOnce();
     router.replace("/(tabs)/home");
@@ -368,77 +352,6 @@ export default function SignInScreen() {
     }
   };
 
-  /* ---- Signup SMS: send OTP ---- */
-  const sendSignupOtp = async () => {
-    if (busy) return;
-    const formatted = formatPhoneForSupabase(phone);
-
-    if (formatted.length < 10) {
-      return Alert.alert("Invalid number", "Please enter a valid US phone number.");
-    }
-
-    setBusy(true);
-
-    const { error } = await supabase.auth.signInWithOtp({ phone: formatted });
-
-    setBusy(false);
-
-    if (error) {
-      return Alert.alert("Error", error.message);
-    }
-
-    setPendingPhone(formatted);
-    setOtp("");
-    setMode("signupOtpEntry");
-  };
-
-  /* ---- Signup SMS: verify OTP, link phone, go to name screen ---- */
-  const verifySignupOtp = async () => {
-    if (busy) return;
-
-    if (otp.length !== 6) {
-      return Alert.alert("Invalid code", "Please enter the 6-digit code we sent you.");
-    }
-
-    setBusy(true);
-
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone: pendingPhone,
-      token: otp,
-      type: "sms",
-    });
-
-    setBusy(false);
-
-    if (error) {
-      return Alert.alert(
-        "Incorrect code",
-        "That code didn't match. Please check and try again, or go back to resend."
-      );
-    }
-
-    const userId = data.session?.user?.id ?? pendingUserId;
-    if (userId) {
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ phone: pendingPhone })
-        .eq("id", userId);
-
-      if (updateError) {
-        if ((updateError as any).code === "23505") {
-          Alert.alert(
-            "Phone already in use",
-            "This phone number is already linked to another account. Please sign in with email instead."
-          );
-          setMode("signin");
-          return;
-        }
-      }
-    }
-
-    setMode("signupName");
-  };
-
   /* ---- Email sign in ---- */
   const signIn = async () => {
     if (busy) return;
@@ -484,7 +397,7 @@ export default function SignInScreen() {
     }
 
     setPassword("");
-    setJustSignedUpEmail("");
+    setSignupEmail("");
 
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user?.id) {
@@ -530,22 +443,8 @@ export default function SignInScreen() {
       return Alert.alert("Create account failed", error.message);
     }
 
-    const userId = data.session?.user?.id ?? data.user?.id ?? "";
-    setPendingUserId(userId);
-    setJustSignedUpEmail(em);
     setSignupEmail(em);
-    setMode("signupVerifyChoice");
-  };
-
-  /* ---- After name screen: finish sign-in if session exists ---- */
-  const continueAfterName = async () => {
-    const { data } = await supabase.auth.getSession();
-    if (data.session?.user?.id) {
-      await finishSignIn(data.session.user.id);
-    } else {
-      setMode("signin");
-      Alert.alert("Almost there", "Once you confirm your email, sign in and we'll apply your name.");
-    }
+    setMode("signin");
   };
 
   const onForgotPassword = async () => {
@@ -569,17 +468,13 @@ export default function SignInScreen() {
   };
 
   const goToCreateAccount = () => {
-    setJustSignedUpEmail("");
     setSignupEmail("");
-    setNameInput("");
     setShowPassword(false);
     setMode("signup");
   };
 
   const goToSignIn = () => {
-    setJustSignedUpEmail("");
     setSignupEmail("");
-    setNameInput("");
     setShowPassword(false);
     setMode("signin");
   };
@@ -693,164 +588,9 @@ export default function SignInScreen() {
             </Pressable>
           </Card>
 
-        /* ── Signup OTP Entry ── */
-        ) : mode === "signupOtpEntry" ? (
-          <Card
-            title="Check your texts"
-            subtitle={`We sent a 6-digit code to ${pendingPhone}. Enter it below.`}
-          >
-            <ThemedInput
-              placeholder="6-digit code"
-              value={otp}
-              onChangeText={(v) => setOtp(v.replace(/\D/g, "").slice(0, 6))}
-              keyboardType="number-pad"
-              returnKeyType="done"
-              onSubmitEditing={verifySignupOtp}
-              autoFocus
-            />
-
-            <ThemedButton
-              label={busy ? "Verifying…" : "Verify Code"}
-              onPress={verifySignupOtp}
-              disabled={busy || otp.length !== 6}
-              tone="primary"
-            />
-
-            <Pressable
-              onPress={() => {
-                setOtp("");
-                setMode("signupPhoneInput");
-              }}
-              style={({ pressed }) => ({
-                alignSelf: "center",
-                opacity: pressed ? 0.7 : 1,
-                paddingVertical: 6,
-              })}
-            >
-              <Text style={[type.microcopyItalic, { color: colors.accent }]}>
-                Go back / resend code
-              </Text>
-            </Pressable>
-          </Card>
-
-        /* ── Signup Phone Input ── */
-        ) : mode === "signupPhoneInput" ? (
-          <Card
-            title="Verify with SMS"
-            subtitle="Enter your phone number. We'll text you a 6-digit code to verify your account."
-          >
-            <ThemedInput
-              placeholder="Phone number"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              returnKeyType="done"
-              onSubmitEditing={sendSignupOtp}
-              autoFocus
-            />
-
-            <ThemedButton
-              label={busy ? "Sending…" : "Send Code"}
-              onPress={sendSignupOtp}
-              disabled={busy}
-              tone="primary"
-            />
-
-            <Pressable
-              onPress={() => setMode("signupVerifyChoice")}
-              style={({ pressed }) => ({
-                alignSelf: "center",
-                opacity: pressed ? 0.7 : 1,
-                paddingVertical: 6,
-              })}
-            >
-              <Text style={[type.microcopyItalic, { color: colors.accent }]}>
-                Go back
-              </Text>
-            </Pressable>
-          </Card>
-
-        /* ── Signup: choose verification method ── */
-        ) : mode === "signupVerifyChoice" ? (
-          <Card
-            title="Verify Your Account"
-            subtitle={`Account created for ${signupEmail}. How would you like to verify?`}
-          >
-            <ThemedButton
-              label="Send Email Confirmation"
-              onPress={() => {
-                Alert.alert(
-                  "Check your email",
-                  "We sent a confirmation email. Verify your address, then return and sign in."
-                );
-                setMode("signin");
-              }}
-              disabled={busy}
-              tone="primary"
-            />
-
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing.sm,
-                paddingVertical: spacing.xs,
-              }}
-            >
-              <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
-              <Text style={[type.microcopyItalic, { color: colors.textSecondary }]}>
-                or
-              </Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
-            </View>
-
-            <ThemedButton
-              label="Verify with SMS"
-              onPress={() => {
-                setPhone("");
-                setMode("signupPhoneInput");
-              }}
-              disabled={busy}
-              tone="secondary"
-            />
-          </Card>
-
-        /* ── Signup Name (optional, after SMS verification) ── */
-        ) : mode === "signupName" ? (
-          <Card
-            title="Optional"
-            subtitle={
-              signupEmail
-                ? `Add a name for personalization (email: ${signupEmail}).`
-                : "Add a name for personalization."
-            }
-          >
-            <ThemedInput
-              placeholder="Name (optional)"
-              value={nameInput}
-              onChangeText={setNameInput}
-              autoCapitalize="words"
-              returnKeyType="done"
-            />
-
-            <ThemedButton
-              label={busy ? "Working…" : "Continue"}
-              onPress={continueAfterName}
-              disabled={busy}
-              tone="primary"
-            />
-
-            <ThemedButton
-              label="Skip"
-              onPress={continueAfterName}
-              disabled={busy}
-              tone="secondary"
-            />
-          </Card>
-
         /* ── Email Sign Up ── */
         ) : mode === "signup" ? (
-          <Card title="Create Account" subtitle="One tap. Then choose how to verify.">
+          <Card title="Create Account" subtitle="Create your account. We'll send a confirmation email to verify.">
             <ThemedInput
               placeholder="Email"
               value={email}
@@ -883,11 +623,6 @@ export default function SignInScreen() {
               tone="secondary"
             />
 
-            {justSignedUpEmail ? (
-              <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
-                Confirmation sent to {justSignedUpEmail}.
-              </Text>
-            ) : null}
           </Card>
 
         /* ── Phone Sign In ── */
@@ -947,6 +682,12 @@ export default function SignInScreen() {
               returnKeyType="done"
               onSubmitEditing={signIn}
             />
+
+            {signupEmail ? (
+              <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.9 }]}>
+                Check your email to confirm your account before signing in.
+              </Text>
+            ) : null}
 
             <ThemedButton
               label={busy ? "Working…" : "Sign In"}
