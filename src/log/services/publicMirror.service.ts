@@ -68,7 +68,6 @@ export async function upsertPublicMirror(params: {
   flavorIntensity: number | null;
   flavorTags: string[] | null;
   dislikeTags: string[] | null;
-  personalNotes: string | null;
 
   // v2 refined nodes
   selectedNodeIds: string[];
@@ -88,7 +87,6 @@ export async function upsertPublicMirror(params: {
     flavorIntensity,
     flavorTags,
     dislikeTags,
-    personalNotes,
     selectedNodeIds,
     sentimentById,
   } = params;
@@ -128,7 +126,6 @@ export async function upsertPublicMirror(params: {
         flavor_intensity: flavorIntensity,
         flavor_tags: flavorTags,
         dislike_tags: dislikeTags,
-        personal_notes: personalNotes,
       })
       .eq("id", publicTastingId);
 
@@ -145,7 +142,6 @@ export async function upsertPublicMirror(params: {
         flavor_intensity: flavorIntensity,
         flavor_tags: flavorTags,
         dislike_tags: dislikeTags,
-        personal_notes: personalNotes,
         created_at: createdAt,
       })
       .select("id")

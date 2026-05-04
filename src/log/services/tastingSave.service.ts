@@ -321,7 +321,6 @@ const activeEventId = await getActiveEventId();
       flavorIntensity,
       flavorTags: mergedFlavorTags.length ? mergedFlavorTags : null,
       dislikeTags: null,
-      personalNotes: finalPersonalNotes,
       selectedNodeIds,
     });
   };
