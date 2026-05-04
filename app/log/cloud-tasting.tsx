@@ -242,6 +242,7 @@ export default function CloudTastingScreen() {
     whiskeyName?: string | string[];
     whiskeyId?: string | string[];
     lockName?: string | string[];
+    templateTastingId?: string | string[];
   }>();
 
   const tastingId = (asString(params.tastingId) ?? "").trim();
@@ -251,10 +252,14 @@ export default function CloudTastingScreen() {
   const lockNameParam = (asString(params.lockName) ?? "0").trim();
   const lockName = lockNameParam === "1";
 
+  const templateTastingIdRaw = (asString(params.templateTastingId) ?? "").trim();
+  const templateTastingId = isUuid(templateTastingIdRaw) ? templateTastingIdRaw : "";
+
   const isExisting = !!tastingId;
+  const hasTemplate = !isExisting && !!templateTastingId;
 
   const postSaveMeta = usePostSaveMetadata();
-  const [loading, setLoading] = useState(isExisting);
+  const [loading, setLoading] = useState(isExisting || hasTemplate);
   const [saving, setSaving] = useState(false);
   const [locked, setLocked] = useState(isExisting);
   const [sentimentById, setSentimentById] = useState<
@@ -507,6 +512,53 @@ export default function CloudTastingScreen() {
       alive = false;
     };
   }, [isExisting, tastingId]);
+
+  // ====== SECTION: Load template tasting (Log Again — Use Previous Ratings) ======
+
+  useEffect(() => {
+    if (!hasTemplate) return;
+
+    let alive = true;
+
+    async function run() {
+      setLoading(true);
+      try {
+        const loaded = await loadTastingById(templateTastingId);
+        if (!loaded || !alive) return;
+
+        setName(loaded.whiskeyName);
+        setWhiskeyId(loaded.whiskeyId);
+        setRating(loaded.rating);
+        setTextureLevel(loaded.textureLevel);
+        setProofIntensity(loaded.proofIntensity);
+        setFlavorIntensity(loaded.flavorIntensity);
+        setNose(loaded.noseReaction as any);
+        setTaste(loaded.tasteReaction as any);
+        setFlavorTags(loaded.flavorTags);
+        setPersonalNotes(loaded.personalNotes);
+        setSourceType(loaded.sourceType);
+        setBarName(loaded.barName);
+
+        const [sel, savedSentiments] = await Promise.all([
+          loadTastingFlavorNodes(templateTastingId),
+          loadTastingFlavorSentiments(templateTastingId),
+        ]);
+        if (!alive) return;
+        setSelectedNodeIds(sel);
+        setSentimentById(savedSentiments);
+      } catch (e: any) {
+        if (!alive) return;
+        Alert.alert("Couldn't load template", String(e?.message ?? e));
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+
+    void run();
+    return () => {
+      alive = false;
+    };
+  }, [hasTemplate, templateTastingId]);
 
   // ====== SECTION: Data Fetching (whiskey meta) ======
 

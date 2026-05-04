@@ -3,6 +3,7 @@ import { router, Stack } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -93,6 +94,14 @@ export default function AllTastingsScreen() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [activeRow, setActiveRow] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const sameWhiskeyCount = useMemo(() => {
+    if (!activeRow?.whiskey_name) return 0;
+    const needle = activeRow.whiskey_name.trim().toLowerCase();
+    return rows.filter(
+      (r) => (r.whiskey_name ?? "").trim().toLowerCase() === needle
+    ).length;
+  }, [activeRow, rows]);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = !!opts?.silent;
@@ -590,6 +599,52 @@ export default function AllTastingsScreen() {
                     {deleting ? "Deleting…" : "Delete"}
                   </Text>
                 </Pressable>
+
+                {sameWhiskeyCount >= 2 ? (
+                  <Pressable
+                    onPress={() => {
+                      if (!activeRow) return;
+                      const whiskeyLabel =
+                        (activeRow.whiskey_name ?? "this whiskey").trim() ||
+                        "this whiskey";
+                      closeActions();
+                      Alert.alert(
+                        "Log Again",
+                        `Start a new tasting for ${whiskeyLabel}?`,
+                        [
+                          {
+                            text: "Use Previous Ratings",
+                            onPress: () =>
+                              router.push(
+                                `/log/cloud-tasting?templateTastingId=${encodeURIComponent(activeRow.id)}&lockName=1`
+                              ),
+                          },
+                          {
+                            text: "Start Fresh",
+                            onPress: () =>
+                              router.push(
+                                `/log/cloud-tasting?whiskeyName=${encodeURIComponent(activeRow.whiskey_name ?? "")}&lockName=1`
+                              ),
+                          },
+                          { text: "Cancel", style: "cancel" },
+                        ]
+                      );
+                    }}
+                    style={({ pressed }) => ({
+                      borderRadius: radii.md,
+                      paddingVertical: spacing.lg,
+                      alignItems: "center",
+                      borderWidth: 1,
+                      borderColor: colors.divider,
+                      backgroundColor: colors.surface,
+                      opacity: pressed ? 0.9 : 1,
+                    })}
+                  >
+                    <Text style={[type.button, { color: colors.accent }]}>
+                      Log Again
+                    </Text>
+                  </Pressable>
+                ) : null}
 
                 <Pressable
                   onPress={closeActions}
