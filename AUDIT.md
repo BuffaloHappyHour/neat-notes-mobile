@@ -257,6 +257,42 @@ Also fix `TopWhiskeyRow.avg_rating` type to `number | null` (see L5) to make Typ
 
 ---
 
+## Database Findings
+
+---
+
+### DB1 — `tastings_with_email` grants SELECT to anon and authenticated roles
+**Location:** Supabase database schema (public schema)
+**Status:** ✅ Resolved
+**Residual Risk:** None
+
+**Finding:** The `tastings_with_email` view joins `auth.users` and exposes user email addresses. SELECT privilege was granted to the `anon` and `authenticated` roles, meaning any unauthenticated visitor or logged-in user could query the view directly via the Supabase REST API and retrieve email addresses for all users with tastings records.
+
+**Mitigating Controls:** None — this was a live exposure with no database-level safeguard preventing access.
+
+**App Code Exposure:** Zero references in the codebase. Grep across all `.ts`, `.tsx`, `.js`, `.json`, `.sql`, and `.yaml` files returned no matches. The view was never called by the app — exposure was through direct API access only.
+
+**Resolution:**
+`REVOKE ALL ON tastings_with_email FROM anon, authenticated` executed in Supabase SQL editor. Access now restricted to `postgres` and `service_role` only.
+
+---
+
+### DB2 — `analytics_activation` grants SELECT to anon and authenticated roles
+**Location:** Supabase database schema (public schema)
+**Status:** ✅ Resolved
+**Residual Risk:** None
+
+**Finding:** The `analytics_activation` view joins `auth.users` and exposes user email addresses. SELECT privilege was granted to the `anon` and `authenticated` roles, same exposure vector as DB1.
+
+**Mitigating Controls:** None — live exposure, no database-level safeguard preventing access.
+
+**App Code Exposure:** Zero references in the codebase. Same grep sweep confirmed no app code queries this view.
+
+**Resolution:**
+`REVOKE ALL ON analytics_activation FROM anon, authenticated` executed in Supabase SQL editor. Access now restricted to `postgres` and `service_role` only.
+
+---
+
 ## Summary Table
 
 | ID | File | Severity | Status | Residual Risk | Issue |
@@ -278,12 +314,14 @@ Also fix `TopWhiskeyRow.avg_rating` type to `number | null` (see L5) to make Typ
 | L5 | useEventPageData.ts:22 | Low | 🔴 Open | Low | avg_rating typed non-nullable |
 | L6 | cloud-tasting.tsx:783–797 | Low | 🔴 Open | Low | "Save failed" shown for validation errors |
 | L7 | tastingSave.service.ts:120–127 | Low | 🔴 Open | Low | Rating 0 is submittable — no floor enforced |
+| DB1 | Supabase schema — tastings_with_email | Critical | ✅ Resolved | None | View exposes user emails — SELECT granted to anon/authenticated |
+| DB2 | Supabase schema — analytics_activation | Critical | ✅ Resolved | None | View exposes user emails — SELECT granted to anon/authenticated |
 
 ---
 
 ## Pending Confirmations
 
-- [ ] **M4 intent** — Confirm whether `personal_notes` in `public_tastings` is intentional. Check RLS on `public_tastings` SELECT to determine if other authenticated users can read this column.
+*No open confirmations.*
 
 ---
 
@@ -292,3 +330,4 @@ Also fix `TopWhiskeyRow.avg_rating` type to `number | null` (see L5) to make Typ
 | Date | Type | Scope | Notes |
 |---|---|---|---|
 | May 2026 | Full codebase | All hooks, services, screens | Initial audit. 4 Critical, 6 Medium, 5 Low findings. RLS confirmed on tastings and public_tastings tables. |
+| May 2026 | Database schema | Supabase views | DB1/DB2: tastings_with_email and analytics_activation found granting SELECT to anon/authenticated. Both views join auth.users and expose email. REVOKE ALL executed. Access restricted to postgres and service_role. |
