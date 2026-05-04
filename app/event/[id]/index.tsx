@@ -364,6 +364,7 @@ export default function EventPage() {
 
   const {
     loading,
+    error,
     event,
     recent,
     topWhiskies,
@@ -402,6 +403,41 @@ export default function EventPage() {
             ]}
           >
             Loading event…
+          </Text>
+        </View>
+      </>
+    );
+  }
+
+  if (error) {
+    return (
+      <>
+        <Stack.Screen
+          options={{
+            title: "",
+            headerTransparent: true,
+            headerShadowVisible: false,
+          }}
+        />
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: colors.background,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Text
+            style={[
+              type.microcopyItalic,
+              {
+                marginTop: spacing.sm,
+                color: colors.textPrimary,
+                opacity: 0.8,
+              },
+            ]}
+          >
+            {error}
           </Text>
         </View>
       </>

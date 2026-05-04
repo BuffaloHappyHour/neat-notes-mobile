@@ -127,6 +127,7 @@ export default function EventHostPage() {
 
   const {
     loading,
+    error,
     event,
     topWhiskies,
     mostRatedWhiskies,
@@ -164,6 +165,41 @@ export default function EventHostPage() {
             ]}
           >
             Loading host analytics…
+          </Text>
+        </View>
+      </>
+    );
+  }
+
+  if (error) {
+    return (
+      <>
+        <Stack.Screen
+          options={{
+            title: "",
+            headerTransparent: true,
+            headerShadowVisible: false,
+          }}
+        />
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: colors.background,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Text
+            style={[
+              type.microcopyItalic,
+              {
+                marginTop: spacing.sm,
+                color: colors.textPrimary,
+                opacity: 0.8,
+              },
+            ]}
+          >
+            {error}
           </Text>
         </View>
       </>

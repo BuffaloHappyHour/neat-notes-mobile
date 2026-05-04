@@ -38,6 +38,7 @@ type EventPageSummary = {
 
 type UseEventPageDataResult = {
   loading: boolean;
+  error: string | null;
   event: EventHeader | null;
   recent: RecentTastingRow[];
   topWhiskies: TopWhiskeyRow[];
@@ -98,6 +99,7 @@ function buildMostRatedRows(
 
 export function useEventPageData(eventId: string): UseEventPageDataResult {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [event, setEvent] = useState<EventHeader | null>(null);
   const [recent, setRecent] = useState<RecentTastingRow[]>([]);
   const [topWhiskies, setTopWhiskies] = useState<TopWhiskeyRow[]>([]);
@@ -114,6 +116,7 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
       if (!eventId) {
         if (mounted) {
           setLoading(false);
+          setError(null);
           setEvent(null);
           setRecent([]);
           setTopWhiskies([]);
@@ -125,16 +128,17 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
       }
 
       setLoading(true);
+      setError(null);
 
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
       const [
-        { data: eventData },
-        { data: recentData },
-        { data: topData },
-        { data: mostRatedData },
+        { data: eventData, error: eventError },
+        { data: recentData, error: recentError },
+        { data: topData, error: topError },
+        { data: mostRatedData, error: mostRatedError },
       ] = await Promise.all([
         supabase
           .from("events")
@@ -157,10 +161,21 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
           .eq("event_id", eventId),
       ]);
 
+      if (eventError || recentError || topError || mostRatedError) {
+        if (mounted) {
+          setError("Failed to load event data. Please try again.");
+          setLoading(false);
+        }
+        return;
+      }
+
       let hasAccess = false;
 
       if (user) {
-        const [{ data: roles }, { data: adminRow }] = await Promise.all([
+        const [
+          { data: roles, error: rolesError },
+          { data: adminRow, error: adminError },
+        ] = await Promise.all([
           supabase
             .from("event_user_roles")
             .select("role")
@@ -173,7 +188,7 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
             .maybeSingle(),
         ]);
 
-        if (roles?.some((r) => r.role === "host") || adminRow) {
+        if (!rolesError && !adminError && (roles?.some((r) => r.role === "host") || adminRow)) {
           hasAccess = true;
         }
       }
@@ -237,6 +252,7 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
 
   return {
     loading,
+    error,
     event,
     recent,
     topWhiskies,
