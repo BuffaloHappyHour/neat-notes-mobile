@@ -226,11 +226,11 @@ const activeEventId = await getActiveEventId();
       p_currency: "USD",
       p_pour_size_oz:
         sourceType === "bar"
-          ? Number(safePourSizeOz || "1")
+          ? (Number(safePourSizeOz) || null)
           : null,
       p_bottle_size_ml:
         sourceType === "purchased"
-          ? Number(safeBottleSizeMl || "750")
+          ? (Number(safeBottleSizeMl) || null)
           : null,
       p_notes: null,
       p_recorded_by: recordedBy,
@@ -270,12 +270,12 @@ const activeEventId = await getActiveEventId();
 
     source_pour_size_oz:
       sourceType === "bar"
-        ? Number(safePourSizeOz || 1)
+        ? (Number(safePourSizeOz) || null)
         : null,
 
     source_bottle_size_ml:
       sourceType === "purchased"
-        ? Number(safeBottleSizeMl || 750)
+        ? (Number(safeBottleSizeMl) || null)
         : null,
   };
 

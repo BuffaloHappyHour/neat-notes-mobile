@@ -172,13 +172,13 @@ Also fix `TopWhiskeyRow.avg_rating` type to `number | null` (see L5) to make Typ
 ---
 
 ### M6 — Hardcoded fallbacks fabricate venue data
-**File:** `src/services/tastingSave.service.ts` lines 229, 278  
-**Status:** 🔴 Open  
-**Residual Risk:** Medium — pollutes venue database with invented values  
+**File:** `src/log/services/tastingSave.service.ts` lines 227–234, 271–279
+**Status:** ✅ Resolved
+**Residual Risk:** None
 
-**Finding:** Empty pour size defaults to `1oz`, empty bottle size defaults to `750ml` in `upsert_venue_whiskey_offering`. These invented values are written to the venue pricing database.
+**Finding:** Empty pour size defaults to `1oz`, empty bottle size defaults to `750ml` in `upsert_venue_whiskey_offering`. These invented values were written to the venue pricing database and to `source_pour_size_oz` / `source_bottle_size_ml` on the `tastings` row.
 
-**Remediation:** Pass `null` instead of hardcoded fallbacks when fields are empty. Update RPC to accept nullable values if needed.
+**Resolution:** Replaced `Number(safePourSizeOz || "1")` and `Number(safeBottleSizeMl || "750")` with `(Number(safePourSizeOz) || null)` and `(Number(safeBottleSizeMl) || null)` in both the RPC call and the tastings payload. `Number("") === 0`, so empty fields now resolve to `null` in all four locations.
 
 ---
 
@@ -306,7 +306,7 @@ Also fix `TopWhiskeyRow.avg_rating` type to `number | null` (see L5) to make Typ
 | M3 | useEventPageData.ts:129–154 | Medium | ✅ Resolved | None | Query errors silently discarded |
 | M4 | publicMirror.service.ts:127–132 | Medium | ✅ Resolved | None | personal_notes in public mirror — intent unclear |
 | M5 | useProfileData.ts:142 | Medium | 🔴 Open | Low now | 3000-row client fetch for bar chart |
-| M6 | tastingSave.service.ts:229,278 | Medium | 🔴 Open | Medium | Hardcoded fallbacks fabricate venue data |
+| M6 | tastingSave.service.ts:227–234, 271–279 | Medium | ✅ Resolved | None | Hardcoded fallbacks fabricate venue data |
 | L1 | index.tsx:510, host.tsx:260 | Low | 🔴 Open | Low | as any suppresses route type checking |
 | L2 | useEventPageData.ts:146 | Low | 🔴 Open | Low | RPC fetches 10, UI shows 5 |
 | L3 | useClarityInsightsData.ts:173 | Low | 🔴 Open | Low | console.log in production |
