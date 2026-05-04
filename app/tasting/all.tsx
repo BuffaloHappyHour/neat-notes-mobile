@@ -266,8 +266,11 @@ export default function AllTastingsScreen() {
         style={{
           padding: spacing.xl,
           paddingBottom: spacing.lg,
-          backgroundColor: "transparent",
+          backgroundColor: colors.background,
           gap: spacing.lg,
+          zIndex: 10,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.divider,
         }}
       >
         <Card>
@@ -383,7 +386,9 @@ export default function AllTastingsScreen() {
                   { opacity: 0.65, color: colors.textPrimary, fontSize: 12 },
                 ]}
               >
-                {filteredAndSorted.length} / {rows.length}
+                {filteredAndSorted.length < rows.length
+                  ? `${filteredAndSorted.length} of ${rows.length}`
+                  : `${rows.length} tastings`}
               </Text>
             ) : null}
           </View>
@@ -692,27 +697,31 @@ export default function AllTastingsScreen() {
           <View style={{ flex: 1, gap: 4 }}>
             <Text
               style={[type.body, { fontWeight: "900", color: colors.textPrimary }]}
-              numberOfLines={2}
+              numberOfLines={1}
             >
               {nm}
             </Text>
 
-            <Text
-              style={[
-                type.body,
-                { opacity: 0.7, color: colors.textPrimary, fontSize: 12 },
-              ]}
-            >
-              Rating: <Text style={{ fontWeight: "900" }}>{ratingText}</Text>
-              {dateText ? `  •  ${dateText}` : ""}
-            </Text>
+            {dateText ? (
+              <Text
+                style={[
+                  type.body,
+                  { opacity: 0.6, color: colors.textPrimary, fontSize: 12 },
+                ]}
+              >
+                {dateText}
+              </Text>
+            ) : null}
           </View>
 
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={colors.textPrimary as any}
-          />
+          <Text
+            style={[
+              type.body,
+              { fontWeight: "900", color: colors.accent, fontSize: 18 },
+            ]}
+          >
+            {ratingText}
+          </Text>
         </Pressable>
       </View>
     );

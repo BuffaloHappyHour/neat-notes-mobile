@@ -36,7 +36,7 @@ Each feature includes:
 
 | ID | Feature | Area | Priority | Release Target | Complexity | Risk | Status | Description |
 |---|---|---|---|---|---|---|---|---|
-| F001 | All Tastings Page Revamp | Tasting | Low | v1.0.8 | Low | Low | 💡 Idea | Scroll layering bug + full visual redesign of the tastings list view |
+| F001 | All Tastings Page Revamp | Tasting | Low | v1.0.8 | Low | Low | 🧪 Testing | Scroll layering bug + full visual redesign of the tastings list view |
 | F002 | Fix Host Analytics Event Snapshot metrics (C2) | Analytics | High | v1.0.8 | Low | Low | ✅ Done | Summary metrics computed from 12-row slice — wrong for events with >12 tastings |
 | F003 | Surface query errors on Event page (M3) | Events | Medium | v1.0.8 | Low | Low | ✅ Done | Silent failures show empty UI with no user feedback when queries fail |
 | F004 | Verify personal_notes in public mirror (M4) | Infrastructure | Medium | v1.0.8 | Low | Medium | ✅ Done | personal_notes written to public_tastings — confirm intent and restrict if unintentional |
