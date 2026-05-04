@@ -19,7 +19,7 @@ export type RecentTastingRow = {
 
 export type TopWhiskeyRow = {
   whiskey_name: string;
-  avg_rating: number;
+  avg_rating: number | null;
   tasting_count: number;
 };
 
@@ -103,6 +103,9 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
   const [topWhiskies, setTopWhiskies] = useState<TopWhiskeyRow[]>([]);
   const [mostRatedWhiskies, setMostRatedWhiskies] = useState<MostRatedWhiskeyRow[]>([]);
   const [canViewHostAnalytics, setCanViewHostAnalytics] = useState(false);
+  const [allTastings, setAllTastings] = useState<
+    { whiskey_name: string | null; rating: number | null; user_id: string | null }[]
+  >([]);
 
   useEffect(() => {
     let mounted = true;
@@ -115,6 +118,7 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
           setRecent([]);
           setTopWhiskies([]);
           setMostRatedWhiskies([]);
+          setAllTastings([]);
           setCanViewHostAnalytics(false);
         }
         return;
@@ -149,7 +153,7 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
         }),
         supabase
           .from("public_tastings")
-          .select("whiskey_name, rating")
+          .select("whiskey_name, rating, user_id")
           .eq("event_id", eventId),
       ]);
 
@@ -187,12 +191,14 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
         }))
       );
       setTopWhiskies((topData as TopWhiskeyRow[] | null) ?? []);
-      setMostRatedWhiskies(
-        buildMostRatedRows(
-          (mostRatedData as { whiskey_name: string | null; rating: number | null }[] | null) ??
-            null
-        )
-      );
+      const rawAllTastings =
+        (mostRatedData as {
+          whiskey_name: string | null;
+          rating: number | null;
+          user_id: string | null;
+        }[] | null) ?? [];
+      setAllTastings(rawAllTastings);
+      setMostRatedWhiskies(buildMostRatedRows(rawAllTastings));
       setCanViewHostAnalytics(hasAccess);
       setLoading(false);
     }
@@ -205,15 +211,16 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
   }, [eventId]);
 
   const summary = useMemo(() => {
-    const tastingCount = recent.length;
+    const tastingCount = allTastings.length;
     const uniqueNames = new Set(
-      recent.map((r) => (r.whiskey_name ?? "").trim()).filter(Boolean)
+      allTastings.map((r) => (r.whiskey_name ?? "").trim()).filter(Boolean)
     ).size;
     const uniqueUsers = new Set(
-      recent.map((r) => r.user_id).filter((id): id is string => Boolean(id))
+      allTastings.map((r) => r.user_id).filter((id): id is string => Boolean(id))
     ).size;
-    const ratedRows = recent.filter(
-      (r): r is RecentTastingRow & { rating: number } => r.rating != null
+    const ratedRows = allTastings.filter(
+      (r): r is { whiskey_name: string | null; rating: number; user_id: string | null } =>
+        r.rating != null
     );
     const averageRating =
       ratedRows.length > 0
@@ -226,7 +233,7 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
       uniqueUsers,
       averageRating,
     };
-  }, [recent]);
+  }, [allTastings]);
 
   return {
     loading,
