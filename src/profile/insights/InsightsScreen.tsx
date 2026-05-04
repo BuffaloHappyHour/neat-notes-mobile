@@ -264,7 +264,7 @@ function PackageOption({
   export default function InsightsScreen() {
   const [tab, setTab] = useState<InsightsTab>("summary");
 
-  const { isPremium } = useProfileData();
+  const { isPremium, loading: profileLoading } = useProfileData();
 
   const { metrics } = useClarityInsightsData();
   const [purchaseLoading, setPurchaseLoading] = useState(false);
@@ -403,6 +403,14 @@ router.replace("/insights");
     setRestoreLoading(false);
   }
 }
+
+  if (profileLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color={colors.accent} />
+      </View>
+    );
+  }
 
   if (!hasPremiumAccess) {
     return (

@@ -5,56 +5,63 @@ import {
   CormorantGaramond_600SemiBold,
   useFonts as useCormorantFonts,
 } from "@expo-google-fonts/cormorant-garamond";
-import { DarkTheme, ThemeProvider } from "@react-navigation/native";
-import { Stack } from "expo-router";
-import React, { useEffect, useMemo } from "react";
-import { ImageBackground, Platform, StyleSheet, View } from "react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import Purchases from "react-native-purchases";
-import { supabase } from "../lib/supabase";
-
 import {
   Montserrat_400Regular,
   Montserrat_500Medium,
   useFonts as useMontserratFonts,
 } from "@expo-google-fonts/montserrat";
-
+import { DarkTheme, ThemeProvider } from "@react-navigation/native";
+import * as SplashScreen from "expo-splash-screen";
+import { Stack } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import { ImageBackground, Platform, StyleSheet, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Purchases from "react-native-purchases";
+import { bootstrapApp } from "../lib/bootstrapApp";
+import { supabase } from "../lib/supabase";
 import { colors } from "../lib/theme";
 
+// Hold the native splash until bootstrap resolves.
+// Must be called at module level, before any component renders.
+SplashScreen.preventAutoHideAsync();
+
 export default function RootLayout() {
+  const [bootstrapDone, setBootstrapDone] = useState(false);
+
   useEffect(() => {
-    async function setupRevenueCat() {
-      const apiKey =
-        Platform.OS === "android"
-          ? process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY
-          : process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY;
+    async function run() {
+      try {
+        // Configure RevenueCat first — bootstrapApp depends on it
+        const apiKey =
+          Platform.OS === "android"
+            ? process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY
+            : process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY;
 
-      if (!apiKey) {
-        console.error("RevenueCat API key is missing for this platform.");
-        return;
+        if (apiKey) {
+          const alreadyConfigured = await Purchases.isConfigured();
+          if (!alreadyConfigured) {
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+            Purchases.configure({
+              apiKey,
+              appUserID: session?.user?.id ?? null,
+            });
+          }
+        }
+
+        // Premium sync runs here on every cold open.
+        // Ensures is_premium is always fresh before any screen renders.
+        await bootstrapApp();
+      } catch (e) {
+        console.error("[bootstrap] unexpected error:", e);
+      } finally {
+        setBootstrapDone(true);
+        await SplashScreen.hideAsync();
       }
-
-      // ✅ Await isConfigured() — it returns a Promise in newer RC SDK versions
-      const alreadyConfigured = await Purchases.isConfigured();
-      if (alreadyConfigured) return;
-
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
-
-      if (error) {
-        console.error("Supabase session error during RC setup:", error.message);
-        // Still configure without a user ID — RC works anonymously
-      }
-
-      Purchases.configure({
-        apiKey,
-        appUserID: session?.user?.id ?? null,
-      });
     }
 
-    setupRevenueCat();
+    run();
   }, []);
 
   useCormorantFonts({
@@ -68,8 +75,8 @@ export default function RootLayout() {
     Montserrat_500Medium,
   });
 
-  const navTheme = useMemo(() => {
-    return {
+  const navTheme = useMemo(
+    () => ({
       ...DarkTheme,
       colors: {
         ...DarkTheme.colors,
@@ -80,8 +87,12 @@ export default function RootLayout() {
         primary: DarkTheme.colors.primary,
         notification: DarkTheme.colors.notification,
       },
-    };
-  }, []);
+    }),
+    []
+  );
+
+  // Return null while bootstrapping — native splash is still visible
+  if (!bootstrapDone) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -92,7 +103,6 @@ export default function RootLayout() {
           resizeMode="cover"
         >
           <View style={styles.tint} />
-
           <Stack
             screenOptions={{
               headerStyle: { backgroundColor: "transparent" },
