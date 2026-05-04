@@ -74,6 +74,7 @@ Each feature includes:
 | F036 | Website — Public Events Finder | Website | High | Website | Medium | Low | 💡 Idea | Public-facing table/map of upcoming whiskey events near the visitor — drives app downloads, great SEO. Requires F021 Location Platform |
 | F037 | Bottle Collection Tracker | Tasting | High | v1.1.0 | Medium | Low | 💡 Idea | Track personal whiskey collection — add via manual entry or barcode scan, bottle status (sealed/open/half/nearly gone/finished), ties to existing tasting records |
 | F038 | Claude "What Should I Drink?" Recommendation | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | Natural language prompt against your collection — type the notes you want to taste, Claude cross-references your collection and tasting history to recommend what to pour tonight. Sorted by your historical ratings. Secondary market pricing as nice-to-have. |
+| F039 | App Store / Play Store Review Prompt | UX | High | v1.0.8 | Low | Low | 💡 Idea | Prompt users to rate the app after reaching 5 tastings. Uses expo-store-review (already installed). Fires on next cold open after threshold — not inline. One-time only via review_prompted_at on profiles table. |
 
 ---
 
@@ -185,6 +186,37 @@ Generate a gorgeous, branded shareable image card from the user's Flavor Profile
 **Notes:**
 Goal is "stop the scroll" quality. Should look stunning to someone who has never heard of whiskey. Think editorial magazine aesthetic, not app screenshot.
 
+### F039 — App Store / Play Store Review Prompt
+**Area:** UX
+**Priority:** High
+**Release Target:** v1.0.8
+**Complexity:** Low
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+Prompt users to rate the app on the App Store or Google Play after they reach 5 tastings. Uses the native iOS/Android system review sheet — no custom UI. Designed to catch users at a meaningful early milestone without being intrusive.
+
+**Scope / Requirements:**
+- Trigger: user reaches 5 tastings (check on cold open, not immediately after save)
+- One-time only — store a `review_prompted_at` timestamp in the `profiles` table to prevent re-prompting
+- Use `expo-store-review` (already installed as a dependency — currently unused)
+- Call `StoreReview.isAvailableAsync()` before requesting — no-op if unavailable (simulator, unsupported device)
+- Fire on the next cold open after the threshold is crossed, not mid-session
+- No custom UI — relies entirely on the native system review sheet
+
+**Implementation Notes:**
+- Add `review_prompted_at` column (timestamptz, nullable) to the `profiles` table in Supabase
+- On app launch, after home stats load: if `tastingCount >= 5` and `review_prompted_at` is null, call `StoreReview.requestReview()` and write the current timestamp to `review_prompted_at`
+- Natural hook point: `app/(tabs)/home.tsx` already loads `tastingCount` via `useHomeStats` — post-load effect is the right place
+
+**Open Questions:**
+- Should the threshold be 5 tastings or a different number?
+- Should we re-prompt after a major milestone (e.g., 50 tastings) with a separate flag?
+
+**Dependencies:**
+- Supabase `profiles` table must have `review_prompted_at` column added before shipping
+
 ### Events
 - F003 — Surface query errors on Event page (v1.0.8)
 - F025 — Upcoming Public Events Near You (v1.2.0)
@@ -227,6 +259,7 @@ Goal is "stop the scroll" quality. Should look stunning to someone who has never
 - F016 — Fix "Save failed" title for validation errors (Backlog)
 - F018 — Shareable Flavor Profile Card (v1.1.0)
 - F022 — Nearby Whiskey Alerts (v1.2.0)
+- F039 — App Store / Play Store Review Prompt (v1.0.8)
 
 ### Infrastructure
 - F004 — Verify personal_notes in public mirror (v1.0.8)
