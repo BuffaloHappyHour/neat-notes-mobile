@@ -112,3 +112,33 @@ export function trackTastingSaveFailed(input: {
     },
   });
 }
+
+export async function trackInsightsScreenViewed() {
+  await insertEvent({
+    event_name: "insights_screen_viewed",
+    screen: "insights",
+  });
+}
+
+export async function trackPurchaseTapped(packageId: string) {
+  await insertEvent({
+    event_name: "purchase_tapped",
+    screen: "insights",
+    properties: { package_id: packageId },
+  });
+}
+
+export async function trackPurchaseCompleted(packageId: string) {
+  await insertEvent({
+    event_name: "purchase_completed",
+    screen: "insights",
+    properties: { package_id: packageId },
+  });
+}
+
+export async function trackRestoreCompleted() {
+  await insertEvent({
+    event_name: "restore_completed",
+    screen: "insights",
+  });
+}

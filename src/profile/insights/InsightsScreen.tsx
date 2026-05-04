@@ -9,13 +9,13 @@ import {
 } from "react-native";
 import Purchases, { type PurchasesPackage } from "react-native-purchases";
 
-import { router } from "expo-router";
 import {
   getCurrentOffering,
   purchasePackage,
   restoreMyPurchases,
 } from "../../../lib/purchases";
 import { syncPremiumStatusFromRevenueCat } from "../../../lib/premiumSync";
+import { trackInsightsScreenViewed, trackPurchaseTapped, trackPurchaseCompleted, trackRestoreCompleted } from "../../../lib/analytics";
 import { spacing } from "../../../lib/spacing";
 import { colors } from "../../../lib/theme";
 import { type } from "../../../lib/typography";
@@ -299,6 +299,7 @@ function PackageOption({
     packages.find((pkg) => pkg.identifier === selectedPackageId) ?? null;
 
   useEffect(() => {
+    void trackInsightsScreenViewed();
     if (hasPremiumAccess) return;
 
     let active = true;
@@ -354,55 +355,49 @@ function PackageOption({
   }, [hasPremiumAccess]);
 
 async function handleUnlockInsights() {
-  if (purchaseLoading || restoreLoading || !selectedPackage) return;
-
-  try {
-    setPurchaseLoading(true);
-
-    await purchasePackage(selectedPackage); // ✅ REAL CALL
-    await syncPremiumStatusFromRevenueCat();
-
-router.replace("/insights");
-
-    Alert.alert(
-      "Premium unlocked",
-      "Insights are now available on your account."
-    );
-  } catch (e: any) {
-    Alert.alert("Purchase not completed", String(e?.message ?? e));
-  } finally {
-    setPurchaseLoading(false);
+    if (purchaseLoading || restoreLoading || !selectedPackage) return;
+    void trackPurchaseTapped(selectedPackage.identifier);
+    try {
+      setPurchaseLoading(true);
+      const configured = await Purchases.isConfigured();
+      if (!configured) {
+        Alert.alert("Not ready", "Please wait a moment and try again.");
+        return;
+      }
+      await purchasePackage(selectedPackage);
+      await syncPremiumStatusFromRevenueCat();
+      void trackPurchaseCompleted(selectedPackage.identifier);
+      Alert.alert("Premium unlocked", "Insights are now available on your account.");
+    } catch (e: any) {
+      Alert.alert("Purchase not completed", String(e?.message ?? e));
+    } finally {
+      setPurchaseLoading(false);
+    }
   }
-}
 
 async function handleRestorePurchases() {
-  if (purchaseLoading || restoreLoading) return;
-
-  try {
-    setRestoreLoading(true);
-
-    const restored = await restoreMyPurchases(); // ✅ REAL CALL
-    await syncPremiumStatusFromRevenueCat();
-
-router.replace("/insights");
-
-    if (restored) {
-      Alert.alert(
-        "Purchases restored",
-        "Your premium access has been restored."
-      );
-    } else {
-      Alert.alert(
-        "Nothing to restore",
-        "No active premium purchase was found for this account."
-      );
+    if (purchaseLoading || restoreLoading) return;
+    try {
+      setRestoreLoading(true);
+      const configured = await Purchases.isConfigured();
+      if (!configured) {
+        Alert.alert("Not ready", "Please wait a moment and try again.");
+        return;
+      }
+      const restored = await restoreMyPurchases();
+      await syncPremiumStatusFromRevenueCat();
+      if (restored) {
+        void trackRestoreCompleted();
+        Alert.alert("Purchases restored", "Your premium access has been restored.");
+      } else {
+        Alert.alert("Nothing to restore", "No active premium purchase was found for this account.");
+      }
+    } catch (e: any) {
+      Alert.alert("Restore failed", String(e?.message ?? e));
+    } finally {
+      setRestoreLoading(false);
     }
-  } catch (e: any) {
-    Alert.alert("Restore failed", String(e?.message ?? e));
-  } finally {
-    setRestoreLoading(false);
   }
-}
 
   if (profileLoading) {
     return (
