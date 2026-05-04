@@ -151,12 +151,12 @@ Also fix `TopWhiskeyRow.avg_rating` type to `number | null` (see L5) to make Typ
 
 ### M4 — `personal_notes` written to `public_tastings` mirror table
 **File:** `src/services/publicMirror.service.ts` lines 127–132  
-**Status:** 🔴 Open — intent unclear, needs verification  
-**Residual Risk:** Medium — pending RLS review on `public_tastings`  
+**Status:** ✅ Resolved  
+**Residual Risk:** None  
 
 **Finding:** `personal_notes` field is included in the `public_tastings` upsert. Current event page queries don't select this column, so it isn't surfaced in UI — but the data exists in the table.
 
-**Action Required:** Confirm whether `personal_notes` is intentionally public. If not, remove it from the mirror upsert and verify `public_tastings` RLS does not expose it to other users.
+**Resolution:** personal_notes removed from public mirror upsert in publicMirror.service.ts and tastingSave.service.ts. 264 existing rows wiped from public_tastings via SQL. Column remains on table but no longer populated.
 
 ---
 
@@ -268,7 +268,7 @@ Also fix `TopWhiskeyRow.avg_rating` type to `number | null` (see L5) to make Typ
 | M1 | useProfileData.ts:381 | Medium | 🟡 Mitigated | Low | Delete has no ownership check |
 | M2 | useInsightsData.ts:86, useClarityInsightsData.ts:164 | Medium | 🔴 Open | Low | .single() fires false errors for new users |
 | M3 | useEventPageData.ts:129–154 | Medium | 🔴 Open | Medium | Query errors silently discarded |
-| M4 | publicMirror.service.ts:127–132 | Medium | 🔴 Open | Medium | personal_notes in public mirror — intent unclear |
+| M4 | publicMirror.service.ts:127–132 | Medium | ✅ Resolved | None | personal_notes in public mirror — intent unclear |
 | M5 | useProfileData.ts:142 | Medium | 🔴 Open | Low now | 3000-row client fetch for bar chart |
 | M6 | tastingSave.service.ts:229,278 | Medium | 🔴 Open | Medium | Hardcoded fallbacks fabricate venue data |
 | L1 | index.tsx:510, host.tsx:260 | Low | 🔴 Open | Low | as any suppresses route type checking |
