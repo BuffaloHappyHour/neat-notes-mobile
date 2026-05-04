@@ -159,6 +159,22 @@ export default function TastingDetailScreen() {
     }
   }
 
+  async function onDelete() {
+    if (!row?.id) return;
+
+    try {
+      const { error } = await supabase
+        .from("tastings")
+        .delete()
+        .eq("id", row.id);
+
+      if (error) throw new Error(error.message);
+      router.back();
+    } catch (e: any) {
+      Alert.alert("Delete failed", String(e?.message ?? e));
+    }
+  }
+
   function onCancelEdit() {
     // revert fields back to the saved row
     const nm = (row?.whiskey_name ?? "Whiskey").trim() || "Whiskey";
@@ -196,7 +212,17 @@ export default function TastingDetailScreen() {
             if (!isEditing) {
               return (
                 <Pressable
-                  onPress={() => setIsEditing(true)}
+                  onPress={() =>
+                    Alert.alert(
+                      (row.whiskey_name ?? "Tasting").trim() || "Tasting",
+                      undefined,
+                      [
+                        { text: "Edit", onPress: () => setIsEditing(true) },
+                        { text: "Delete", style: "destructive", onPress: onDelete },
+                        { text: "Cancel", style: "cancel" },
+                      ]
+                    )
+                  }
                   style={({ pressed }) => ({
                     paddingHorizontal: spacing.md,
                     paddingVertical: spacing.sm,

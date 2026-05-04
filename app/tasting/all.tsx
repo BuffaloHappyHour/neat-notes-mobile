@@ -623,11 +623,7 @@ export default function AllTastingsScreen() {
         {!isFirst ? <View style={{ height: 1, backgroundColor: colors.divider }} /> : null}
 
         <Pressable
-          onPress={() =>
-            router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(r.id)}`)
-          }
-          onLongPress={() => openActionsForRow(r)}
-          delayLongPress={250}
+          onPress={() => openActionsForRow(r)}
           style={({ pressed }) => ({
             opacity: pressed ? 0.88 : 1,
             paddingVertical: spacing.md,
