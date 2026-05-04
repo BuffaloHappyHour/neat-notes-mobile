@@ -140,8 +140,8 @@ Also fix `TopWhiskeyRow.avg_rating` type to `number | null` (see L5) to make Typ
 
 ### M3 — Event page query errors silently discarded
 **File:** `src/events/hooks/useEventPageData.ts` lines 129–154  
-**Status:** 🔴 Open  
-**Residual Risk:** Medium — failed fetches show empty UI with no user feedback  
+**Status:** ✅ Resolved  
+**Residual Risk:** None  
 
 **Finding:** `Promise.all([...])` destructures only `data`, discarding `error`. Network failures or RLS rejections produce silent empty states with no error indication.
 
@@ -267,7 +267,7 @@ Also fix `TopWhiskeyRow.avg_rating` type to `number | null` (see L5) to make Typ
 | C4 | event/[id]/index.tsx:279 | Critical | 🟡 Mitigated | Low | .toFixed(1) on nullable avg_rating |
 | M1 | useProfileData.ts:381 | Medium | 🟡 Mitigated | Low | Delete has no ownership check |
 | M2 | useInsightsData.ts:86, useClarityInsightsData.ts:164 | Medium | 🔴 Open | Low | .single() fires false errors for new users |
-| M3 | useEventPageData.ts:129–154 | Medium | 🔴 Open | Medium | Query errors silently discarded |
+| M3 | useEventPageData.ts:129–154 | Medium | ✅ Resolved | None | Query errors silently discarded |
 | M4 | publicMirror.service.ts:127–132 | Medium | ✅ Resolved | None | personal_notes in public mirror — intent unclear |
 | M5 | useProfileData.ts:142 | Medium | 🔴 Open | Low now | 3000-row client fetch for bar chart |
 | M6 | tastingSave.service.ts:229,278 | Medium | 🔴 Open | Medium | Hardcoded fallbacks fabricate venue data |

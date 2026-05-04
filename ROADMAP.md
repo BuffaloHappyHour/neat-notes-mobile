@@ -38,7 +38,7 @@ Each feature includes:
 |---|---|---|---|---|---|---|---|---|
 | F001 | All Tastings Page Revamp | Tasting | Low | v1.0.8 | Low | Low | 💡 Idea | Scroll layering bug + full visual redesign of the tastings list view |
 | F002 | Fix Host Analytics Event Snapshot metrics (C2) | Analytics | High | v1.0.8 | Low | Low | ✅ Done | Summary metrics computed from 12-row slice — wrong for events with >12 tastings |
-| F003 | Surface query errors on Event page (M3) | Events | Medium | v1.0.8 | Low | Low | 💡 Idea | Silent failures show empty UI with no user feedback when queries fail |
+| F003 | Surface query errors on Event page (M3) | Events | Medium | v1.0.8 | Low | Low | ✅ Done | Silent failures show empty UI with no user feedback when queries fail |
 | F004 | Verify personal_notes in public mirror (M4) | Infrastructure | Medium | v1.0.8 | Low | Medium | ✅ Done | personal_notes written to public_tastings — confirm intent and restrict if unintentional |
 | F005 | Fix hardcoded venue data fallbacks (M6) | Venue | Medium | v1.0.9 | Low | Low | 💡 Idea | Empty pour/bottle size fields write fabricated 1oz/750ml values to venue DB |
 | F006 | Investigate Exposed Auth Users views (DB1/DB2) | Infrastructure | High | v1.0.9 | Low | Medium | 💡 Idea | tastings_with_email and analytics_activation views may expose user emails |
