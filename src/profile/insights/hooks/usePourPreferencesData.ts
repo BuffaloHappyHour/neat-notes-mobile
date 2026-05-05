@@ -312,7 +312,7 @@ export function usePourPreferencesData(): PourPreferencesData {
       type ProofJoinRow = {
         proof_intensity: number | null;
         rating: number | null;
-        whiskeys: { proof: number | null } | null;
+        whiskeys: { proof: number | null } | { proof: number | null }[] | null;
       };
 
       const proofJoinRows = (proofRowResult.data ?? []) as ProofJoinRow[];
