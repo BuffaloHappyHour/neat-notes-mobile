@@ -27,8 +27,9 @@ import { useClarityInsightsData } from "./hooks/useClarityInsightsData";
 import ClarityDeepDive from "./sections/ClarityDeepDive";
 import InsightsSummary from "./sections/summary/InsightsSummary";
 import TasteProfileRadar from "./sections/TasteProfileRadar";
+import PourPreferences from "./sections/PourPreferences";
 
-type InsightsTab = "summary" | "clarity" | "flavor" ;
+type InsightsTab = "summary" | "clarity" | "flavor" | "pour";
 
 function TabButton({
   label,
@@ -497,7 +498,8 @@ async function handleRestorePurchases() {
           <TabButton label="Summary" active={tab === "summary"} onPress={() => setTab("summary")} />
           <TabButton label="Palate Clarity" active={tab === "clarity"} onPress={() => setTab("clarity")} />
           <TabButton label="Flavor Profile" active={tab === "flavor"} onPress={() => setTab("flavor")} />
-         
+          <TabButton label="Pour Preferences" active={tab === "pour"} onPress={() => setTab("pour")} />
+
         </View>
       </View>
 
@@ -519,6 +521,11 @@ async function handleRestorePurchases() {
         </Section>
       )}
 
+      {tab === "pour" && (
+        <Section title="Pour Preferences" subtitle="What your ratings reveal about your palate.">
+          <PourPreferences />
+        </Section>
+      )}
 
     </ScrollView>
   );
