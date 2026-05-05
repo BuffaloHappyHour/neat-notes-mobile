@@ -44,27 +44,27 @@ export type PourPreferencesData = {
 /* ---------- Label maps ---------- */
 
 const TEXTURE_LABELS: Record<number, string> = {
-  1: "light",
-  2: "medium-light",
+  1: "thin",
+  2: "light",
   3: "medium",
-  4: "medium-rich",
-  5: "rich",
+  4: "full",
+  5: "creamy",
 };
 
 const PROOF_LABELS: Record<number, string> = {
-  1: "low proof",
-  2: "moderate proof",
-  3: "medium-high proof",
-  4: "high proof",
-  5: "very high proof",
-};
-
-const FLAVOR_LABELS: Record<number, string> = {
-  1: "subtle",
-  2: "delicate",
+  1: "soft",
+  2: "mild",
   3: "balanced",
   4: "bold",
   5: "intense",
+};
+
+const FLAVOR_LABELS: Record<number, string> = {
+  1: "delicate",
+  2: "gentle",
+  3: "balanced",
+  4: "rich",
+  5: "explosive",
 };
 
 const PROOF_RANGES = [

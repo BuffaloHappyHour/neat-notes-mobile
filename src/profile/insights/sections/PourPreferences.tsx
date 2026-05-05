@@ -11,27 +11,27 @@ const MAX_BAR_HEIGHT = 80;
 const MIN_BAR_HEIGHT = 8;
 
 const TEXTURE_LABELS: Record<number, string> = {
-  1: "Light",
-  2: "Med-Light",
+  1: "Thin",
+  2: "Light",
   3: "Medium",
-  4: "Med-Rich",
-  5: "Rich",
+  4: "Full",
+  5: "Creamy",
 };
 
 const PROOF_LABELS: Record<number, string> = {
-  1: "Low",
-  2: "Moderate",
-  3: "Med-High",
-  4: "High",
-  5: "Very High",
-};
-
-const FLAVOR_LABELS: Record<number, string> = {
-  1: "Subtle",
-  2: "Delicate",
+  1: "Soft",
+  2: "Mild",
   3: "Balanced",
   4: "Bold",
   5: "Intense",
+};
+
+const FLAVOR_LABELS: Record<number, string> = {
+  1: "Delicate",
+  2: "Gentle",
+  3: "Balanced",
+  4: "Rich",
+  5: "Explosive",
 };
 
 type SectionConfig = {
