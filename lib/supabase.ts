@@ -59,5 +59,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false, // required for React Native (we handle deep links manually)
+    debug: false,
   },
 });

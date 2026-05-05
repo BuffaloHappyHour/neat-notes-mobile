@@ -769,7 +769,7 @@ export default function HomeTab() {
         .limit(1)
         .maybeSingle();
 
-      console.log("featured_whiskeys result", { data, error });
+      if (__DEV__) console.log("featured_whiskeys result", { data, error });
       if (!isMounted || error || !data?.whiskey) return;
 
       const whiskeyRaw = Array.isArray(data.whiskey) ? data.whiskey[0] : data.whiskey;

@@ -336,6 +336,11 @@ function PackageOption({
         setSelectedPackageId(defaultPackage?.identifier ?? null);
       } catch (e: any) {
         if (!active) return;
+        const msg = String(e?.message ?? e ?? "");
+        if (msg.includes("PRODUCT_NOT_FOUND") || msg.includes("ConfigurationError") || e?.code === 9 || e?.code === 30) {
+          if (__DEV__) console.warn("[RC] Products unavailable in dev build — expected behavior");
+          return;
+        }
         Alert.alert(
           "Subscriptions unavailable",
           String(e?.message ?? e ?? "Unable to load subscription options."),
