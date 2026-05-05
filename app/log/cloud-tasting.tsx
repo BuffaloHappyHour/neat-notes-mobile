@@ -742,12 +742,31 @@ export default function CloudTastingScreen() {
     const fallback = fallbackSentimentFromTaste();
     const out: Record<string, "LIKE" | "NEUTRAL" | "DISLIKE"> = {};
 
+    const hasLikedDescendant = (ancestorId: string): boolean => {
+      for (const [childId, s] of Object.entries(sentimentById)) {
+        if (s !== "LIKE") continue;
+        let cur = byId.get(childId);
+        let safety = 0;
+        while (cur && safety < 10) {
+          if (cur.parent_id === ancestorId) return true;
+          if (!cur.parent_id) break;
+          cur = byId.get(cur.parent_id);
+          safety++;
+        }
+      }
+      return false;
+    };
+
     for (const id of analyticsNodeIds) {
-      out[id] = sentimentById[id] ?? fallback;
+      if (sentimentById[id] !== undefined) {
+        out[id] = sentimentById[id];
+      } else {
+        out[id] = hasLikedDescendant(id) ? "LIKE" : fallback;
+      }
     }
 
     return out;
-  }, [analyticsNodeIds, sentimentById, taste]);
+  }, [analyticsNodeIds, sentimentById, byId, taste]);
 
   async function onSave() {
     if (saving) return;
