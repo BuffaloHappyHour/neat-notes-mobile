@@ -1,6 +1,6 @@
 WhiskeyAppBeta — Feature Ideas & Roadmap
 
-> Last updated: May 2026  
+> Last updated: May 5, 2026  
 > Maintained by: Derek  
 
 ---
@@ -44,17 +44,17 @@ Each feature includes:
 | F006 | Investigate Exposed Auth Users views (DB1/DB2) | Infrastructure | High | v1.0.9 | Low | Medium | ✅ Done | tastings_with_email and analytics_activation views may expose user emails |
 | F007 | Add user_id filters to profile queries (C1) | Profile | Low | v1.1.0 | Low | Low | 💡 Idea | 5 profile queries missing user_id filter — mitigated by RLS but should be fixed |
 | F008 | Add ownership checks to update/delete (C3/M1) | Infrastructure | Low | v1.1.0 | Low | Low | 💡 Idea | Update and delete paths missing user_id check — mitigated by RLS |
-| F009 | Fix null guard on avg_rating (C4/L5) | Tasting | Low | v1.1.0 | Low | Low | 💡 Idea | .toFixed(1) on nullable avg_rating + fix type definition |
+| F009 | Fix null guard on avg_rating (C4/L5) | Tasting | Low | v1.1.0 | Low | Low | ✅ Done | .toFixed(1) on nullable avg_rating + fix type definition |
 | F010 | Replace .single() with .maybeSingle() (M2) | Infrastructure | Low | v1.1.0 | Low | Low | 💡 Idea | Spurious errors logged for new users with no metrics data |
 | F011 | Move category breakdown to server-side RPC (M5) | Infrastructure | Low | v1.1.0 | Medium | Low | 💡 Idea | 3000-row client-side fetch for a simple bar chart — needs server aggregation |
 | F012 | Fix route type casting (L1) | Infrastructure | Low | Backlog | Low | Low | 💡 Idea | as any casts suppress Expo Router compile-time route checking |
 | F013 | Align RPC limit with UI display (L2) | Analytics | Low | Backlog | Low | Low | 💡 Idea | RPC fetches 10 top whiskies, UI shows 5 — align to avoid wasted network call |
-| F014 | Remove console.log from production (L3) | Infrastructure | Low | Backlog | Low | Low | 💡 Idea | console.log("90d metrics") left in useClarityInsightsData.ts |
+| F014 | Remove console.log from production (L3) | Infrastructure | Low | Backlog | Low | Low | ✅ Done | console.log("90d metrics") left in useClarityInsightsData.ts |
 | F015 | Fix insights hooks re-fetch on user change (L4) | Infrastructure | Low | Backlog | Low | Low | 💡 Idea | Hooks don't re-fetch when session changes — stale data can persist |
 | F016 | Fix "Save failed" title for validation errors (L6) | UX | Low | Backlog | Low | Low | 💡 Idea | Validation errors show "Save failed" implying network issue |
 | F017 | Enforce minimum rating floor (L7) | Tasting | Low | Backlog | Low | Low | 💡 Idea | Rating 0 is submittable — decide on minimum valid rating and enforce it |
 | F018 | Shareable Flavor Profile Card | UX | High | v1.1.0 | Medium | Low | 💡 Idea | Branded shareable image card (Stories + Square) with radar chart, Palate Clarity score, top traits, and personalized tagline |
-| F019 | Insights Revamp | Insights | High | v1.1.0 | High | Medium | 💡 Idea | Dynamic Claude-powered Summary, actionable Palate Clarity recommendations, updated Flavor Profile with Texture/Proof, new Palate DNA tab |
+| F019 | Insights Revamp | Insights | High | v1.1.0 | High | Medium | 🔨 In Progress | Summary tab restructured, Pour Profile tab added, Flavor Map renamed, Hero Card still pending. |
 | F020 | Push Notification System | Infrastructure | High | v1.1.0 | Medium | Low | 💡 Idea | Weekly palate check-ins, palate score updates, milestone alerts (50 tastings, Refining tier, etc.) with Whoop-style retention model |
 | F021 | Location Platform Foundation | Infrastructure | High | v1.2.0 | High | Medium | 💡 Idea | Enable location permissions, core location infrastructure, privacy controls — foundation for all location-based features |
 | F022 | Nearby Whiskey Alerts | UX | Medium | v1.2.0 | Medium | Low | 💡 Idea | Push notification when a favorited whiskey is logged nearby by another user |
@@ -75,6 +75,14 @@ Each feature includes:
 | F037 | Bottle Collection Tracker | Tasting | High | v1.1.0 | Medium | Low | 💡 Idea | Track personal whiskey collection — add via manual entry or barcode scan, bottle status (sealed/open/half/nearly gone/finished), ties to existing tasting records |
 | F038 | Claude "What Should I Drink?" Recommendation | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | Natural language prompt against your collection — type the notes you want to taste, Claude cross-references your collection and tasting history to recommend what to pour tonight. Sorted by your historical ratings. Secondary market pricing as nice-to-have. |
 | F039 | App Store / Play Store Review Prompt | UX | High | v1.0.8 | Low | Low | 💡 Idea | Prompt users to rate the app after reaching 5 tastings. Uses expo-store-review (already installed). Fires on next cold open after threshold — not inline. One-time only via review_prompted_at on profiles table. |
+| F040 | Pour Profile Tab | Insights | High | v1.0.8 | Medium | Low | ✅ Done | New Insights tab showing Proof Point classification, perception bar charts for Texture/Proof/Flavor with sweet spot and gap insights. usePourPreferencesData hook queries tastings directly. |
+| F041 | Insights Summary Tab Restructure | Insights | High | v1.0.8 | Medium | Low | ✅ Done | Summary rebuilt into 6 sections: Identity Header, What to Try Next (hero), Here's Why chips (tab navigation), Palate Snapshot 2x2 grid, Flavor Fingerprint, Coach's Note. |
+| F042 | Hero Card with Here's Why Bullets | Insights | High | v1.1.0 | High | Low | 💡 Idea | Single amber card combining recommendation + 3 data-backed insight bullets (L2/L3 flavor ratings, whiskey type avg ratings, pour preference gaps). Needs useHeroInsightsData hook. |
+| F043 | Fix L1 Flavor Sentiment Inference | Infrastructure | High | v1.0.8 | Low | Low | ✅ Done | When user selects L2/L3 LIKE nodes, parent L1 now correctly infers LIKE via hasLikedDescendant() walk in cloud-tasting.tsx. Fixes historical NEUTRAL pollution on L1 nodes. |
+| F044 | Bar / Venue Menu Feature | Venue | High | v1.1.1 | High | Medium | 🔍 Scoped | Venue page with filterable whiskey menu, community ratings, out-of-stock flagging, pour size/price/$/oz. Premium: Palate Match score. Host dashboard. First use case: Hartman's Speakeasy. Needs venue_user_roles table + is_out_of_stock column. |
+| F045 | Whiskey Type Correlation Insights | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | Surface insights like "you prefer high proof Single Malts over Bourbon" using whiskey_type_id joined with tastings and ratings. Clean data confirmed via SQL. |
+| F046 | Palate Match for Venue Menus | Venue | High | v1.1.2 | High | Medium | 💡 Idea | Premium feature on venue menu pages. Match user flavor profile + pour preferences against whiskey community flavor data. Sort by Palate Match, filter "Good matches only" (>70%). Conversion moment for premium. |
+| F047 | SMS Consent Text + Twilio Resubmission | Infrastructure | High | v1.0.8 | Low | Low | ✅ Done | Added TCPA-compliant consent disclosure below phone input in sign-in.tsx. Screenshot uploaded to privacy policy page. Twilio toll-free resubmitted May 5 2026. |
 
 ---
 
@@ -289,7 +297,7 @@ Prompt users to rate the app on the App Store or Google Play after they reach 5 
 | v1.0.5 | Mar 23, 2026 | Premium Insights | ✅ Done | Premium Insights launch, lifetime vs 90d clarity system, recommendations |
 | v1.0.6 | Apr 3, 2026 | Barcode & UX | ✅ Internal Only | Barcode scan, review prompt, RevenueCat UUID sync, event candidate work — tested internally, never pushed to public |
 | v1.0.7 | May 1, 2026 | Events system | 🧪 Testing | Event system: check-in flow, event page refactor, host view, Supabase sync |
-| v1.0.8 | TBD | Bug fixes & audit remediation | 💡 Planning | All Tastings revamp, host analytics fix, silent error handling, personal_notes verification |
+| v1.0.8 | TBD | Bug fixes, audit remediation, Insights revamp phase 1, Pour Profile tab, SMS consent fix | 💡 Planning | All Tastings revamp, host analytics fix, silent error handling, personal_notes verification |
 | v1.0.9 | TBD | Security & data integrity | 💡 Planning | Exposed auth views investigation, hardcoded venue fallbacks fix |
 | v1.1.0 | TBD | Social & Integration | 💡 Planning | Phone number integration, Claude-powered Insights revamp, Palate DNA tab, shareable flavor profile card, push notifications |
 | v1.1.1 | TBD | Venue Foundation & Analytics Revamp | 💡 Planning | Venue check-in infrastructure, tastings mapped to venues, event host analytics revamp |
