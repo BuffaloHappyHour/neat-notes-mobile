@@ -276,7 +276,7 @@ function TopWhiskeyRowCard({ row }: { row: TopWhiskeyRow }) {
             },
           ]}
         >
-          {row.avg_rating.toFixed(1)}
+          {row.avg_rating?.toFixed(1)}
         </Text>
       </View>
     </View>

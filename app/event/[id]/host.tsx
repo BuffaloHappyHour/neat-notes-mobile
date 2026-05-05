@@ -435,7 +435,7 @@ export default function EventHostPage() {
                     ]}
                   >
                     {row.tasting_count} {row.tasting_count === 1 ? "tasting" : "tastings"} • Avg{" "}
-                    {row.avg_rating.toFixed(1)}
+                    {row.avg_rating?.toFixed(1)}
                   </Text>
                 </View>
               ))}
