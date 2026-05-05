@@ -285,7 +285,7 @@ function PackageOption({
 
   if (tab === "flavor") {
     return {
-      title: "Flavor Profile",
+      title: "Flavor Map",
       subtitle: "A visual summary of your defining flavor tendencies.",
     };
   }
@@ -497,8 +497,8 @@ async function handleRestorePurchases() {
         <View style={{ flexDirection: "row" }}>
           <TabButton label="Summary" active={tab === "summary"} onPress={() => setTab("summary")} />
           <TabButton label="Palate Clarity" active={tab === "clarity"} onPress={() => setTab("clarity")} />
-          <TabButton label="Flavor Profile" active={tab === "flavor"} onPress={() => setTab("flavor")} />
-          <TabButton label="Pour Preferences" active={tab === "pour"} onPress={() => setTab("pour")} />
+          <TabButton label="Flavor Map" active={tab === "flavor"} onPress={() => setTab("flavor")} />
+          <TabButton label="Pour Profile" active={tab === "pour"} onPress={() => setTab("pour")} />
 
         </View>
       </View>
@@ -522,7 +522,7 @@ async function handleRestorePurchases() {
       )}
 
       {tab === "pour" && (
-        <Section title="Pour Preferences" subtitle="What your ratings reveal about your palate.">
+        <Section title="Pour Profile" subtitle="What your ratings reveal about your palate.">
           <PourPreferences />
         </Section>
       )}
