@@ -46,7 +46,7 @@ type ClarityInsightsData = {
   };
 };
 
-type UserMetrics90dRow = {
+export type UserMetrics90dRow = {
   user_id: string;
   period_start: string;
   period_end: string;

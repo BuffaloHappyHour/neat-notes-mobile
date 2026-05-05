@@ -505,7 +505,7 @@ async function handleRestorePurchases() {
 
       {tab === "summary" && (
         <Section title="Summary" subtitle="A narrative view of your palate.">
-          <InsightsSummary />
+          <InsightsSummary metrics={metrics} onTabChange={setTab} />
         </Section>
       )}
 
