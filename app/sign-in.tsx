@@ -641,6 +641,10 @@ export default function SignInScreen() {
               autoFocus
             />
 
+            <Text style={{ fontSize: 12, color: '#888', textAlign: 'center', marginTop: 8, paddingHorizontal: 24 }}>
+              By continuing, you agree to receive a one-time verification code via SMS. Message and data rates may apply. Reply STOP to opt out.
+            </Text>
+
             <ThemedButton
               label={busy ? "Sending…" : "Send Code"}
               onPress={sendSignInOtp}
