@@ -1,3 +1,4 @@
+import * as StoreReview from "expo-store-review";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -738,6 +739,30 @@ export default function HomeTab() {
       detail: { ts: Date.now() },
     });
   }, []);
+
+  useEffect(() => {
+    if (!isAuthed || tastingCount === null || tastingCount < 5) return;
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const uid = data.session?.user?.id;
+        if (!uid) return;
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("review_prompted_at")
+          .eq("id", uid)
+          .maybeSingle();
+        if (profile?.review_prompted_at) return;
+        const available = await StoreReview.isAvailableAsync();
+        if (!available) return;
+        await StoreReview.requestReview();
+        await supabase
+          .from("profiles")
+          .update({ review_prompted_at: new Date().toISOString() })
+          .eq("id", uid);
+      } catch {}
+    })();
+  }, [isAuthed, tastingCount]);
 
   useFocusEffect(
     useCallback(() => {
