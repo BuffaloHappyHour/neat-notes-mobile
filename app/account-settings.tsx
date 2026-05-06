@@ -406,6 +406,12 @@ export default function AccountSettingsScreen() {
       );
     }
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    const uid = sessionData.session?.user?.id;
+    if (uid) {
+      await supabase.from("profiles").update({ phone: pendingPhone }).eq("id", uid);
+    }
+
     setLinkedPhone(pendingPhone);
     setPhoneStep("idle");
     setPhoneInput("");
@@ -830,10 +836,54 @@ export default function AccountSettingsScreen() {
           }
         >
           {linkedPhone ? (
-            <InfoRow
-              label="Linked number"
-              value={linkedPhone.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3")}
-            />
+            <View style={{ gap: spacing.md }}>
+              <InfoRow
+                label="Linked number"
+                value={linkedPhone.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3")}
+              />
+              <ThemedButton
+                label="Change"
+                onPress={() => {
+                  setPhoneStep("enterPhone");
+                  setPhoneInput("");
+                }}
+                disabled={busy}
+                tone="secondary"
+                icon={<Ionicons name="create-outline" size={18} color={colors.textPrimary} />}
+              />
+              <ThemedButton
+                label="Remove"
+                onPress={() => {
+                  Alert.alert(
+                    "Remove phone number?",
+                    "You won't be able to sign in with this number anymore.",
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Remove",
+                        style: "destructive",
+                        onPress: async () => {
+                          setBusy(true);
+                          const { data: sd } = await supabase.auth.getSession();
+                          const uid = sd.session?.user?.id;
+                          if (uid) await supabase.from("profiles").update({ phone: null }).eq("id", uid);
+                          await supabase.auth.updateUser({ phone: "" });
+                          setLinkedPhone("");
+                          setPhoneStep("idle");
+                          setStatusLine("Phone number removed.");
+                          setTimeout(() => setStatusLine(""), 1500);
+                          await hapticSuccess();
+                          setBusy(false);
+                        },
+                      },
+                    ]
+                  );
+                }}
+                disabled={busy}
+                tone="danger"
+                icon={<Ionicons name="close-circle-outline" size={18} color={colors.textPrimary} />}
+              />
+            </View>
           ) : phoneStep === "idle" ? (
             <ThemedButton
               label="Add Phone Number"
@@ -850,6 +900,11 @@ export default function AccountSettingsScreen() {
               <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
                 Enter your US phone number. We'll send a verification code.
               </Text>
+              {linkedPhone ? (
+                <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
+                  This will replace your current linked number.
+                </Text>
+              ) : null}
               <ThemedInput
                 placeholder="Phone number"
                 value={phoneInput}
