@@ -301,6 +301,7 @@ function PackageOption({
     packages.find((pkg) => pkg.identifier === selectedPackageId) ?? null;
 
   useEffect(() => {
+    if (profileLoading) return;
     if (hasPremiumAccess) return;
     if (insightsViewedRef.current) return;
     insightsViewedRef.current = true;
@@ -361,7 +362,7 @@ function PackageOption({
     return () => {
       active = false;
     };
-  }, [hasPremiumAccess]);
+  }, [hasPremiumAccess, profileLoading]);
 
 async function handleUnlockInsights() {
     if (purchaseLoading || restoreLoading || !selectedPackage) return;
