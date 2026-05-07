@@ -331,8 +331,9 @@ export default function LogTab() {
         const data = await res.json();
         console.log("[log] lookup-upc response:", data);
 
-        if (data?.found) {
-          setBarcodeLookupStatus("found");
+        if (data?.found && data?.title) {
+          setQuery(data.title);
+          setBarcodeLookupStatus("not_found");
         } else {
           setBarcodeLookupStatus("not_found");
           setQuery("");
@@ -353,9 +354,6 @@ export default function LogTab() {
     if (barcodeLookupStatus === "loading") return "Checking barcode…";
     if (barcodeLookupStatus === "not_found") {
       return "We couldn’t identify this bottle automatically yet. Search below or add a custom bottle.";
-    }
-    if (barcodeLookupStatus === "found") {
-      return "Barcode recognized. Opening bottle…";
     }
     if (!hasEnoughQuery) return "Start typing a bottle name to search.";
     if (selected) return "Tap Continue to open the whiskey profile.";
@@ -398,8 +396,8 @@ export default function LogTab() {
   function goToCustomTasting(name: string) {
     const n = String(name ?? "").trim();
     if (n.length < 2) return;
-
-    router.push(`/log/cloud-tasting?whiskeyName=${encodeURIComponent(n)}&lockName=0` as any);
+    const barcodeParam = barcode ? `&barcode=${encodeURIComponent(String(barcode))}` : "";
+    router.push(`/log/cloud-tasting?whiskeyName=${encodeURIComponent(n)}&lockName=0${barcodeParam}` as any);
   }
 
   const onPickSuggestion = withTick(async (s: Suggestion) => {
@@ -438,6 +436,11 @@ export default function LogTab() {
   const onUseCustom = withTick(() => {
     if (!hasEnoughQuery) return;
     if (selected) return;
+    // Reject raw barcode strings (8-14 digit numbers) as custom whiskey names
+    if (/^\d{8,14}$/.test(query.trim())) {
+      Alert.alert("Invalid name", "Please enter a whiskey name, not a barcode number.");
+      return;
+    }
     goToCustomTasting(query.trim());
   });
 
