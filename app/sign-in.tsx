@@ -431,7 +431,7 @@ export default function SignInScreen() {
 
     setBusy(true);
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: em,
       password: pw,
     });
@@ -451,6 +451,18 @@ export default function SignInScreen() {
         );
       }
       return Alert.alert("Create account failed", error.message);
+    }
+
+    // Supabase returns no error for duplicate emails — detect via empty identities array
+    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      return Alert.alert(
+        "Account already exists",
+        "An account with this email already exists. Please sign in.",
+        [
+          { text: "Go to Sign In", onPress: goToSignIn },
+          { text: "OK", style: "cancel" },
+        ]
+      );
     }
 
     setMode("signupVerifyChoice");
