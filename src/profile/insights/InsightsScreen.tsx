@@ -9,13 +9,13 @@ import {
 } from "react-native";
 import Purchases, { type PurchasesPackage } from "react-native-purchases";
 
+import { trackInsightsScreenViewed, trackPurchaseCompleted, trackPurchaseTapped, trackRestoreCompleted } from "../../../lib/analytics";
+import { syncPremiumStatusFromRevenueCat } from "../../../lib/premiumSync";
 import {
   getCurrentOffering,
   purchasePackage,
   restoreMyPurchases,
 } from "../../../lib/purchases";
-import { syncPremiumStatusFromRevenueCat } from "../../../lib/premiumSync";
-import { trackInsightsScreenViewed, trackPurchaseTapped, trackPurchaseCompleted, trackRestoreCompleted } from "../../../lib/analytics";
 import { spacing } from "../../../lib/spacing";
 import { colors } from "../../../lib/theme";
 import { type } from "../../../lib/typography";
@@ -25,9 +25,9 @@ import { Section } from "./components/Section";
 
 import { useClarityInsightsData } from "./hooks/useClarityInsightsData";
 import ClarityDeepDive from "./sections/ClarityDeepDive";
+import PourPreferences from "./sections/PourPreferences";
 import InsightsSummary from "./sections/summary/InsightsSummary";
 import TasteProfileRadar from "./sections/TasteProfileRadar";
-import PourPreferences from "./sections/PourPreferences";
 
 type InsightsTab = "summary" | "clarity" | "flavor" | "pour";
 
@@ -274,6 +274,7 @@ function PackageOption({
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const hasPremiumAccess = isPremium;
+  const insightsViewedRef = React.useRef(false);
 
  const headerCopy = useMemo(() => {
   if (tab === "clarity") {
@@ -300,8 +301,10 @@ function PackageOption({
     packages.find((pkg) => pkg.identifier === selectedPackageId) ?? null;
 
   useEffect(() => {
-    void trackInsightsScreenViewed();
     if (hasPremiumAccess) return;
+    if (insightsViewedRef.current) return;
+    insightsViewedRef.current = true;
+    void trackInsightsScreenViewed();
 
     let active = true;
 
