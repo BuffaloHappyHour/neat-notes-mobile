@@ -69,6 +69,7 @@ export default function AllTastingsScreen() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [activeRow, setActiveRow] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [logAgainExpanded, setLogAgainExpanded] = useState(false);
 
   const sameWhiskeyCount = useMemo(() => {
     if (!activeRow?.whiskey_name) return 0;
@@ -197,6 +198,7 @@ export default function AllTastingsScreen() {
     if (deleting) return;
     setActionsOpen(false);
     setActiveRow(null);
+    setLogAgainExpanded(false);
   }
 
   async function deleteActiveRow() {
@@ -656,47 +658,72 @@ export default function AllTastingsScreen() {
                 </Pressable>
 
                 {sameWhiskeyCount >= 2 ? (
-                  <Pressable
-                    onPress={() => {
-                      if (!activeRow) return;
-                      const whiskeyLabel =
-                        (activeRow.whiskey_name ?? "this whiskey").trim() ||
-                        "this whiskey";
-                      closeActions();
-                      Alert.alert(
-                        "Log Again",
-                        `Start a new tasting for ${whiskeyLabel}?`,
-                        [
-                          {
-                            text: "Use Previous Ratings",
-                            onPress: () =>
-                              router.push(
-                                `/log/cloud-tasting?templateTastingId=${encodeURIComponent(activeRow.id)}&lockName=1`
-                              ),
-                          },
-                          {
-                            text: "Start Fresh",
-                            onPress: () =>
-                              router.push(
-                                `/log/cloud-tasting?whiskeyName=${encodeURIComponent(activeRow.whiskey_name ?? "")}&lockName=1`
-                              ),
-                          },
-                          { text: "Cancel", style: "cancel" },
-                        ]
-                      );
-                    }}
-                    style={({ pressed }) => ({
-                      borderRadius: radii.md,
-                      paddingVertical: spacing.lg,
-                      alignItems: "center",
-                      borderWidth: 1,
-                      borderColor: colors.divider,
-                      backgroundColor: colors.surface,
-                      opacity: pressed ? 0.9 : 1,
-                    })}
-                  >
-                    <Text style={[type.button, { color: colors.accent }]}>Log Again</Text>
-                  </Pressable>
+                  logAgainExpanded ? (
+                    <View style={{ gap: spacing.sm }}>
+                      <Text style={[type.microcopyItalic, { opacity: 0.75, textAlign: "center" }]}>
+                        Start a new tasting for {(activeRow?.whiskey_name ?? "this whiskey").trim() || "this whiskey"}?
+                      </Text>
+                      <Pressable
+                        onPress={() => {
+                          if (!activeRow) return;
+                          closeActions();
+                          router.push(
+                            `/log/cloud-tasting?templateTastingId=${encodeURIComponent(activeRow.id)}&lockName=1`
+                          );
+                        }}
+                        style={({ pressed }) => ({
+                          borderRadius: radii.md,
+                          paddingVertical: spacing.lg,
+                          alignItems: "center",
+                          backgroundColor: colors.accent,
+                          opacity: pressed ? 0.9 : 1,
+                        })}
+                      >
+                        <Text style={[type.button, { color: colors.background }]}>Use Previous Ratings</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          if (!activeRow) return;
+                          closeActions();
+                          router.push(
+                            `/log/cloud-tasting?whiskeyName=${encodeURIComponent(activeRow.whiskey_name ?? "")}&lockName=1`
+                          );
+                        }}
+                        style={({ pressed }) => ({
+                          borderRadius: radii.md,
+                          paddingVertical: spacing.lg,
+                          alignItems: "center",
+                          borderWidth: 1,
+                          borderColor: colors.divider,
+                          backgroundColor: colors.surface,
+                          opacity: pressed ? 0.9 : 1,
+                        })}
+                      >
+                        <Text style={[type.button, { color: colors.accent }]}>Start Fresh</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setLogAgainExpanded(false)}
+                        style={({ pressed }) => ({ paddingVertical: spacing.sm, alignItems: "center", opacity: pressed ? 0.7 : 1 })}
+                      >
+                        <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Back</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={() => setLogAgainExpanded(true)}
+                      style={({ pressed }) => ({
+                        borderRadius: radii.md,
+                        paddingVertical: spacing.lg,
+                        alignItems: "center",
+                        borderWidth: 1,
+                        borderColor: colors.divider,
+                        backgroundColor: colors.surface,
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text style={[type.button, { color: colors.accent }]}>Log Again</Text>
+                    </Pressable>
+                  )
                 ) : null}
 
                 <Pressable
