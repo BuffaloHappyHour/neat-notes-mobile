@@ -1,5 +1,5 @@
-import * as StoreReview from "expo-store-review";
 import { router, useFocusEffect } from "expo-router";
+import * as StoreReview from "expo-store-review";
 import React, { useCallback, useEffect, useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
@@ -697,6 +697,8 @@ export default function HomeTab() {
     name: string;
   } | null>(null);
 
+  const reviewCheckRan = React.useRef(false);
+
   const logPress = (action: string, href?: string) => {
     void logClientEvent("press", {
       screen: "home",
@@ -743,6 +745,8 @@ export default function HomeTab() {
   useEffect(() => {
     if (!isAuthed || tastingCount === null || tastingCount < 5) return;
     (async () => {
+      if (reviewCheckRan.current) return;
+      reviewCheckRan.current = true;
       try {
         const { data } = await supabase.auth.getSession();
         const uid = data.session?.user?.id;
