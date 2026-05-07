@@ -299,7 +299,7 @@ export function usePostSaveMetadata() {
     return to ?? null;
   }, [pendingNavigateTo]);
 
-  const saveMetadataFromModal = useCallback(async (): Promise<Href | null> => {
+  const saveMetadataFromModal = useCallback(async (pendingBarcode?: string): Promise<Href | null> => {
     if (metaSaving) return null;
 
     // ✅ Custom: no whiskey_id to update — just close after validation (modal enforces required)
@@ -313,7 +313,7 @@ export function usePostSaveMetadata() {
 
   setMetaSaving(true);
   try {
-   await maybeCreateWhiskeyCandidate({
+   const candidateId = await maybeCreateWhiskeyCandidate({
   nameRaw: fName,
   whiskeyType: whiskeyTypeName,
   distillery: dist,
@@ -323,6 +323,23 @@ export function usePostSaveMetadata() {
   region: fRegion,
   subRegion: fSubRegion,
 });
+
+  // If this came from a barcode scan, save the pending mapping now that we have the candidate ID
+  if (pendingBarcode && candidateId) {
+    try {
+      await supabase.rpc("save_barcode_mapping", {
+        p_barcode: pendingBarcode,
+        p_whiskey_id: null,
+        p_source: "pending_candidate",
+        p_confidence: 0.5,
+        p_verified: false,
+        p_barcode_format: null,
+        p_candidate_id: candidateId,
+      });
+    } catch (e) {
+      console.warn("[barcode] pending mapping failed:", e);
+    }
+  }
 
     await hapticSuccess();
     return finishPostSaveFlow();

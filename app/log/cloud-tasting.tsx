@@ -835,43 +835,6 @@ export default function CloudTastingScreen() {
           return;
         }
       } else {
-        // If this tasting came from a barcode scan, save a pending barcode mapping
-        // linked to the candidate that will be created by maybeOpenPostSaveMetadata
-        if (routeBarcode) {
-          try {
-            // Get the candidate id that was created for this custom whiskey
-            const { data: authData } = await supabase.auth.getUser();
-            const uid = authData?.user?.id;
-            if (uid) {
-              const { data: candidateRow } = await supabase
-                .from("whiskey_candidates")
-                .select("id")
-                .eq("created_by", uid)
-                .eq("name_normalized", name.toLowerCase().trim())
-                .is("promoted_whiskey_id", null)
-                .is("rejected_at", null)
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-              if (candidateRow?.id) {
-                await supabase.rpc("save_barcode_mapping", {
-                  p_barcode: routeBarcode,
-                  p_whiskey_id: null,
-                  p_source: "pending_candidate",
-                  p_confidence: 0.5,
-                  p_verified: false,
-                  p_barcode_format: null,
-                  p_candidate_id: candidateRow.id,
-                });
-              }
-            }
-          } catch (e) {
-            // Silent — barcode mapping failure should not block the tasting save
-            console.warn("[barcode] pending mapping failed:", e);
-          }
-        }
-
         const to = await postSaveMeta.maybeOpenPostSaveMetadata("CUSTOM", "/log", {
           isCustom: true,
           name: name,
@@ -1333,7 +1296,7 @@ export default function CloudTastingScreen() {
           }
         }}
         onSave={async () => {
-          const to = await postSaveMeta.saveMetadataFromModal();
+          const to = await postSaveMeta.saveMetadataFromModal(routeBarcode || undefined);
           if (to) {
             const toastUrl =
               `${to}${String(to).includes("?") ? "&" : "?"}` +
