@@ -2,6 +2,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -217,6 +219,8 @@ export default function LogTab() {
   const [selected, setSelected] = useState<Suggestion | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionsRow, setActionsRow] = useState<{ id: string; whiskeyName: string } | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput | null>(null);
@@ -565,6 +569,16 @@ export default function LogTab() {
     };
   }, [query]);
 
+  function openActions(row: { id: string; whiskeyName: string }) {
+    setActionsRow(row);
+    setActionsOpen(true);
+  }
+
+  function closeActions() {
+    setActionsOpen(false);
+    setActionsRow(null);
+  }
+
   function goTasting(tastingId: string) {
     const id = String(tastingId ?? "").trim();
     if (!id) return;
@@ -647,13 +661,118 @@ export default function LogTab() {
                 <RecentRow
                   key={r.id}
                   row={{ id: r.id, whiskeyName: r.whiskeyName, rating: r.rating, createdAt: r.createdAt }}
-                  onPress={withTick(() => goTasting(r.id))}
+                  onPress={withTick(() => openActions({ id: r.id, whiskeyName: r.whiskeyName }))}
                 />
               ))}
             </View>
           )}
         </Card>
       </ScrollView>
+
+      <Modal
+        visible={actionsOpen}
+        transparent
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        animationType="fade"
+        onRequestClose={closeActions}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <Pressable
+            onPress={closeActions}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+
+          <Pressable
+            onPress={() => {}}
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: radii.lg,
+              borderWidth: 1,
+              borderColor: colors.divider,
+              padding: spacing.lg,
+              gap: spacing.md,
+              ...shadows.card,
+            }}
+          >
+            <View style={{ gap: 6 }}>
+              <Text style={[type.sectionHeader, { fontSize: 16 }]}>Tasting options</Text>
+              <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
+                {actionsRow?.whiskeyName}
+              </Text>
+            </View>
+
+            <View style={{ gap: spacing.sm }}>
+              <Pressable
+                onPress={() => {
+                  if (!actionsRow) return;
+                  const id = actionsRow.id;
+                  closeActions();
+                  router.push(
+                    `/log/cloud-tasting?tastingId=${encodeURIComponent(id)}&mode=edit&readonly=0` as any
+                  );
+                }}
+                style={({ pressed }) => ({
+                  borderRadius: radii.md,
+                  paddingVertical: spacing.lg,
+                  alignItems: "center",
+                  backgroundColor: colors.accent,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text style={[type.button, { color: colors.background }]}>Edit</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  if (!actionsRow) return;
+                  const row = actionsRow;
+                  Alert.alert("Delete tasting?", "This cannot be undone.", [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Delete",
+                      style: "destructive",
+                      onPress: async () => {
+                        await supabase.from("tastings").delete().eq("id", row.id);
+                        closeActions();
+                        recent.refresh();
+                      },
+                    },
+                  ]);
+                }}
+                style={({ pressed }) => ({
+                  borderRadius: radii.md,
+                  paddingVertical: spacing.lg,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: colors.divider,
+                  backgroundColor: colors.surface,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text style={[type.button, { color: colors.accent }]}>Delete</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={closeActions}
+                style={({ pressed }) => ({
+                  paddingVertical: spacing.sm,
+                  alignItems: "center",
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Cancel</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </View>
+      </Modal>
     </View>
   );
 }

@@ -247,7 +247,7 @@ export function useProfileData() {
 
         const { data: wRows, error: wErr } = await supabase
           .from("whiskeys")
-          .select("id, category")
+          .select("id, whiskey_type")
           .in("id", uniqueIds)
           .limit(4000);
 
@@ -257,7 +257,7 @@ export function useProfileData() {
         (wRows as any[]).forEach((w) => {
           const id = normId(w?.id);
           if (!id) return;
-          whiskeyToCategory.set(id, safeLabel(w?.category) || "Unknown");
+          whiskeyToCategory.set(id, safeLabel(w?.whiskey_type) || "Unknown");
         });
 
         const counts = new Map<string, number>();

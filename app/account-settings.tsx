@@ -835,7 +835,86 @@ export default function AccountSettingsScreen() {
               : <Pill label="Not linked" tone="muted" />
           }
         >
-          {linkedPhone ? (
+          {phoneStep === "enterPhone" ? (
+            <View style={{ gap: spacing.md }}>
+              <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
+                Enter your US phone number. We'll send a verification code.
+              </Text>
+              {linkedPhone ? (
+                <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
+                  This will replace your current linked number.
+                </Text>
+              ) : null}
+              <ThemedInput
+                placeholder="Phone number"
+                value={phoneInput}
+                onChangeText={setPhoneInput}
+                keyboardType="phone-pad"
+                returnKeyType="done"
+                onSubmitEditing={sendPhoneLinkOtp}
+                disabled={busy}
+                autoFocus
+              />
+              <View style={{ flexDirection: "row", gap: spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <ThemedButton
+                    label="Cancel"
+                    onPress={() => {
+                      setPhoneStep("idle");
+                      setPhoneInput("");
+                    }}
+                    disabled={busy}
+                    tone="secondary"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <ThemedButton
+                    label={busy ? "Sending…" : "Send Code"}
+                    onPress={sendPhoneLinkOtp}
+                    disabled={busy}
+                    tone="primary"
+                  />
+                </View>
+              </View>
+            </View>
+          ) : phoneStep === "enterOtp" ? (
+            <View style={{ gap: spacing.md }}>
+              <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
+                Enter the 6-digit code sent to {pendingPhone}.
+              </Text>
+              <ThemedInput
+                placeholder="6-digit code"
+                value={phoneOtp}
+                onChangeText={(v) => setPhoneOtp(v.replace(/\D/g, "").slice(0, 6))}
+                keyboardType="number-pad"
+                returnKeyType="done"
+                onSubmitEditing={verifyPhoneLinkOtp}
+                disabled={busy}
+                autoFocus
+              />
+              <View style={{ flexDirection: "row", gap: spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <ThemedButton
+                    label="Back"
+                    onPress={() => {
+                      setPhoneStep("enterPhone");
+                      setPhoneOtp("");
+                    }}
+                    disabled={busy}
+                    tone="secondary"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <ThemedButton
+                    label={busy ? "Verifying…" : "Verify Code"}
+                    onPress={verifyPhoneLinkOtp}
+                    disabled={busy || phoneOtp.length !== 6}
+                    tone={phoneOtp.length === 6 ? "primary" : "secondary"}
+                  />
+                </View>
+              </View>
+            </View>
+          ) : linkedPhone ? (
             <View style={{ gap: spacing.md }}>
               <InfoRow
                 label="Linked number"
@@ -884,7 +963,7 @@ export default function AccountSettingsScreen() {
                 icon={<Ionicons name="close-circle-outline" size={18} color={colors.textPrimary} />}
               />
             </View>
-          ) : phoneStep === "idle" ? (
+          ) : (
             <ThemedButton
               label="Add Phone Number"
               onPress={() => {
@@ -895,85 +974,6 @@ export default function AccountSettingsScreen() {
               tone="secondary"
               icon={<Ionicons name="phone-portrait-outline" size={18} color={colors.textPrimary} />}
             />
-          ) : phoneStep === "enterPhone" ? (
-            <View style={{ gap: spacing.md }}>
-              <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
-                Enter your US phone number. We'll send a verification code.
-              </Text>
-              {linkedPhone ? (
-                <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
-                  This will replace your current linked number.
-                </Text>
-              ) : null}
-              <ThemedInput
-                placeholder="Phone number"
-                value={phoneInput}
-                onChangeText={setPhoneInput}
-                keyboardType="phone-pad"
-                returnKeyType="done"
-                onSubmitEditing={sendPhoneLinkOtp}
-                disabled={busy}
-                autoFocus
-              />
-              <View style={{ flexDirection: "row", gap: spacing.md }}>
-                <View style={{ flex: 1 }}>
-                  <ThemedButton
-                    label="Cancel"
-                    onPress={() => {
-                      setPhoneStep("idle");
-                      setPhoneInput("");
-                    }}
-                    disabled={busy}
-                    tone="secondary"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <ThemedButton
-                    label={busy ? "Sending…" : "Send Code"}
-                    onPress={sendPhoneLinkOtp}
-                    disabled={busy}
-                    tone="primary"
-                  />
-                </View>
-              </View>
-            </View>
-          ) : (
-            <View style={{ gap: spacing.md }}>
-              <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
-                Enter the 6-digit code sent to {pendingPhone}.
-              </Text>
-              <ThemedInput
-                placeholder="6-digit code"
-                value={phoneOtp}
-                onChangeText={(v) => setPhoneOtp(v.replace(/\D/g, "").slice(0, 6))}
-                keyboardType="number-pad"
-                returnKeyType="done"
-                onSubmitEditing={verifyPhoneLinkOtp}
-                disabled={busy}
-                autoFocus
-              />
-              <View style={{ flexDirection: "row", gap: spacing.md }}>
-                <View style={{ flex: 1 }}>
-                  <ThemedButton
-                    label="Back"
-                    onPress={() => {
-                      setPhoneStep("enterPhone");
-                      setPhoneOtp("");
-                    }}
-                    disabled={busy}
-                    tone="secondary"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <ThemedButton
-                    label={busy ? "Verifying…" : "Verify Code"}
-                    onPress={verifyPhoneLinkOtp}
-                    disabled={busy || phoneOtp.length !== 6}
-                    tone={phoneOtp.length === 6 ? "primary" : "secondary"}
-                  />
-                </View>
-              </View>
-            </View>
           )}
         </Card>
 

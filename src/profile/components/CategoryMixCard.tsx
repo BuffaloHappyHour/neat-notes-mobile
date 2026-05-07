@@ -187,7 +187,7 @@ export function CategoryMixCard({
   if (embedded) return <View style={{ gap: spacing.md }}>{Content}</View>;
 
   return (
-    <ProfileCard title="What you drink most" subtitle="Your category mix, based on logged pours.">
+    <ProfileCard title="What you drink most" subtitle="Your whiskey type mix, based on logged pours.">
       {Content}
     </ProfileCard>
   );

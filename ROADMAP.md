@@ -1,6 +1,6 @@
 WhiskeyAppBeta — Feature Ideas & Roadmap
 
-> Last updated: May 6, 2026  
+> Last updated: May 7, 2026  
 > Maintained by: Derek  
 
 ---
@@ -36,7 +36,7 @@ Each feature includes:
 
 | ID | Feature | Area | Priority | Release Target | Complexity | Risk | Status | Description |
 |---|---|---|---|---|---|---|---|---|
-| F001 | All Tastings Page Revamp | Tasting | Low | v1.0.8 | Low | Low | 🧪 Testing | Scroll layering bug + full visual redesign of the tastings list view |
+| F001 | All Tastings Page Revamp | Tasting | Low | v1.0.8 | Low | Low | ✅ Done | Scroll layering bug fixed, full visual redesign — glass cards, whiskey type metadata, amber rating badges, sticky header |
 | F002 | Fix Host Analytics Event Snapshot metrics (C2) | Analytics | High | v1.0.8 | Low | Low | ✅ Done | Summary metrics computed from 12-row slice — wrong for events with >12 tastings |
 | F003 | Surface query errors on Event page (M3) | Events | Medium | v1.0.8 | Low | Low | ✅ Done | Silent failures show empty UI with no user feedback when queries fail |
 | F004 | Verify personal_notes in public mirror (M4) | Infrastructure | Medium | v1.0.8 | Low | Medium | ✅ Done | personal_notes written to public_tastings — confirm intent and restrict if unintentional |
@@ -67,24 +67,26 @@ Each feature includes:
 | F029 | B2B Venue Owner Access & Monetization | Infrastructure | High | v1.1.2 | Medium | Medium | 💡 Idea | Gated analytics access sold to venue/bar/restaurant owners — subscription or one-time access model |
 | F030 | Event Host Analytics Revamp | Analytics | High | v1.1.1 | Medium | Low | 💡 Idea | Revamp existing event host analytics to be richer and more actionable — foundation shared with venue analytics |
 | F031 | Delete Tasting from Edit Flow | Tasting | Low | v1.0.8 | Low | Low | ✅ Done | Add Delete option when tapping Edit on a tasting — action sheet with Edit, Delete, Cancel instead of going straight to edit form |
-| F032 | Log Again from Previous Tasting | Tasting | Medium | v1.0.8 | Low | Low | ✅ Done | "Log again" shortcut on tastings with 2+ records — prompts user to use previous ratings or start fresh, prepopulates whiskey details, defaults to today's date |
+| F032 | Log Again from Previous Tasting | Tasting | Medium | v1.0.8 | Low | Low | ✅ Done | "Log again" shortcut on tastings with 2+ records — available in All Tastings actions sheet |
 | F033 | Palate Clarity Unique Whiskey Calculation | Insights | High | v1.1.0 | Medium | Medium | 💡 Idea | Recalculate Palate Clarity and core insights using unique whiskey records only — prevents inflation from logging the same bottle repeatedly |
 | F034 | Whiskey Evolution Insights | Insights | Medium | v1.1.0 | Medium | Low | 💡 Idea | Track how perception of the same whiskey changes over time across multiple logs — first pour vs. mid-bottle vs. last dram. Unique differentiator vs. other apps |
 | F035 | Website — Core Marketing Site | Website | High | Website | Medium | Low | 💡 Idea | Formal Neat Notes website — app download CTAs, feature overview, brand story |
 | F036 | Website — Public Events Finder | Website | High | Website | Medium | Low | 💡 Idea | Public-facing table/map of upcoming whiskey events near the visitor — drives app downloads, great SEO. Requires F021 Location Platform |
 | F037 | Bottle Collection Tracker | Tasting | High | v1.1.0 | Medium | Low | 💡 Idea | Track personal whiskey collection — add via manual entry or barcode scan, bottle status (sealed/open/half/nearly gone/finished), ties to existing tasting records |
 | F038 | Claude "What Should I Drink?" Recommendation | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | Natural language prompt against your collection — type the notes you want to taste, Claude cross-references your collection and tasting history to recommend what to pour tonight. Sorted by your historical ratings. Secondary market pricing as nice-to-have. |
-| F039 | App Store / Play Store Review Prompt | UX | High | v1.0.8 | Low | Low | ✅ Done | Prompt users to rate the app after reaching 5 tastings. Uses expo-store-review (already installed). Fires on next cold open after threshold — not inline. One-time only via review_prompted_at on profiles table. |
-| F040 | Pour Profile Tab | Insights | High | v1.0.8 | Medium | Low | ✅ Done | New Insights tab showing Proof Point classification, perception bar charts for Texture/Proof/Flavor with sweet spot and gap insights. usePourPreferencesData hook queries tastings directly. |
-| F041 | Insights Summary Tab Restructure | Insights | High | v1.0.8 | Medium | Low | ✅ Done | Summary rebuilt into 6 sections: Identity Header, What to Try Next (hero), Here's Why chips (tab navigation), Palate Snapshot 2x2 grid, Flavor Fingerprint, Coach's Note. |
-| F042 | Hero Card with Here's Why Bullets | Insights | High | v1.1.0 | High | Low | 💡 Idea | Single amber card combining recommendation + 3 data-backed insight bullets (L2/L3 flavor ratings, whiskey type avg ratings, pour preference gaps). Needs useHeroInsightsData hook. |
-| F043 | Fix L1 Flavor Sentiment Inference | Infrastructure | High | v1.0.8 | Low | Low | ✅ Done | When user selects L2/L3 LIKE nodes, parent L1 now correctly infers LIKE via hasLikedDescendant() walk in cloud-tasting.tsx. Fixes historical NEUTRAL pollution on L1 nodes. |
-| F044 | Bar / Venue Menu Feature | Venue | High | v1.1.1 | High | Medium | 🔍 Scoped | Venue page with filterable whiskey menu, community ratings, out-of-stock flagging, pour size/price/$/oz. Premium: Palate Match score. Host dashboard. First use case: Hartman's Speakeasy. Needs venue_user_roles table + is_out_of_stock column. |
-| F045 | Whiskey Type Correlation Insights | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | Surface insights like "you prefer high proof Single Malts over Bourbon" using whiskey_type_id joined with tastings and ratings. Clean data confirmed via SQL. |
-| F046 | Palate Match for Venue Menus | Venue | High | v1.1.2 | High | Medium | 💡 Idea | Premium feature on venue menu pages. Match user flavor profile + pour preferences against whiskey community flavor data. Sort by Palate Match, filter "Good matches only" (>70%). Conversion moment for premium. |
-| F047 | SMS Consent Text + Twilio Resubmission | Infrastructure | High | v1.0.8 | Low | Low | ✅ Done | Added TCPA-compliant consent disclosure below phone input in sign-in.tsx. Screenshot uploaded to privacy policy page. Twilio toll-free resubmitted May 5 2026. |
-| F048 | Custom Whiskey Submission Flow Redesign | Tasting | High | v1.1.0 | Medium | Low | 💡 Idea | Redesign the user-facing custom whiskey submission form to reduce friction and improve data quality. Remove editable canonical slug (auto-generate from name). Replace free-text classification fields with taxonomy-backed dropdowns. Set MVP required fields: Name, Proof, Whiskey Type only — everything else optional. |
-| F049 | Account Settings — Add / Change Phone Number | Profile | High | v1.1.0 | Low | Low | 💡 Idea | Users who verified by email at sign-up can link a phone number later from Account Settings. Shows current linked number with option to change or remove. OTP verification required before linking. UNIQUE constraint prevents duplicates across accounts. |
+| F039 | App Store / Play Store Review Prompt | UX | High | v1.0.8 | Low | Low | ✅ Done | Prompt users to rate the app after reaching 5 tastings. Fires on next cold open. One-time only via review_prompted_at. useRef guard prevents double-fire. |
+| F040 | Pour Profile Tab | Insights | High | v1.0.8 | Medium | Low | ✅ Done | New Insights tab showing Proof Point classification, perception bar charts for Texture/Proof/Flavor with sweet spot and gap insights. |
+| F041 | Insights Summary Tab Restructure | Insights | High | v1.0.8 | Medium | Low | ✅ Done | Summary rebuilt into 6 sections: Identity Header, What to Try Next, Here's Why chips, Palate Snapshot 2x2 grid, Flavor Fingerprint, Coach's Note. |
+| F042 | Hero Card with Here's Why Bullets | Insights | High | v1.1.0 | High | Low | 💡 Idea | Single amber card combining recommendation + 3 data-backed insight bullets. Needs useHeroInsightsData hook. |
+| F043 | Fix L1 Flavor Sentiment Inference | Infrastructure | High | v1.0.8 | Low | Low | ✅ Done | When user selects L2/L3 LIKE nodes, parent L1 now correctly infers LIKE via hasLikedDescendant() walk. |
+| F044 | Bar / Venue Menu Feature | Venue | High | v1.1.1 | High | Medium | 🔍 Scoped | Venue page with filterable whiskey menu, community ratings, out-of-stock flagging. Premium: Palate Match score. First use case: Hartman's Speakeasy. |
+| F045 | Whiskey Type Correlation Insights | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | Surface insights like "you prefer high proof Single Malts over Bourbon" using whiskey_type_id joined with tastings and ratings. |
+| F046 | Palate Match for Venue Menus | Venue | High | v1.1.2 | High | Medium | 💡 Idea | Premium feature on venue menu pages. Match user flavor profile + pour preferences against whiskey community flavor data. |
+| F047 | SMS Consent Text + Twilio Resubmission | Infrastructure | High | v1.0.8 | Low | Low | ✅ Done | TCPA-compliant consent disclosure added. Twilio toll-free verified ✅ May 6, 2026. |
+| F048 | Custom Whiskey Submission Flow Redesign | Tasting | High | v1.1.0 | Medium | Low | 💡 Idea | Remove canonical slug, replace classification fields with taxonomy dropdowns, MVP required fields: Name, Proof, Whiskey Type only. |
+| F049 | Account Settings — Add / Change Phone Number | Profile | High | v1.0.8 | Low | Low | ✅ Done | Phone management card: add, change, remove linked phone. OTP verification required. profiles.phone write bug fixed. |
+| F050 | Whiskey Card Revamp | Tasting | High | v1.1.0 | Medium | Low | 💡 Idea | Full redesign of whiskey profile card — tasting history, Log Again shortcut (2+ tastings), richer bottle metadata, BHH review integration, premium community flavor data. |
+| F051 | Paywall Analytics Instrumentation | Analytics | High | v1.0.8 | Low | Low | ✅ Done | insights_screen_viewed, purchase_tapped, purchase_completed, restore_completed tracked in analytics_events. Non-premium only. Double-fire fixed via useRef guard. |
 
 ---
 
@@ -100,32 +102,10 @@ Each feature includes:
 **Release Target:** v1.0.8
 **Complexity:** Low
 **Risk:** Low
-**Status:** 💡 Idea
+**Status:** ✅ Done
 
 **Description:**
-The "All Tastings" list view feels utilitarian and unpolished compared to the rest of the app. Reported by beta user (Mike) — the layout feels clunky, the search box has a z-index/layering issue where tasting rows scroll behind it rather than beneath it cleanly, and the overall page lacks the visual warmth and hierarchy present elsewhere in the app.
-
-**Current Issues:**
-- Tasting rows scroll behind the search box instead of under it cleanly
-- Search bar and sort dropdown feel like placeholder UI with no visual refinement
-- "26 / 26" count reads like a debug label — needs better treatment
-- Tasting rows are barebones (name, rating, date, chevron only) with no visual differentiation
-- No card styling, warmth, or glass aesthetic consistent with the rest of the app
-
-**Scope / Requirements:**
-- Fix scroll layering so rows pass cleanly beneath the sticky search/sort header
-- Redesign tasting row cards with richer visual treatment (rating display, whiskey type indicator, etc.)
-- Improve search bar and sort control styling to match app aesthetic
-- Replace or reframe the count display
-- Consider sticky header polish — shadow, blur, or glass effect on scroll
-
-**Open Questions:**
-- Should tasting rows show additional metadata (whiskey type, distillery, flavor tags)?
-- Should the sort control be a segmented control or stay as a dropdown?
-- Is there a desired empty state design?
-
-**References:**
-- Screenshot from Mike (beta user) — May 1, 2026 — shows scroll layering issue and overall layout
+Full visual revamp shipped May 7, 2026. FlatList replaced with ScrollView + fixed sticky header, eliminating the header duplication scroll bug. Each tasting row is now a standalone glass card with whiskey type shown in amber italic and rating in an amber-bordered badge. Header card removed — search and sort controls inlined into compact sticky header. Query updated to join whiskeys table for whiskey_type per row. Confirmed working on device.
 
 ---
 
@@ -162,7 +142,6 @@ Additional context, inspiration, or implementation ideas.
 
 ### F018 — Shareable Flavor Profile Card
 **Area:** UX
-**Interface:** Flavor Profile (Insights)
 **Priority:** High
 **Release Target:** v1.1.0
 **Complexity:** Medium
@@ -170,35 +149,17 @@ Additional context, inspiration, or implementation ideas.
 **Status:** 💡 Idea
 
 **Description:**
-Generate a gorgeous, branded shareable image card from the user's Flavor Profile that stops the scroll on Instagram and Facebook — whether the viewer drinks whiskey or not. Serves as organic marketing for Neat Notes while giving users a meaningful artifact of their tasting identity.
+Generate a branded shareable image card from the user's Flavor Profile — stops the scroll on Instagram and Facebook. Serves as organic marketing while giving users a meaningful artifact of their tasting identity.
 
 **Scope / Requirements:**
-- Render as both 9:16 portrait (Stories) and 1:1 square (Feed post)
-- Content includes:
-  - User's name (e.g., "Derek's Flavor Profile")
-  - Flavor radar chart rendered as a clean graphic
-  - Palate Clarity score (e.g., 58/100)
-  - Top traits + avoided traits
-  - Personalized tagline (e.g., "You lean sweet and fruity")
-  - Neat Notes logo/wordmark branding
-- Dark, rich aesthetic matching the app — should feel premium and editorial
-- Export as PNG/JPEG to native share sheet (Instagram, Facebook, etc.)
+- 9:16 portrait (Stories) and 1:1 square (Feed post)
+- Flavor radar chart, Palate Clarity score, top/avoided traits, personalized tagline, Neat Notes branding
+- Dark, rich aesthetic — editorial quality
+- Export as PNG/JPEG to native share sheet
 - Replace current "copy text" share behavior entirely
 
-**Open Questions:**
-- Should the card reflect 90-day data or lifetime data?
-- Should the radar chart style match exactly what's in-app or be a more stylized/simplified version for shareability?
-- Should there be seasonal or milestone variants (e.g., "50 tastings" special card)?
-
 **Dependencies:**
-- F019 (Insights revamp with Flavor Intensity, Proof Intensity, Texture) — card should reflect updated data model
-
-**References:**
-- Screenshots of current Flavor Profile tab — May 1, 2026
-- Current share feature just copies text — no image generation
-
-**Notes:**
-Goal is "stop the scroll" quality. Should look stunning to someone who has never heard of whiskey. Think editorial magazine aesthetic, not app screenshot.
+- F019 Insights revamp — card should reflect updated data model
 
 ---
 
@@ -211,27 +172,7 @@ Goal is "stop the scroll" quality. Should look stunning to someone who has never
 **Status:** ✅ Done
 
 **Description:**
-Prompt users to rate the app on the App Store or Google Play after they reach 5 tastings. Uses the native iOS/Android system review sheet — no custom UI. Designed to catch users at a meaningful early milestone without being intrusive.
-
-**Scope / Requirements:**
-- Trigger: user reaches 5 tastings (check on cold open, not immediately after save)
-- One-time only — store a `review_prompted_at` timestamp in the `profiles` table to prevent re-prompting
-- Use `expo-store-review` (already installed as a dependency — currently unused)
-- Call `StoreReview.isAvailableAsync()` before requesting — no-op if unavailable (simulator, unsupported device)
-- Fire on the next cold open after the threshold is crossed, not mid-session
-- No custom UI — relies entirely on the native system review sheet
-
-**Implementation Notes:**
-- Add `review_prompted_at` column (timestamptz, nullable) to the `profiles` table in Supabase
-- On app launch, after home stats load: if `tastingCount >= 5` and `review_prompted_at` is null, call `StoreReview.requestReview()` and write the current timestamp to `review_prompted_at`
-- Natural hook point: `app/(tabs)/home.tsx` already loads `tastingCount` via `useHomeStats` — post-load effect is the right place
-
-**Open Questions:**
-- Should the threshold be 5 tastings or a different number?
-- Should we re-prompt after a major milestone (e.g., 50 tastings) with a separate flag?
-
-**Dependencies:**
-- Supabase `profiles` table must have `review_prompted_at` column added before shipping
+Prompts users to rate the app after reaching 5 tastings. Native system review sheet — no custom UI. Fires on cold open after threshold. One-time only via review_prompted_at on profiles table. useRef guard prevents StrictMode double-fire.
 
 ---
 
@@ -244,65 +185,79 @@ Prompt users to rate the app on the App Store or Google Play after they reach 5 
 **Status:** 💡 Idea
 
 **Description:**
-The current custom whiskey submission form is essentially an admin tool handed to users — including an editable canonical slug, free-text classification fields, and no clear sense of what's required vs. optional. This creates friction, produces dirty data, and kills momentum mid-log. The redesign simplifies the form to an MVP-friendly surface that lowers the barrier to submission while improving data quality through taxonomy-backed dropdowns.
-
-**Current Issues (seen in admin/candidate screen):**
-- Canonical slug is exposed and editable — users should never touch this; it should auto-generate from the name
-- Whiskey Type, Category, Region, and Sub-region are free-text inputs — produces inconsistent, hard-to-analyze records and contributes to "Other" pollution in analytics
-- No clear MVP required fields — the form implies everything matters equally, which discourages completion
-
-**Scope / Requirements:**
-- Remove canonical slug field entirely from user-facing form — auto-generate from name on submission
-- Replace Whiskey Type, Category, Region, and Sub-region free-text fields with dropdowns populated from approved taxonomy tables (`whiskey_types`, `whiskey_categories`, `whiskey_regions`, `whiskey_sub_regions`)
-- Set MVP required fields: **Name**, **Proof**, **Whiskey Type** — all other fields optional
-- Sub-region dropdown should be contextually filtered based on selected Region
-- Form should feel like a quick, natural extension of the logging flow — not a data entry chore
-
-**Open Questions:**
-- Should Distillery also be a dropdown from the `distilleries` table, or stay as free text for now?
-- Should we surface a "Can't find your whiskey?" explainer to set expectations before the form opens?
-- How do we handle duplicate detection before submission (same name already in candidates or whiskeys)?
+Remove canonical slug from user-facing form (auto-generate from name). Replace free-text classification fields with taxonomy-backed dropdowns. MVP required fields: Name, Proof, Whiskey Type only — everything else optional.
 
 **Dependencies:**
-- Taxonomy tables (`whiskey_types`, `whiskey_categories`, `whiskey_regions`, `whiskey_sub_regions`) must be fully populated and clean before dropdowns can be wired
-- Admin candidate review screen should remain unchanged — this only affects the user-facing submission form
-
-**Notes:**
-This is a data quality and engagement win in one. Less friction = more submissions. Dropdowns = cleaner analytics. The canonical slug auto-generation already happens on the backend — we're just stopping it from leaking into the user's face.
+- Taxonomy tables must be fully populated before dropdowns can be wired
+- Admin candidate review screen unchanged
 
 ---
 
 ### F049 — Account Settings — Add / Change Phone Number
 **Area:** Profile
 **Priority:** High
-**Release Target:** v1.1.0
+**Release Target:** v1.0.8
 **Complexity:** Low
+**Risk:** Low
+**Status:** ✅ Done
+
+**Description:**
+Phone management card in Account Settings. Add, change, or remove linked phone number. OTP verification required before linking. Critical bug fixed: verifyPhoneLinkOtp now writes profiles.phone (previously only updated Supabase auth, breaking check_phone_exists RPC for sign-in).
+
+---
+
+### F050 — Whiskey Card Revamp
+**Area:** Tasting
+**Priority:** High
+**Release Target:** v1.1.0
+**Complexity:** Medium
 **Risk:** Low
 **Status:** 💡 Idea
 
 **Description:**
-Users who verified by email at sign-up, or who skipped phone verification, have no way to link a phone number after the fact. This feature adds a phone management card to Account Settings so those users can link a phone later — enabling phone sign-in going forward without requiring a full re-registration.
+Full redesign of the whiskey profile card — currently shows basic bottle info but nothing about the user's personal relationship with the whiskey. Revamp makes it a rich personal record of every pour.
 
 **Scope / Requirements:**
-- Account Settings shows a "Phone Number" card under the Account section
-- If no phone linked: shows "Add phone number" with an input + OTP flow
-- If phone already linked: shows the masked number (e.g. +1 •••• •••• 1234) with "Change" and "Remove" options
-- Change: enter new number → OTP verification → write to profiles.phone + Supabase auth
-- Remove: confirmation alert → clear profiles.phone + Supabase auth phone
-- OTP flow uses same `supabase.auth.updateUser({ phone })` + `type: "phone_change"` pattern already in place
-- UNIQUE constraint on profiles.phone prevents the same number being linked to two accounts — show clear error if violated (error code 23505)
-
-**Open Questions:**
-- Should removing a phone number require password re-entry as a security check?
-- Should we show a home screen nudge prompting email-only users to add a phone?
+- Personal tasting history for that whiskey — dates, ratings, trend over time
+- Log Again shortcut — visible when user has 2+ tastings of that whiskey
+- Richer bottle metadata — proof, age, distillery, region, whiskey type
+- BHH review integration — show BHH score and review link if available
+- Premium: community flavor profile (top flavors logged by all users)
+- Premium: community average rating with tasting count
 
 **Dependencies:**
-- F026 — Phone Number Sign-In must be working before this is useful
-- `profiles.phone` column already exists (added April 24, 2026)
-- Partial implementation already exists in `account-settings.tsx` (`verifyPhoneLinkOtp`, `updateUser({ phone })`) — this formalizes and completes it
+- bhh_reviews table already populated
+- whiskey_community_stats view already exists
 
-**Notes:**
-Low complexity because the plumbing is mostly already there. This is primarily a UI and error-handling pass to make the existing partial flow production-ready, plus adding the remove/change paths.
+---
+
+### F051 — Paywall Analytics Instrumentation
+**Area:** Analytics
+**Priority:** High
+**Release Target:** v1.0.8
+**Complexity:** Low
+**Risk:** Low
+**Status:** ✅ Done
+
+**Description:**
+Full premium conversion funnel tracked in analytics_events. Non-premium users only. Enables post-1.0.8 analysis of awareness vs. pricing problem.
+
+**Events:** insights_screen_viewed, purchase_tapped (with package_id), purchase_completed (with package_id), restore_completed.
+
+**SQL funnel query:**
+```sql
+WITH funnel AS (
+  SELECT
+    COUNT(DISTINCT CASE WHEN event_name = 'insights_screen_viewed' THEN user_id END) as viewed,
+    COUNT(DISTINCT CASE WHEN event_name = 'purchase_tapped' THEN user_id END) as tapped,
+    COUNT(DISTINCT CASE WHEN event_name = 'purchase_completed' THEN user_id END) as converted
+  FROM analytics_events
+)
+SELECT viewed, tapped, converted,
+  ROUND(tapped::numeric / NULLIF(viewed, 0) * 100, 1) as tap_rate_pct,
+  ROUND(converted::numeric / NULLIF(tapped, 0) * 100, 1) as close_rate_pct
+FROM funnel;
+```
 
 ---
 
@@ -315,12 +270,13 @@ Low complexity because the plumbing is mostly already there. This is primarily a
 ### Profile
 - F007 — Add user_id filters to profile queries (v1.1.0)
 - F026 — Phone Number Sign-In (v1.0.8) 🔨 In Progress
-- F049 — Account Settings — Add / Change Phone Number (v1.1.0)
+- F049 — Account Settings — Add / Change Phone Number ✅ Done
 
 ### Analytics
 - F002 — Fix Host Analytics Event Snapshot metrics ✅ Done
 - F013 — Align RPC limit with UI display (Backlog)
 - F030 — Event Host Analytics Revamp (v1.1.1)
+- F051 — Paywall Analytics Instrumentation ✅ Done
 
 ### Insights
 - F019 — Insights Revamp (v1.1.0) 🔨 In Progress
@@ -334,13 +290,14 @@ Low complexity because the plumbing is mostly already there. This is primarily a
 - F045 — Whiskey Type Correlation Insights (v1.1.0)
 
 ### Tasting
-- F001 — All Tastings Page Revamp (v1.0.8) 🧪 Testing
+- F001 — All Tastings Page Revamp ✅ Done
 - F009 — Fix null guard on avg_rating ✅ Done
 - F017 — Enforce minimum rating floor (Backlog)
 - F031 — Delete Tasting from Edit Flow ✅ Done
 - F032 — Log Again from Previous Tasting ✅ Done
 - F037 — Bottle Collection Tracker (v1.1.0)
 - F048 — Custom Whiskey Submission Flow Redesign (v1.1.0)
+- F050 — Whiskey Card Revamp (v1.1.0)
 
 ### Venue
 - F005 — Fix hardcoded venue data fallbacks ✅ Done
@@ -390,9 +347,9 @@ Low complexity because the plumbing is mostly already there. This is primarily a
 | v1.0.5 | Mar 23, 2026 | Premium Insights | ✅ Done | Premium Insights launch, lifetime vs 90d clarity system, recommendations |
 | v1.0.6 | Apr 3, 2026 | Barcode & UX | ✅ Internal Only | Barcode scan, review prompt, RevenueCat UUID sync, event candidate work — tested internally, never pushed to public |
 | v1.0.7 | May 1, 2026 | Events system | 🧪 Testing | Event system: check-in flow, event page refactor, host view, Supabase sync |
-| v1.0.8 | TBD | Bug fixes, auth revamp, Insights revamp phase 1 | 💡 Planning | All Tastings revamp, host analytics fix, phone sign-in restore, confirm password, two-step verification choice, app store review prompt |
+| v1.0.8 | TBD | Auth revamp, UX polish, analytics | 💡 Planning | All Tastings revamp (glass cards, whiskey type, scroll fix), auth revamp (confirm password, two-step verification, phone sign-in), account settings phone management, app store review prompt, paywall analytics funnel, single-tap actions on recent tastings, category mix → whiskey_type |
 | v1.0.9 | TBD | Security & data integrity | 💡 Planning | Exposed auth views investigation, hardcoded venue fallbacks fix |
-| v1.1.0 | TBD | Social & Integration | 💡 Planning | Account Settings phone management, Claude-powered Insights revamp, shareable flavor profile card, push notifications, custom whiskey submission redesign, Hero Card |
+| v1.1.0 | TBD | Intelligence & Social | 💡 Planning | Whiskey card revamp + Log Again, Hero Card, shareable flavor profile card, push notifications, custom whiskey submission redesign, whiskey type correlation insights |
 | v1.1.1 | TBD | Venue Foundation & Analytics Revamp | 💡 Planning | Venue check-in infrastructure, tastings mapped to venues, event host analytics revamp, Bar/Venue Menu feature |
 | v1.1.2 | TBD | B2B Monetization | 💡 Planning | Venue owner analytics dashboard, B2B access & subscription model, Palate Match for venue menus |
 | v1.2.0 | TBD | Location Platform | 💡 Planning | Location foundation, nearby whiskey alerts, bar discovery fed by venue data, event discovery by location |
@@ -405,15 +362,19 @@ Low complexity because the plumbing is mostly already there. This is primarily a
 
 | Date | Update |
 |---|---|
-| May 6, 2026 | F049 added — Account Settings — Add / Change Phone Number |
-| May 6, 2026 | F026 updated — description revised, status → In Progress, target → v1.0.8 |
+| May 7, 2026 | F051 added — Paywall Analytics Instrumentation (confirmed live, double-fire fixed) |
+| May 7, 2026 | F050 added — Whiskey Card Revamp (v1.1.0, includes Log Again) |
+| May 7, 2026 | F001 confirmed ✅ Done on device — glass cards, whiskey type, scroll architecture fixed |
+| May 7, 2026 | F049 confirmed ✅ Done — phone management fully built, profiles.phone write bug fixed |
+| May 7, 2026 | Category mix chart switched from category to whiskey_type |
+| May 7, 2026 | Single-tap actions shipped on Log tab + Profile tab recent tastings |
+| May 7, 2026 | Paywall analytics double-fire fixed — useRef guard in InsightsScreen.tsx |
 | May 6, 2026 | Auth revamp shipped — confirm password, two-step verification choice, phone linked at sign-up, finishSignIn cleanup |
 | May 6, 2026 | F048 added — Custom Whiskey Submission Flow Redesign |
-| May 6, 2026 | Section indexes updated — F040–F047 added, F049 added to Profile |
+| May 6, 2026 | F049 added — Account Settings phone number management |
+| May 6, 2026 | F026 updated — status → In Progress, target → v1.0.8 |
+| May 6, 2026 | Section indexes updated — F040–F047 added to all relevant sections |
 | May 6, 2026 | F009 release target cleared (✅ Done, no active milestone) |
 | May 6, 2026 | F014 corrected in Infrastructure index from Backlog to ✅ Done |
-| May 5, 2026 | F040–F047 added to feature table — Pour Profile tab, Summary restructure, Hero Card, L1 sentiment fix, Bar/Venue feature, Whiskey Type Correlation, Palate Match, Twilio SMS consent |
-| May 2026 | Milestones updated through v1.2.0 with themed release arcs |
-| May 2026 | F019–F026 added — Insights revamp, push notifications, location platform, phone integration, shareable cards |
-| May 2026 | Milestones seeded from GitHub tag history (v1.0.0 through v1.0.7) |
-| May 2026 | Document created |
+| May 5, 2026 | F040–F047 added to feature table |
+| May 2026 | Milestones seeded, document created |
