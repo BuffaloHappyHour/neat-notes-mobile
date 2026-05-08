@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 import { radii } from "../../../../../lib/radii";
 import { spacing } from "../../../../../lib/spacing";
@@ -9,6 +9,8 @@ import { colors } from "../../../../../lib/theme";
 import { type } from "../../../../../lib/typography";
 import { useHomeStats } from "../../../../home/hooks/useHomeStats";
 import { type UserMetrics90dRow } from "../../hooks/useClarityInsightsData";
+import { statusLabel, toTierLabel } from "../../utils/clarityUtils";
+import { generateHeroBullets, generateStretchReason } from "../../utils/heroInsights";
 
 type InsightsTab = "summary" | "clarity" | "flavor" | "pour";
 
@@ -132,26 +134,13 @@ function buildExplorationParagraph(args: {
   }`;
 }
 
-function toTierLabel(score: number) {
-  if (score >= 80) return "Signature";
-  if (score >= 65) return "Refining";
-  if (score >= 50) return "Defining";
-  if (score >= 30) return "Developing";
-  return "Emerging";
-}
-
-function statusLabel(pct: number) {
-  if (pct >= 0.7) return "Strong";
-  if (pct >= 0.45) return "Medium";
-  return "Building";
-}
-
 type RecommendationCardItem = {
   mode: "safe" | "explore";
   title: string;
   whiskeyId: string;
   whiskeyName: string;
   whiskeyType: string;
+  whiskeyTypeId: string;
   reason: string;
 };
 
@@ -181,84 +170,6 @@ type RecommendedWhiskeyRow = {
   avg_rating: number | null;
 };
 
-function RecommendationCard({
-  item,
-  onPress,
-}: {
-  item: RecommendationCardItem;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        width: 280,
-        borderRadius: 20,
-        padding: spacing.md,
-        marginRight: spacing.md,
-        backgroundColor: pressed
-          ? "rgba(255,255,255,0.05)"
-          : "rgba(255,255,255,0.03)",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.08)",
-        gap: spacing.sm,
-      })}
-    >
-      <Text
-        style={[
-          type.body,
-          {
-            color: colors.accent,
-            fontWeight: "800",
-          },
-        ]}
-      >
-        {item.title}
-      </Text>
-
-      <Text
-        style={[
-          type.sectionHeader,
-          {
-            color: colors.textPrimary,
-            fontSize: 22,
-            lineHeight: 28,
-            fontWeight: "800",
-          },
-        ]}
-      >
-        {item.whiskeyName}
-      </Text>
-
-      <Text
-        style={[
-          type.body,
-          {
-            color: colors.textSecondary,
-            fontWeight: "600",
-            opacity: 0.8,
-            marginTop: 2,
-          },
-        ]}
-      >
-        {item.whiskeyType}
-      </Text>
-
-      <Text
-        style={[
-          type.body,
-          {
-            color: colors.textSecondary,
-            lineHeight: 22,
-          },
-        ]}
-      >
-        {item.reason}
-      </Text>
-    </Pressable>
-  );
-}
-
 export default function InsightsSummary({ metrics, onTabChange }: InsightsSummaryProps) {
   const { firstName } = useHomeStats();
 
@@ -283,6 +194,8 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
     biggestDrop: metrics?.biggest_drop_l1 ?? null,
   });
 
+  const heroBullets = metrics ? generateHeroBullets(metrics) : [];
+
   const [recommendationCards, setRecommendationCards] = useState<
     RecommendationCardItem[]
   >([
@@ -292,6 +205,7 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
       whiskeyId: "loading-safe",
       whiskeyName: "Loading recommendation...",
       whiskeyType: "Matching your palate",
+      whiskeyTypeId: "",
       reason:
         "We're pulling a whiskey that best fits your current tasting profile.",
     },
@@ -301,6 +215,7 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
       whiskeyId: "loading-explore",
       whiskeyName: "Loading recommendation...",
       whiskeyType: "Outside your comfort zone",
+      whiskeyTypeId: "",
       reason:
         "We're pulling a whiskey that encourages broader exploration.",
     },
@@ -311,12 +226,7 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
 
     async function loadRecommendations() {
       const safeFlavor = topTraits[0] ?? null;
-      const exploreFlavor = avoidedTraits[0] ?? null;
-
-      console.log("safeFlavor:", safeFlavor);
-      console.log("exploreFlavor:", exploreFlavor);
-
-      if (!safeFlavor && !exploreFlavor) return;
+      if (!safeFlavor) return;
 
       const {
         data: { user },
@@ -325,7 +235,7 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
 
       if (userError || !user?.id || !isActive) return;
 
-      const flavorSlugs = [safeFlavor, exploreFlavor].filter(
+      const flavorSlugs = [safeFlavor].filter(
         (value): value is string => Boolean(value)
       );
 
@@ -345,12 +255,9 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
         `
         )
         .eq("is_active", true)
-        .in("rule_type", ["safe", "explore"])
+        .eq("rule_type", "safe")
         .in("flavor_slug", flavorSlugs)
         .order("priority", { ascending: true });
-
-      console.log("rulesError:", rulesError);
-      console.log("rules:", rules);
 
       if (rulesError || !rules || !isActive) return;
 
@@ -358,11 +265,6 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
 
       const safeRule = typedRules.find(
         (rule) => rule.rule_type === "safe" && rule.flavor_slug === safeFlavor
-      );
-
-      const exploreRule = typedRules.find(
-        (rule) =>
-          rule.rule_type === "explore" && rule.flavor_slug === exploreFlavor
       );
 
       const nextCards: RecommendationCardItem[] = [];
@@ -377,9 +279,6 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
           }
         );
 
-        console.log("safeError:", safeError);
-        console.log("safeWhiskey:", safeWhiskey);
-
         const safeItem = (safeWhiskey as RecommendedWhiskeyRow[] | null)?.[0];
         const safeWhiskeyType = Array.isArray(safeRule.whiskey_types)
           ? safeRule.whiskey_types[0]
@@ -393,39 +292,47 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
             whiskeyId: safeItem.whiskey_id,
             whiskeyType:
               safeWhiskeyType?.name ?? "Recommended for your palate",
+            whiskeyTypeId: safeRule.target_whiskey_type_id,
             reason: safeRule.reason_template,
           });
         }
       }
 
-      if (exploreRule?.target_whiskey_type_id) {
-        const { data: exploreWhiskey, error: exploreError } = await supabase.rpc(
-          "get_recommended_whiskey_for_type",
-          {
-            p_user_id: user.id,
-            p_whiskey_type_id: exploreRule.target_whiskey_type_id,
-            p_min_tastings: 3,
-          }
+      // EXPLORE — driven by whiskey_type_affinity gap
+      const affinity = metrics?.whiskey_type_affinity;
+      if (affinity && isActive) {
+        const safeTypeId = safeRule?.target_whiskey_type_id ?? null;
+
+        const sortedTypes = Object.entries(affinity)
+          .map(([typeId, data]) => ({ typeId, ...data }))
+          .sort((a, b) => a.count - b.count);
+
+        const stretchTypeEntry = sortedTypes.find(
+          (t) => t.typeId !== safeTypeId
         );
 
-        console.log("exploreError:", exploreError);
-        console.log("exploreWhiskey:", exploreWhiskey);
+        if (stretchTypeEntry && isActive) {
+          const { data: stretchWhiskey, error: stretchError } = await supabase.rpc(
+            "get_recommended_whiskey_for_type",
+            {
+              p_user_id: user.id,
+              p_whiskey_type_id: stretchTypeEntry.typeId,
+              p_min_tastings: 1,
+            }
+          );
 
-        const exploreItem = (exploreWhiskey as RecommendedWhiskeyRow[] | null)?.[0];
-        const exploreWhiskeyType = Array.isArray(exploreRule.whiskey_types)
-          ? exploreRule.whiskey_types[0]
-          : exploreRule.whiskey_types;
-
-        if (!exploreError && exploreItem) {
-          nextCards.push({
-            mode: "explore",
-            title: "Explore Something New",
-            whiskeyName: exploreItem.display_name,
-            whiskeyId: exploreItem.whiskey_id,
-            whiskeyType:
-              exploreWhiskeyType?.name ?? "Outside your comfort zone",
-            reason: exploreRule.reason_template,
-          });
+          const stretchItem = (stretchWhiskey as RecommendedWhiskeyRow[] | null)?.[0];
+          if (!stretchError && stretchItem && isActive) {
+            nextCards.push({
+              mode: "explore",
+              title: "Stretch Pick",
+              whiskeyId: stretchItem.whiskey_id,
+              whiskeyName: stretchItem.display_name,
+              whiskeyType: stretchTypeEntry.name,
+              whiskeyTypeId: stretchTypeEntry.typeId,
+              reason: `A ${stretchTypeEntry.name} — outside your usual rotation.`,
+            });
+          }
         }
       }
 
@@ -439,7 +346,14 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
     return () => {
       isActive = false;
     };
-  }, [topTraits, avoidedTraits]);
+  }, [topTraits, avoidedTraits, metrics]);
+
+  const stretchCard = recommendationCards.find(
+    (c) => c.mode === "explore" && !c.whiskeyId.startsWith("loading")
+  );
+  const stretchReason = metrics
+    ? generateStretchReason(metrics, stretchCard?.whiskeyTypeId ?? null)
+    : null;
 
   const drivers = [
     { label: "Depth", score: metrics?.depth_0_100 ?? 0 },
@@ -496,76 +410,198 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
         </View>
       </View>
 
-      {/* SECTION 2 — WHAT TO TRY NEXT */}
-      <View style={{ gap: spacing.xs }}>
-        <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>
-          What to try next
-        </Text>
-        <Text style={[type.body, { color: colors.textSecondary }]}>
-          Based on your recent tasting profile.
-        </Text>
-      </View>
+      {/* ── HERO CARD ── */}
+      <View style={{
+        borderWidth: 1,
+        borderColor: colors.accent + '59',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 24,
+        gap: 0,
+      }}>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingTop: spacing.sm,
-          paddingRight: spacing.md,
-        }}
-      >
-        {recommendationCards.map((item) => (
-          <RecommendationCard
-            key={item.mode}
-            item={item}
-            onPress={() => {
-              if (item.whiskeyId.startsWith("loading-")) return;
-              router.push({
-                pathname: "/whiskey/[id]",
-                params: { id: item.whiskeyId },
-              });
-            }}
-          />
+        <Text style={[type.labelCaps, { color: colors.textMuted, marginBottom: 12 }]}>
+          WHAT TO TRY NEXT
+        </Text>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 12, paddingBottom: 4 }}
+          style={{ marginHorizontal: -16, paddingHorizontal: 16 }}
+        >
+          {/* Safe Pick Card */}
+          {recommendationCards
+            .filter((c) => c.mode === "safe" && !c.whiskeyId.startsWith("loading"))
+            .map((card) => (
+              <TouchableOpacity
+                key={card.whiskeyId}
+                onPress={() => router.push(`/whiskey/${card.whiskeyId}` as any)}
+                activeOpacity={0.75}
+                style={{
+                  width: 260,
+                  backgroundColor: "rgba(255,255,255,0.04)",
+                  borderWidth: 1,
+                  borderColor: colors.accent + '40',
+                  borderRadius: 10,
+                  padding: 14,
+                  gap: 6,
+                }}
+              >
+                <View style={{
+                  backgroundColor: colors.accent + '22',
+                  borderRadius: 4,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  alignSelf: "flex-start",
+                }}>
+                  <Text style={[type.labelCaps, { color: colors.accent, fontSize: 10 }]}>
+                    SAFE PICK
+                  </Text>
+                </View>
+                <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>
+                  {card.whiskeyName}
+                </Text>
+                <Text style={[type.caption, { color: colors.accent }]}>
+                  {card.whiskeyType}
+                </Text>
+                <Text style={[type.body, { color: colors.textMuted }]}>
+                  {card.reason}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+          {/* Stretch Pick Card */}
+          {recommendationCards
+            .filter((c) => c.mode === "explore" && !c.whiskeyId.startsWith("loading"))
+            .map((card) => (
+              <TouchableOpacity
+                key={card.whiskeyId}
+                onPress={() => router.push(`/whiskey/${card.whiskeyId}` as any)}
+                activeOpacity={0.75}
+                style={{
+                  width: 260,
+                  backgroundColor: "rgba(255,255,255,0.04)",
+                  borderWidth: 1,
+                  borderColor: colors.accentPressed + '40',
+                  borderRadius: 10,
+                  padding: 14,
+                  gap: 6,
+                }}
+              >
+                <View style={{
+                  backgroundColor: colors.accentPressed + '22',
+                  borderRadius: 4,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  alignSelf: "flex-start",
+                }}>
+                  <Text style={[type.labelCaps, { color: colors.accentPressed, fontSize: 10 }]}>
+                    STRETCH PICK
+                  </Text>
+                </View>
+                <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>
+                  {card.whiskeyName}
+                </Text>
+                <Text style={[type.caption, { color: colors.accentPressed }]}>
+                  {card.whiskeyType}
+                </Text>
+                <Text style={[type.body, { color: colors.textMuted }]}>
+                  {stretchReason?.label ?? card.reason}
+                </Text>
+                <Text style={[type.caption, { color: colors.textMuted, opacity: 0.7 }]}>
+                  {stretchReason?.detail}
+                </Text>
+              </TouchableOpacity>
+            ))}
+        </ScrollView>
+
+        {/* Divider */}
+        <View style={{
+          height: 1,
+          backgroundColor: "rgba(244, 241, 234, 0.2)",
+          marginVertical: 16,
+        }} />
+
+        {/* Here's Why */}
+        <Text style={[type.labelCaps, { color: colors.textMuted, marginBottom: 12 }]}>
+          HERE'S WHY
+        </Text>
+        {heroBullets.map((bullet, i) => (
+          <View key={i} style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+            <Text style={[type.body, { color: colors.accent }]}>•</Text>
+            <Text style={[type.body, { color: colors.textPrimary, flex: 1 }]}>
+              {bullet}
+            </Text>
+          </View>
         ))}
-      </ScrollView>
 
-      {/* SECTION 3 — HERE'S WHY */}
-      <View style={{ gap: spacing.sm, marginTop: spacing.lg }}>
-        <Text style={[type.labelCaps, { color: colors.textSecondary }]}>
-          Here's why
-        </Text>
-
-        <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>
-          {(
-            [
-              { label: "🫙 Pour Profile", tab: "pour" },
-              { label: "🗺 Flavor Map", tab: "flavor" },
-              { label: "📊 Palate Clarity", tab: "clarity" },
-            ] as { label: string; tab: InsightsTab }[]
-          ).map(({ label, tab }) => (
-            <Pressable
-              key={tab}
-              onPress={() => onTabChange(tab)}
-              style={({ pressed }) => ({
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.12)",
-                backgroundColor: pressed
-                  ? "rgba(255,255,255,0.08)"
-                  : "rgba(255,255,255,0.04)",
-              })}
-            >
-              <Text style={[type.body, { color: colors.textPrimary, fontWeight: "600" }]}>
-                {label}
-              </Text>
-            </Pressable>
-          ))}
+        {/* Tab chips */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
+          <TouchableOpacity
+            style={{
+              borderWidth: 1,
+              borderColor: "rgba(244, 241, 234, 0.33)",
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+            }}
+            onPress={() => onTabChange("pour")}
+          >
+            <Text style={[type.caption, { color: colors.textMuted }]}>Pour Profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              borderWidth: 1,
+              borderColor: "rgba(244, 241, 234, 0.33)",
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+            }}
+            onPress={() => onTabChange("flavor")}
+          >
+            <Text style={[type.caption, { color: colors.textMuted }]}>Flavor Map</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              borderWidth: 1,
+              borderColor: "rgba(244, 241, 234, 0.33)",
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+            }}
+            onPress={() => onTabChange("clarity")}
+          >
+            <Text style={[type.caption, { color: colors.textMuted }]}>Palate Clarity</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* SECTION 4 — PALATE SNAPSHOT */}
+      {/* COACH'S NOTE — moved up before Palate Snapshot */}
+      <View>
+        <View
+          style={{
+            height: 1,
+            backgroundColor: colors.divider,
+            opacity: 0.4,
+            marginVertical: spacing.lg,
+          }}
+        />
+
+        <Text style={[type.labelCaps, { color: colors.textSecondary, opacity: 0.6, marginBottom: spacing.sm }]}>
+          Coach's Note
+        </Text>
+
+        <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
+          {explorationParagraph}
+        </Text>
+
+        <Text style={[type.microcopyItalic, { opacity: 0.75, marginTop: spacing.sm }]}>
+          {idealPour}
+        </Text>
+      </View>
+
+      {/* PALATE SNAPSHOT */}
       <View style={{ gap: spacing.sm, marginTop: spacing.lg }}>
         <Text style={[type.labelCaps, { color: colors.textSecondary }]}>
           Palate Snapshot
@@ -618,7 +654,7 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
         </View>
       </View>
 
-      {/* SECTION 5 — FLAVOR FINGERPRINT */}
+      {/* FLAVOR FINGERPRINT */}
       <View style={{ gap: spacing.sm, marginTop: spacing.lg }}>
         <Text style={[type.labelCaps, { color: colors.textSecondary }]}>
           Flavor Fingerprint
@@ -683,30 +719,6 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
             See full flavor map →
           </Text>
         </Pressable>
-      </View>
-
-      {/* SECTION 6 — COACH'S NOTE */}
-      <View>
-        <View
-          style={{
-            height: 1,
-            backgroundColor: colors.divider,
-            opacity: 0.4,
-            marginVertical: spacing.lg,
-          }}
-        />
-
-        <Text style={[type.labelCaps, { color: colors.textSecondary, opacity: 0.6, marginBottom: spacing.sm }]}>
-          Coach's Note
-        </Text>
-
-        <Text style={[type.microcopyItalic, { opacity: 0.75 }]}>
-          {explorationParagraph}
-        </Text>
-
-        <Text style={[type.microcopyItalic, { opacity: 0.75, marginTop: spacing.sm }]}>
-          {idealPour}
-        </Text>
       </View>
 
     </View>

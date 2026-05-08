@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../../lib/supabase";
+import { statusLabel, toTierLabel } from "../utils/clarityUtils";
 
 type MiniChartDatum = {
   label: string;
@@ -57,6 +58,7 @@ export type UserMetrics90dRow = {
   consistency_0_100: number;
   confidence_0_100: number;
   radar_l1_pct: Record<string, number> | null;
+  radar_l1_affinity: Record<string, number> | null;
   top_traits_l1: string[] | null;
   avoided_traits_l1: string[] | null;
   radar_prev_l1_pct: Record<string, number> | null;
@@ -71,6 +73,11 @@ export type UserMetrics90dRow = {
   flavor_pref: number | null;
   preference_signal_count: number | null;
   top_category: string | null;
+  whiskey_type_affinity: Record<string, {
+    name: string;
+    count: number;
+    avg_rating: number | null;
+  }> | null;
 };
 
 function makeDriverDetail(
@@ -170,7 +177,6 @@ export function useClarityInsightsData(): ClarityInsightsData {
       }
 
       const metrics = data as UserMetrics90dRow;
-      console.log("90d metrics:", metrics);
 
       const depthPct = clamp01((metrics.depth_0_100 ?? 0) / 100);
       const diversityPct = clamp01((metrics.diversity_0_100 ?? 0) / 100);
@@ -338,20 +344,6 @@ export function useClarityInsightsData(): ClarityInsightsData {
 
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
-}
-
-function statusLabel(pct: number) {
-  if (pct >= 0.7) return "Strong";
-  if (pct >= 0.45) return "Medium";
-  return "Building";
-}
-
-function toTierLabel(score: number) {
-  if (score >= 80) return "Signature";
-  if (score >= 65) return "Refining";
-  if (score >= 50) return "Defining";
-  if (score >= 30) return "Developing";
-  return "Emerging";
 }
 
 function prettyTrait(value: string) {
