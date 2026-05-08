@@ -16,7 +16,7 @@ module.exports = {
       bundleIdentifier: IS_DEV_CLIENT
         ? "com.neatnotesapp.neatnotes.dev"
         : "com.neatnotesapp.neatnotes",
-      buildNumber: "49",
+      buildNumber: "50",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
       },
