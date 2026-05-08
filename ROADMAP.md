@@ -77,7 +77,7 @@ Each feature includes:
 | F039 | App Store / Play Store Review Prompt | UX | High | v1.0.8 | Low | Low | ✅ Done | Prompt users to rate the app after reaching 5 tastings. Fires on next cold open. One-time only via review_prompted_at. useRef guard prevents double-fire. |
 | F040 | Pour Profile Tab | Insights | High | v1.0.8 | Medium | Low | ✅ Done | New Insights tab showing Proof Point classification, perception bar charts for Texture/Proof/Flavor with sweet spot and gap insights. |
 | F041 | Insights Summary Tab Restructure | Insights | High | v1.0.8 | Medium | Low | ✅ Done | Summary rebuilt into 6 sections: Identity Header, What to Try Next, Here's Why chips, Palate Snapshot 2x2 grid, Flavor Fingerprint, Coach's Note. |
-| F042 | Hero Card with Here's Why Bullets | Insights | High | v1.1.0 | High | Low | 💡 Idea | Single amber card combining recommendation + 3 data-backed insight bullets. Needs useHeroInsightsData hook. |
+| F042 | Hero Card with Here's Why Bullets | Insights | High | v1.0.8 | High | Low | ✅ Done | Hero Card built and shipped in v1.0.8. Single amber-bordered card with horizontal scrollable Safe Pick + Stretch Pick cards, Here's Why data-backed bullets, and tab navigation chips. Stretch Pick driven by whiskey_type_affinity gap logic — targets types user has never or rarely tried. Safe Pick driven by recommendation_rules. Both cards use accent/accentPressed color hierarchy. |
 | F043 | Fix L1 Flavor Sentiment Inference | Infrastructure | High | v1.0.8 | Low | Low | ✅ Done | When user selects L2/L3 LIKE nodes, parent L1 now correctly infers LIKE via hasLikedDescendant() walk. |
 | F044 | Bar / Venue Menu Feature | Venue | High | v1.1.1 | High | Medium | 🔍 Scoped | Venue page with filterable whiskey menu, community ratings, out-of-stock flagging. Premium: Palate Match score. First use case: Hartman's Speakeasy. |
 | F045 | Whiskey Type Correlation Insights | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | Surface insights like "you prefer high proof Single Malts over Bourbon" using whiskey_type_id joined with tastings and ratings. |
@@ -88,7 +88,8 @@ Each feature includes:
 | F050 | Whiskey Card Revamp | Tasting | High | v1.1.0 | Medium | Low | 💡 Idea | Full redesign of whiskey profile card — tasting history, Log Again shortcut (2+ tastings), richer bottle metadata, BHH review integration, premium community flavor data. |
 | F051 | Paywall Analytics Instrumentation | Analytics | High | v1.0.8 | Low | Low | ✅ Done | insights_screen_viewed, purchase_tapped, purchase_completed, restore_completed tracked in analytics_events. Non-premium only. Double-fire fixed via useRef guard. |
 | F052 | Bulletproof Barcode Flow | Infrastructure | High | v1.0.8 | Medium | Low | ✅ Done | UPC pre-population from lookup-upc title, barcode threaded through custom tasting flow, pending_candidate mapping fires after maybeCreateWhiskeyCandidate returns, RPC resolves on promote/merge. Schema: candidate_id added to whiskey_barcodes. |
-| F053 | Go-UPC Fallback + Bottle Images | Infrastructure | High | v1.1.0 | Medium | Low | 💡 Idea | Add Go-UPC as fallback lookup when UPCitemdb returns nothing. Pull bottle images from both services. Add image_url to whiskeys + whiskey_candidates tables. Show bottle image on scan confirmation and whiskey card. Requires Go-UPC API key. Also consider UPC Data 4 Spirits bulk import (125K alcohol-specific records with proof, region, ABV). |
+| F053 | Go-UPC Fallback + Bottle Images | Infrastructure | High | v1.1.0 | Medium | Low | 💡 Idea | Add Go-UPC as fallback lookup when UPCitemdb returns nothing. Pull bottle images from both services. Add image_url to whiskeys + whiskey_candidates tables. Show bottle image on scan confirmation and whiskey card. UPC Data 4 Spirits: 16,500 whiskey records, $1,750 (Gregg London, gregg@glondon.com). |
+| F054 | User Submit Edits for Whiskey Records | Tasting | High | v1.0.9 | Medium | Low | 💡 Idea | Allow users to suggest corrections to proof, age, distillery, region, whiskey type on canonical whiskey records. Goes through admin review before applying. Crowdsources missing data at scale. |
 
 ---
 
@@ -322,11 +323,14 @@ Part 2 — Bottle image storage and display:
 - On candidate promote/merge, carry image_url to whiskeys table via RPC
 - Do not store external image URLs permanently without caching strategy — evaluate Supabase Storage vs CDN proxy
 
-Part 3 — UPC Data 4 Spirits bulk import (strategic):
-- 125K alcohol-specific records with proof, region, ABV, appellation
-- Contact upcdata4spirits.com for pricing and data format
-- Bulk import into whiskeys table would be transformative for catalog completeness
-- This is a data partnership play, not an API integration
+Part 3 — UPC Data 4 Spirits bulk import:
+- 16,500 true whiskey records from all over the world
+- Vendor: Gregg London — gregg@glondon.com — 469-585-1961
+- Agreed price: $1,750 for whiskey-only subset
+- Includes extended descriptions, tasting notes, flavor data at no extra charge
+- Quarterly updates included free year 1, $700/year after
+- Delivery: Excel with SQL-compatible field names
+- Pipeline: receive Excel → map fields → deduplicate vs existing catalog → import → run Go-UPC image pull for all new records
 
 **Open Questions:**
 - Should we proxy/cache bottle images in Supabase Storage or link directly to external URLs?
@@ -336,6 +340,37 @@ Part 3 — UPC Data 4 Spirits bulk import (strategic):
 **Dependencies:**
 - Go-UPC API key (sign up at go-upc.com, ~$19.95/month)
 - F050 Whiskey Card Revamp — images should ship alongside the card revamp
+
+---
+
+### F054 — User Submit Edits for Whiskey Records
+**Area:** Tasting
+**Priority:** High
+**Release Target:** v1.0.9
+**Complexity:** Medium
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+Allow users to suggest corrections to canonical whiskey records — proof, age, distillery, region, whiskey type. Submissions go through admin review before being applied. Crowdsources missing data at scale, especially valuable after the UPC Data 4 Spirits bulk import where some fields may still be incomplete.
+
+**Scope / Requirements:**
+- "Suggest an edit" button on whiskey profile card — visible to all logged-in users
+- Fields: proof, age, distillery, region, whiskey type (the five most commonly missing)
+- Submission creates a review record in whiskey_cleanup_review or a dedicated edits table
+- Admin review screen shows pending edits with approve/reject + current vs. suggested value diff
+- On approve: applies the change to the canonical whiskeys record
+- User gets no direct write access to canonical records — always through admin gate
+- Optional: notify submitting user when their edit is approved
+
+**Open Questions:**
+- Use existing whiskey_cleanup_review table or create a dedicated whiskey_edit_suggestions table?
+- Should we surface which fields are missing to prompt users specifically ("This whiskey is missing proof — do you know it?")?
+- Gamification angle — acknowledge top contributors?
+
+**Dependencies:**
+- F053 / UPC Data 4 Spirits import — more valuable after bulk import creates records with partial data
+- Missing data prompt (backlog) — could surface this naturally when a user logs a whiskey with gaps
 
 ---
 
@@ -364,7 +399,7 @@ Part 3 — UPC Data 4 Spirits bulk import (strategic):
 - F038 — Claude "What Should I Drink?" Recommendation (v1.1.0)
 - F040 — Pour Profile Tab ✅ Done
 - F041 — Insights Summary Tab Restructure ✅ Done
-- F042 — Hero Card with Here's Why Bullets (v1.1.0)
+- F042 — Hero Card with Here's Why Bullets ✅ Done
 - F045 — Whiskey Type Correlation Insights (v1.1.0)
 
 ### Tasting
@@ -376,6 +411,7 @@ Part 3 — UPC Data 4 Spirits bulk import (strategic):
 - F037 — Bottle Collection Tracker (v1.1.0)
 - F048 — Custom Whiskey Submission Flow Redesign (v1.1.0)
 - F050 — Whiskey Card Revamp (v1.1.0)
+- F054 — User Submit Edits for Whiskey Records (v1.0.9)
 
 ### Venue
 - F005 — Fix hardcoded venue data fallbacks ✅ Done
@@ -427,9 +463,9 @@ Part 3 — UPC Data 4 Spirits bulk import (strategic):
 | v1.0.5 | Mar 23, 2026 | Premium Insights | ✅ Done | Premium Insights launch, lifetime vs 90d clarity system, recommendations |
 | v1.0.6 | Apr 3, 2026 | Barcode & UX | ✅ Internal Only | Barcode scan, review prompt, RevenueCat UUID sync, event candidate work — tested internally, never pushed to public |
 | v1.0.7 | May 1, 2026 | Events system | 🧪 Testing | Event system: check-in flow, event page refactor, host view, Supabase sync |
-| v1.0.8 | TBD | Auth revamp, UX polish, barcode, analytics | 💡 Planning | All Tastings revamp, auth revamp (confirm password, two-step verification, phone sign-in), account settings phone management, app store review prompt, paywall analytics funnel, single-tap actions on recent tastings, category mix → whiskey_type, bulletproof barcode flow (UPC pre-population, pending_candidate mapping, RPC barcode resolution on promote/merge), duplicate email fix, change phone fix, Log Again inline expansion, insights analytics premium gate |
-| v1.0.9 | TBD | Security & web consolidation | 💡 Planning | Exposed auth views investigation, hardcoded venue fallbacks fix, consolidate neatnotes-web.vercel.app → neatnotesapp.com |
-| v1.1.0 | TBD | Intelligence, Catalog & Social | 💡 Planning | Whiskey card revamp + Log Again, Hero Card, Go-UPC fallback + bottle images, shareable flavor profile card, push notifications, custom whiskey submission redesign, whiskey type correlation insights |
+| v1.0.8 | TBD | Auth revamp, UX polish, barcode, analytics | 🔨 In Progress | All Tastings revamp, auth revamp (confirm password, two-step verification, phone sign-in), account settings phone management, app store review prompt, paywall analytics funnel, single-tap actions on recent tastings, category mix → whiskey_type, bulletproof barcode flow, duplicate email fix, change phone fix, Log Again inline, insights analytics premium gate |
+| v1.0.9 | TBD | Security, web consolidation & catalog quality | 💡 Planning | Web consolidation neatnotes-web → neatnotesapp.com, user submit edits for whiskey records (F054), schema security |
+| v1.1.0 | TBD | Intelligence, Catalog & Social | 💡 Planning | Whiskey card revamp, Hero Card, Go-UPC fallback + bottle images + UPC Data 4 Spirits import, shareable flavor profile card, push notifications, custom whiskey submission redesign, whiskey type correlation insights |
 | v1.1.1 | TBD | Venue Foundation & Analytics Revamp | 💡 Planning | Venue check-in infrastructure, tastings mapped to venues, event host analytics revamp, Bar/Venue Menu feature |
 | v1.1.2 | TBD | B2B Monetization | 💡 Planning | Venue owner analytics dashboard, B2B access & subscription model, Palate Match for venue menus |
 | v1.2.0 | TBD | Location Platform | 💡 Planning | Location foundation, nearby whiskey alerts, bar discovery fed by venue data, event discovery by location |
@@ -442,6 +478,8 @@ Part 3 — UPC Data 4 Spirits bulk import (strategic):
 
 | Date | Update |
 |---|---|
+| May 7, 2026 | F054 added — User Submit Edits for Whiskey Records (v1.0.9) |
+| May 7, 2026 | F053 updated — UPC Data 4 Spirits details added (Gregg London, $1,750, 16,500 records) |
 | May 7, 2026 | F052 added — Bulletproof Barcode Flow ✅ Done |
 | May 7, 2026 | F053 added — Go-UPC Fallback + Bottle Images (v1.1.0) |
 | May 7, 2026 | F052 shipped — UPC pre-population, barcode threading, timing fix, candidate_id schema, RPC updates |
