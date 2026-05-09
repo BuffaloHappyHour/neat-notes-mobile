@@ -57,12 +57,19 @@ export default function RootLayout() {
         console.error("[bootstrap] unexpected error:", e);
       } finally {
         setBootstrapDone(true);
-        await SplashScreen.hideAsync();
       }
     }
 
     run();
   }, []);
+
+  // Hide splash only after React has committed the real view tree.
+  // Calling hideAsync() while the component returns null causes iOS to hang.
+  useEffect(() => {
+    if (bootstrapDone) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [bootstrapDone]);
 
   useCormorantFonts({
     CormorantGaramond_400Regular,

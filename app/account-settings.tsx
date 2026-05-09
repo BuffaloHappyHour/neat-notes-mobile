@@ -305,7 +305,12 @@ export default function AccountSettingsScreen() {
 
     setIsSignedIn(true);
     setEmail(session.user.email ?? "");
-    setLinkedPhone(session.user.phone ?? "");
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("phone")
+      .eq("id", session.user.id)
+      .single();
+    setLinkedPhone(profileData?.phone ?? "");
 
     const meta: any = session.user.user_metadata ?? {};
     const metaUsername = String(meta.username ?? meta.user_name ?? meta.name ?? "").trim();
