@@ -215,3 +215,82 @@ Phase 8: Populate whiskey_barcodes with all UPCs
 - UPC coverage: 99.5%
 - ABV coverage: 100%
 - Estimated final import count: ~11,700 (after exclusions)
+
+---
+
+## Country → Category / Region Mapping
+
+### Source Country field → whiskeys.category + whiskeys.region
+
+| Source Country | → category | → region | Notes |
+|---|---|---|---|
+| USA | American | Other | No state data in source — use Other |
+| Scotland | Scotch | Scotland | |
+| Scotland (trailing space) | Scotch | Scotland | Trim whitespace |
+| Scotlan (typo) | Scotch | Scotland | Typo fix |
+| scotland (lowercase) | Scotch | Scotland | Case fix |
+| St. Andrews | Scotch | Scotland | Location in Scotland |
+| Canada | Canadian | Canada | |
+| Ireland | Irish | Ireland | |
+| Japan | Japanese | Japan | |
+| India | World | India | |
+| Australia | World | Australia | |
+| Tasmania | World | Australia | Tasmania is part of Australia |
+| France | World | France | |
+| Taiwan | World | Taiwan | |
+| England | World | England | |
+| Wales | World | Wales | |
+| United Kingdom | World | England | Default to England for ambiguous UK |
+| Sweden | World | Sweden | |
+| Israel | World | Israel | |
+| Germany | World | Germany | |
+| New Zealand | World | New Zealand | |
+| South Africa | World | South Africa | |
+| Finland | World | Finland | |
+| Finalnd (typo) | World | Finland | Typo fix |
+| Spain | World | Spain | |
+| Belgium | World | Belgium | |
+| Austria | World | Austria | |
+| Italy | World | Italy | |
+| Thailand | World | Thailand | |
+| Denmark | World | Denmark | |
+| China | World | China | |
+| Netherlands | World | Netherlands | |
+| Panama | World | Other | No legitimate whiskey industry |
+| Dominican Republic | World | Other | |
+| El Salvador | World | Other | |
+| Peru | World | Other | |
+| Lebanon | World | Lebanon | |
+| Yugoslavia | World | Other | No longer a country |
+| Polish | World | Other | Mislabeled — Poland not in source |
+| Mexico | World | Mexico | |
+| Sri Lanka | World | Sri Lanka | |
+
+### sub_region
+All imported records use sub_region = "Other" — source has no sub-region data.
+Region enrichment available via distillery lookup (Layer 1) or F054 user submit edits post-import.
+
+---
+
+## Import Strategy
+
+### Layer 1 — Distillery name match (highest quality)
+- Fuzzy match Brand_Line from source against distilleries.name
+- Where matched: inherit category, region, sub_region from distillery record AND set distillery_id
+- Estimated coverage: 20-30% of records (major brands)
+
+### Layer 2 — Country-based defaults (medium quality)
+- For unmatched records: apply country → category/region mapping above
+- No distillery_id set
+- Estimated coverage: remaining 70-80%
+
+### Layer 3 — New distillery stubs
+- For major brands not in distilleries table, create stub records during import
+- Grows distillery table organically alongside whiskey catalog
+
+---
+
+## Database Fixes Applied (May 8, 2026)
+- whiskey_regions + whiskey_sub_regions: added 19 World regions (England, Wales, Sweden, Israel, Germany, New Zealand, South Africa, Finland, Spain, Belgium, Austria, Italy, Denmark, China, Thailand, Netherlands, Mexico, Sri Lanka, Lebanon)
+- distilleries: fixed Brenne (World/France), Cooley (Irish/Ireland), Fingerlakes Distilling (American/New York), Kyro Distillery (World/Finland), Keeper's Heart (American/Minnesota)
+- whiskey_types: added Flavored Whiskey, Blended - Other, Single Grain, Wheated Whiskey, Oat Whiskey
