@@ -1,5 +1,16 @@
 import { syncPremiumStatusFromRevenueCat } from "./premiumSync";
 
+const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T | null> =>
+  Promise.race([
+    promise,
+    new Promise<null>((resolve) =>
+      setTimeout(() => {
+        console.warn(`[bootstrap] ${label} timed out after ${ms}ms`);
+        resolve(null);
+      }, ms)
+    ),
+  ]);
+
 /**
  * Coordinates the cold-open bootstrap sequence.
  * Runs premium sync on cold open so is_premium is always fresh before the app renders.
@@ -10,7 +21,11 @@ import { syncPremiumStatusFromRevenueCat } from "./premiumSync";
  */
 export async function bootstrapApp(): Promise<void> {
   await Promise.all([
-    syncPremiumStatusFromRevenueCat().catch((e) =>
+    withTimeout(
+      syncPremiumStatusFromRevenueCat(),
+      5000,
+      "syncPremiumStatusFromRevenueCat"
+    ).catch((e) =>
       console.warn("[bootstrap] premium sync failed:", e)
     ),
   ]);
