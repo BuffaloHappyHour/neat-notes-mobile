@@ -71,13 +71,13 @@ export default function RootLayout() {
     }
   }, [bootstrapDone]);
 
-  useCormorantFonts({
+  const [cormorantLoaded] = useCormorantFonts({
     CormorantGaramond_400Regular,
     CormorantGaramond_400Regular_Italic,
     CormorantGaramond_600SemiBold,
   });
 
-  useMontserratFonts({
+  const [montserratLoaded] = useMontserratFonts({
     Montserrat_400Regular,
     Montserrat_500Medium,
   });
@@ -98,8 +98,8 @@ export default function RootLayout() {
     []
   );
 
-  // Return null while bootstrapping — native splash is still visible
-  if (!bootstrapDone) return null;
+  // Return null while bootstrapping or fonts are loading — native splash is still visible
+  if (!bootstrapDone || !cormorantLoaded || !montserratLoaded) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

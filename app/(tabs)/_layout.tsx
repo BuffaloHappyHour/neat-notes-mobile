@@ -56,6 +56,10 @@ function LoggedTabBarButton(props: any) {
   return <Pressable {...rest} onPress={handlePress} />;
 }
 
+export const unstable_settings = {
+  initialRouteName: "home",
+};
+
 export default function TabsLayout() {
   const screenOptions = useMemo(
     () => ({
