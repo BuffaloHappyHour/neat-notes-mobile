@@ -71,13 +71,13 @@ export default function RootLayout() {
     }
   }, [bootstrapDone]);
 
-  const [cormorantLoaded] = useCormorantFonts({
+  const [cormorantLoaded, cormorantError] = useCormorantFonts({
     CormorantGaramond_400Regular,
     CormorantGaramond_400Regular_Italic,
     CormorantGaramond_600SemiBold,
   });
 
-  const [montserratLoaded] = useMontserratFonts({
+  const [montserratLoaded, montserratError] = useMontserratFonts({
     Montserrat_400Regular,
     Montserrat_500Medium,
   });
@@ -98,8 +98,17 @@ export default function RootLayout() {
     []
   );
 
-  // Return null while bootstrapping or fonts are loading — native splash is still visible
-  if (!bootstrapDone || !cormorantLoaded || !montserratLoaded) return null;
+  useEffect(() => {
+    if (cormorantError) console.warn("[fonts] Cormorant load failed:", cormorantError);
+    if (montserratError) console.warn("[fonts] Montserrat load failed:", montserratError);
+  }, [cormorantError, montserratError]);
+
+  const fontsReady =
+    (cormorantLoaded || !!cormorantError) && (montserratLoaded || !!montserratError);
+
+  // Return null while bootstrapping or fonts are loading — native splash is still visible.
+  // Font errors release the gate so a load failure doesn't hang on a blank screen forever.
+  if (!bootstrapDone || !fontsReady) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
