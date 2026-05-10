@@ -11,9 +11,8 @@ import {
   useFonts as useMontserratFonts,
 } from "@expo-google-fonts/montserrat";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
-import * as SplashScreen from "expo-splash-screen";
 import { Stack } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo } from "react";
 import { ImageBackground, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Purchases from "react-native-purchases";
@@ -21,55 +20,32 @@ import { bootstrapApp } from "../lib/bootstrapApp";
 import { supabase } from "../lib/supabase";
 import { colors } from "../lib/theme";
 
-// Hold the native splash until bootstrap resolves.
-// Must be called at module level, before any component renders.
-SplashScreen.preventAutoHideAsync();
-
 export default function RootLayout() {
-  const [bootstrapDone, setBootstrapDone] = useState(false);
-
   useEffect(() => {
     async function run() {
-      try {
-        // Configure RevenueCat first — bootstrapApp depends on it
-        const apiKey =
-          Platform.OS === "android"
-            ? process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY
-            : process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY;
+      const apiKey =
+        Platform.OS === "android"
+          ? process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY
+          : process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY;
 
-        if (apiKey) {
-          const alreadyConfigured = await Purchases.isConfigured();
-          if (!alreadyConfigured) {
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-            Purchases.configure({
-              apiKey,
-              appUserID: session?.user?.id ?? null,
-            });
-          }
+      if (apiKey) {
+        const alreadyConfigured = await Purchases.isConfigured();
+        if (!alreadyConfigured) {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          Purchases.configure({
+            apiKey,
+            appUserID: session?.user?.id ?? null,
+          });
         }
-
-        // Premium sync runs here on every cold open.
-        // Ensures is_premium is always fresh before any screen renders.
-        await bootstrapApp();
-      } catch (e) {
-        console.error("[bootstrap] unexpected error:", e);
-      } finally {
-        setBootstrapDone(true);
       }
+
+      bootstrapApp().catch((e) => console.error("[bootstrap] unexpected error:", e));
     }
 
     run();
   }, []);
-
-  // Hide splash only after React has committed the real view tree.
-  // Calling hideAsync() while the component returns null causes iOS to hang.
-  useEffect(() => {
-    if (bootstrapDone) {
-      SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [bootstrapDone]);
 
   const [cormorantLoaded, cormorantError] = useCormorantFonts({
     CormorantGaramond_400Regular,
@@ -102,13 +78,6 @@ export default function RootLayout() {
     if (cormorantError) console.warn("[fonts] Cormorant load failed:", cormorantError);
     if (montserratError) console.warn("[fonts] Montserrat load failed:", montserratError);
   }, [cormorantError, montserratError]);
-
-  const fontsReady =
-    (cormorantLoaded || !!cormorantError) && (montserratLoaded || !!montserratError);
-
-  // Return null while bootstrapping or fonts are loading — native splash is still visible.
-  // Font errors release the gate so a load failure doesn't hang on a blank screen forever.
-  if (!bootstrapDone || !fontsReady) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
