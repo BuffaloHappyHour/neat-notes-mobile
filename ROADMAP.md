@@ -1,6 +1,6 @@
 WhiskeyAppBeta — Feature Ideas & Roadmap
 
-> Last updated: May 7, 2026  
+> Last updated: May 10, 2026  
 > Maintained by: Derek  
 
 ---
@@ -54,14 +54,14 @@ Each feature includes:
 | F016 | Fix "Save failed" title for validation errors (L6) | UX | Low | Backlog | Low | Low | 💡 Idea | Validation errors show "Save failed" implying network issue |
 | F017 | Enforce minimum rating floor (L7) | Tasting | Low | Backlog | Low | Low | 💡 Idea | Rating 0 is submittable — decide on minimum valid rating and enforce it |
 | F018 | Shareable Flavor Profile Card | UX | High | v1.1.0 | Medium | Low | 💡 Idea | Branded shareable image card (Stories + Square) with radar chart, Palate Clarity score, top traits, and personalized tagline |
-| F019 | Insights Revamp | Insights | High | v1.1.0 | High | Medium | 🔨 In Progress | Summary tab restructured, Pour Profile tab added, Flavor Map renamed, Hero Card still pending. |
+| F019 | Insights Revamp | Insights | High | v1.0.8 | High | Medium | ✅ Done | Summary tab restructured, Pour Profile tab added, Flavor Map renamed, Hero Card shipped. |
 | F020 | Push Notification System | Infrastructure | High | v1.1.0 | Medium | Low | 💡 Idea | Weekly palate check-ins, palate score updates, milestone alerts (50 tastings, Refining tier, etc.) with Whoop-style retention model |
 | F021 | Location Platform Foundation | Infrastructure | High | v1.2.0 | High | Medium | 💡 Idea | Enable location permissions, core location infrastructure, privacy controls — foundation for all location-based features |
 | F022 | Nearby Whiskey Alerts | UX | Medium | v1.2.0 | Medium | Low | 💡 Idea | Push notification when a favorited whiskey is logged nearby by another user |
 | F023 | Bars Nearby with Your Whiskey | Discover | Medium | v1.2.0 | Medium | Low | 💡 Idea | Find bars serving whiskies that match your flavor profile and favorites |
 | F024 | Top Whiskey Bars in Your Area | Discover | Medium | v1.2.0 | Medium | Low | 💡 Idea | Curated bar discovery ranked by community ratings and whiskey selection |
 | F025 | Upcoming Public Events Near You | Events | Medium | v1.2.0 | Low | Low | 💡 Idea | Event discovery surface driven by user location — find tastings, pours, and whiskey events nearby |
-| F026 | Phone Number Sign-In | Profile | High | v1.0.8 | Medium | Low | 🔨 In Progress | Phone as secondary auth layer. Sign-up: email required, then choose email or SMS verification — phone linked to profile in same step. Sign-in: phone + OTP for users with linked number. Cannot create account with phone only. |
+| F026 | Phone Number Sign-In | Profile | High | v1.0.8 | Medium | Low | ✅ Done | Phone as secondary auth layer. Sign-up: email required, then choose email or SMS verification — phone linked to profile in same step. Sign-in: phone + OTP for users with linked number. Cannot create account with phone only. |
 | F027 | Venue Check-In Foundation | Venue | High | v1.1.1 | High | Medium | 💡 Idea | Core venue check-in infrastructure — tastings mapped to venues, venue profiles, check-in flow |
 | F028 | Venue Host Analytics Dashboard | Venue | High | v1.1.2 | Medium | Low | 💡 Idea | Real-time analytics for venue owners — popular pours, visitor counts, tasting trends. B2B revenue feature |
 | F029 | B2B Venue Owner Access & Monetization | Infrastructure | High | v1.1.2 | Medium | Medium | 💡 Idea | Gated analytics access sold to venue/bar/restaurant owners — subscription or one-time access model |
@@ -90,6 +90,8 @@ Each feature includes:
 | F052 | Bulletproof Barcode Flow | Infrastructure | High | v1.0.8 | Medium | Low | ✅ Done | UPC pre-population from lookup-upc title, barcode threaded through custom tasting flow, pending_candidate mapping fires after maybeCreateWhiskeyCandidate returns, RPC resolves on promote/merge. Schema: candidate_id added to whiskey_barcodes. |
 | F053 | Go-UPC Fallback + Bottle Images | Infrastructure | High | v1.1.0 | Medium | Low | 💡 Idea | Add Go-UPC as fallback lookup when UPCitemdb returns nothing. Pull bottle images from both services. Add image_url to whiskeys + whiskey_candidates tables. Show bottle image on scan confirmation and whiskey card. UPC Data 4 Spirits: 16,500 whiskey records, $1,750 (Gregg London, gregg@glondon.com). |
 | F054 | User Submit Edits for Whiskey Records | Tasting | High | v1.0.9 | Medium | Low | 💡 Idea | Allow users to suggest corrections to proof, age, distillery, region, whiskey type on canonical whiskey records. Goes through admin review before applying. Crowdsources missing data at scale. |
+| F055 | Fuzzy/Trigram Search for Whiskey Lookup | Infrastructure | High | v1.0.9 | Low | Low | 💡 Idea | Current search uses ILIKE %substring% — no typo tolerance. A user typing "lagovolin" gets no results and creates a duplicate custom record. Fix: enable pg_trgm extension, add GIN index on whiskeys.display_name, update search query in log.tsx to use similarity() or word_similarity() instead of ILIKE. Directly protects catalog data quality now that we have 12,701 whiskeys. |
+| F056 | Whiskey Catalog Import (UPC Data 4 Spirits) | Infrastructure | High | v1.1.0 | High | Medium | ✅ Done (May 10, 2026) | Bulk import of 11,596 whiskeys and 13,080 UPC barcodes from working-whiskey.xlsx (UPC Data 4 Spirits dataset). Catalog grew from 1,161 to 12,701 active whiskeys. All records classified by whiskey_type, category, region. 95.6% proof coverage. Import pipeline: classification script → staging table → fuzzy dedup against existing catalog → enrich matched records → promote new records → load barcodes. Scripts: whiskey_import_classifier.py, fuzzy_match.py, enrich_matched.py, promote_new.py. |
 
 ---
 
@@ -374,6 +376,63 @@ Allow users to suggest corrections to canonical whiskey records — proof, age, 
 
 ---
 
+### F055 — Fuzzy/Trigram Search for Whiskey Lookup
+**Area:** Infrastructure
+**Priority:** High
+**Release Target:** v1.0.9
+**Complexity:** Low
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+Current search in `log.tsx` (`fetchSuggestions`) uses `ILIKE %substring%` — a user who types "lagovolin" instead of "Lagavulin" gets zero results and may create a duplicate custom record. With 12,701 whiskeys in the catalog, typo tolerance becomes a catalog quality issue, not just a UX nicety.
+
+**Scope / Requirements:**
+- Enable `pg_trgm` extension in Supabase (one-line SQL: `CREATE EXTENSION IF NOT EXISTS pg_trgm`)
+- Add GIN trigram index: `CREATE INDEX whiskeys_display_name_trgm ON whiskeys USING GIN (display_name gin_trgm_ops)`
+- Update `fetchSuggestions` in `app/(tabs)/log.tsx` to call a Supabase RPC or use `.rpc('search_whiskeys', { query })` that runs `word_similarity(query, display_name) > 0.3 ORDER BY word_similarity DESC`
+- Minimum similarity threshold: 0.3 (tune based on testing — 0.4 may be too strict for short queries)
+- Keep 20-result cap and BHH score re-ranking logic unchanged
+
+**Open Questions:**
+- Use RPC or PostgREST's built-in filter operators? (`cs`, `fts` don't cover trigram — RPC is cleaner)
+- Should the GIN index also cover `whiskey_canonical` for future slug lookups?
+
+**Dependencies:**
+- None — self-contained DB + query change
+
+---
+
+### F056 — Whiskey Catalog Import (UPC Data 4 Spirits)
+**Area:** Infrastructure
+**Priority:** High
+**Release Target:** v1.1.0
+**Complexity:** High
+**Risk:** Medium
+**Status:** ✅ Done (May 10, 2026)
+
+**Description:**
+Bulk import of the UPC Data 4 Spirits dataset (purchased from Gregg London, $1,750). Catalog grew from 1,161 to 12,701 active whiskeys — a 10x expansion. All records classified by whiskey_type, category, and region. 95.6% proof coverage. 13,080 UPC barcodes loaded and linked to whiskey records.
+
+**Import Pipeline:**
+1. `scripts/whiskey_import_classifier.py` — reads `working-whiskey.xlsx` (Liquor sheet, 16,668 rows), applies exclusions, deduplicates by POS_Name with size preference, maps country → category/region, classifies Name → whiskey_type_id. Outputs `whiskeys_staging.csv` (11,698 rows) and `barcodes_staging.csv`.
+2. `scripts/load_staging.py` — loads staging CSV into `whiskey_import_staging` table via PostgREST REST API.
+3. `scripts/fuzzy_match.py` — fuzzy-matches staging records against existing whiskeys catalog using `thefuzz` token_sort_ratio with (category, whiskey_type_id) composite key + first-word prefix filter. Thresholds: ≥90 = matched, ≥85 = review, <85 = new. 18 manual overrides applied post-match.
+4. `scripts/enrich_matched.py` — enriches 70 existing whiskeys from matched staging records (27 proof updates, 165 barcodes added).
+5. `scripts/promote_new.py` — inserts 11,596 new whiskeys and 13,080 barcodes using `on_conflict=whiskey_canonical` to handle slug collisions gracefully.
+
+**Final Numbers:**
+- Whiskeys before import: 1,161 → after: 12,701 (+10x)
+- Barcodes before import: 2 → after: 13,080+
+- Proof updates on existing records: 27
+- Records needing manual review (fuzzy 85–89): 44
+
+**Dependencies:**
+- `whiskey_import_staging` table (already exists)
+- `whiskey_barcodes` table with `barcode` unique constraint
+
+---
+
 ## Section Indexes
 
 ### Events
@@ -382,7 +441,7 @@ Allow users to suggest corrections to canonical whiskey records — proof, age, 
 
 ### Profile
 - F007 — Add user_id filters to profile queries (v1.1.0)
-- F026 — Phone Number Sign-In (v1.0.8) 🔨 In Progress
+- F026 — Phone Number Sign-In ✅ Done
 - F049 — Account Settings — Add / Change Phone Number ✅ Done
 
 ### Analytics
@@ -392,7 +451,7 @@ Allow users to suggest corrections to canonical whiskey records — proof, age, 
 - F051 — Paywall Analytics Instrumentation ✅ Done
 
 ### Insights
-- F019 — Insights Revamp (v1.1.0) 🔨 In Progress
+- F019 — Insights Revamp ✅ Done
 - F020 — Push Notification System (v1.1.0)
 - F033 — Palate Clarity Unique Whiskey Calculation (v1.1.0)
 - F034 — Whiskey Evolution Insights (v1.1.0)
@@ -445,6 +504,8 @@ Allow users to suggest corrections to canonical whiskey records — proof, age, 
 - F047 — SMS Consent Text + Twilio Resubmission ✅ Done
 - F052 — Bulletproof Barcode Flow ✅ Done
 - F053 — Go-UPC Fallback + Bottle Images (v1.1.0)
+- F055 — Fuzzy/Trigram Search for Whiskey Lookup (v1.0.9)
+- F056 — Whiskey Catalog Import (UPC Data 4 Spirits) ✅ Done
 
 ### Website
 - F035 — Core Marketing Site (Website)
@@ -463,9 +524,9 @@ Allow users to suggest corrections to canonical whiskey records — proof, age, 
 | v1.0.5 | Mar 23, 2026 | Premium Insights | ✅ Done | Premium Insights launch, lifetime vs 90d clarity system, recommendations |
 | v1.0.6 | Apr 3, 2026 | Barcode & UX | ✅ Internal Only | Barcode scan, review prompt, RevenueCat UUID sync, event candidate work — tested internally, never pushed to public |
 | v1.0.7 | May 1, 2026 | Events system | 🧪 Testing | Event system: check-in flow, event page refactor, host view, Supabase sync |
-| v1.0.8 | TBD | Auth revamp, UX polish, barcode, analytics | 🔨 In Progress | All Tastings revamp, auth revamp (confirm password, two-step verification, phone sign-in), account settings phone management, app store review prompt, paywall analytics funnel, single-tap actions on recent tastings, category mix → whiskey_type, bulletproof barcode flow, duplicate email fix, change phone fix, Log Again inline, insights analytics premium gate |
+| v1.0.8 | TBD | Auth revamp, UX polish, barcode, analytics | 🔨 In Progress | All Tastings revamp, auth revamp (confirm password, two-step verification, phone sign-in), account settings phone management, app store review prompt, paywall analytics funnel, single-tap actions on recent tastings, category mix → whiskey_type, bulletproof barcode flow, duplicate email fix, change phone fix, Log Again inline, insights analytics premium gate, nav bar fix (unstable_settings + font gate), whiskey catalog import groundwork |
 | v1.0.9 | TBD | Security, web consolidation & catalog quality | 💡 Planning | Web consolidation neatnotes-web → neatnotesapp.com, user submit edits for whiskey records (F054), schema security |
-| v1.1.0 | TBD | Intelligence, Catalog & Social | 💡 Planning | Whiskey card revamp, Hero Card, Go-UPC fallback + bottle images + UPC Data 4 Spirits import, shareable flavor profile card, push notifications, custom whiskey submission redesign, whiskey type correlation insights |
+| v1.1.0 | TBD | Intelligence, Catalog & Social | 💡 Planning | Whiskey card revamp, Hero Card, Go-UPC fallback + bottle images, shareable flavor profile card, push notifications, custom whiskey submission redesign, whiskey type correlation insights |
 | v1.1.1 | TBD | Venue Foundation & Analytics Revamp | 💡 Planning | Venue check-in infrastructure, tastings mapped to venues, event host analytics revamp, Bar/Venue Menu feature |
 | v1.1.2 | TBD | B2B Monetization | 💡 Planning | Venue owner analytics dashboard, B2B access & subscription model, Palate Match for venue menus |
 | v1.2.0 | TBD | Location Platform | 💡 Planning | Location foundation, nearby whiskey alerts, bar discovery fed by venue data, event discovery by location |
@@ -478,6 +539,13 @@ Allow users to suggest corrections to canonical whiskey records — proof, age, 
 
 | Date | Update |
 |---|---|
+| May 10, 2026 | F056 added — Whiskey catalog import ✅ Done. 12,701 whiskeys, 13,080 barcodes |
+| May 10, 2026 | F055 added — Fuzzy/trigram search (v1.0.9) |
+| May 10, 2026 | Catalog import complete: 11,596 new whiskeys promoted, 13,080 barcodes loaded |
+| May 10, 2026 | All pre-import data cleanup complete: 83 Other/Other fixes, 63 type fixes, 75 whiskey_name mismatches resolved, Angel's Envy merge, Lagavulin 16 merge |
+| May 10, 2026 | Nav bar root cause identified and fixed: unstable_settings + font gate |
+| May 10, 2026 | v1.0.8 submitted to App Store |
+| May 10, 2026 | New iOS + Android builds in progress with nav bar fix |
 | May 7, 2026 | F054 added — User Submit Edits for Whiskey Records (v1.0.9) |
 | May 7, 2026 | F053 updated — UPC Data 4 Spirits details added (Gregg London, $1,750, 16,500 records) |
 | May 7, 2026 | F052 added — Bulletproof Barcode Flow ✅ Done |
