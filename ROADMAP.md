@@ -92,6 +92,7 @@ Each feature includes:
 | F054 | User Submit Edits for Whiskey Records | Tasting | High | v1.0.9 | Medium | Low | 💡 Idea | Allow users to suggest corrections to proof, age, distillery, region, whiskey type on canonical whiskey records. Goes through admin review before applying. Crowdsources missing data at scale. |
 | F055 | Fuzzy/Trigram Search for Whiskey Lookup | Infrastructure | High | v1.0.9 | Low | Low | 💡 Idea | Current search uses ILIKE %substring% — no typo tolerance. A user typing "lagovolin" gets no results and creates a duplicate custom record. Fix: enable pg_trgm extension, add GIN index on whiskeys.display_name, update search query in log.tsx to use similarity() or word_similarity() instead of ILIKE. Directly protects catalog data quality now that we have 12,701 whiskeys. |
 | F056 | Whiskey Catalog Import (UPC Data 4 Spirits) | Infrastructure | High | v1.1.0 | High | Medium | ✅ Done (May 10, 2026) | Bulk import of 11,596 whiskeys and 13,080 UPC barcodes from working-whiskey.xlsx (UPC Data 4 Spirits dataset). Catalog grew from 1,161 to 12,701 active whiskeys. All records classified by whiskey_type, category, region. 95.6% proof coverage. Import pipeline: classification script → staging table → fuzzy dedup against existing catalog → enrich matched records → promote new records → load barcodes. Scripts: whiskey_import_classifier.py, fuzzy_match.py, enrich_matched.py, promote_new.py. |
+| F057 | Search Relevance Ranking | UX | High | v1.0.9 | Low | Low | 💡 Idea | With 12,701 whiskeys in the catalog, alphabetical search ranking is broken — "Sazerac" surfaces obscure barrel selects before standard Sazerac Rye. Fix: replace .order("display_name") with an RPC scoring starts-with +10pts, shorter name ranked higher, has community tastings +5pts, alphabetical as tiebreaker. Also reduce result limit from 10 to 7. |
 
 ---
 
@@ -433,6 +434,28 @@ Bulk import of the UPC Data 4 Spirits dataset (purchased from Gregg London, $1,7
 
 ---
 
+### F057 — Search Relevance Ranking
+**Area:** UX
+**Priority:** High
+**Release Target:** v1.0.9
+**Complexity:** Low
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+With 12,701 whiskeys in the catalog, the current alphabetical search ranking is broken. Searching "Sazerac" surfaces obscure barrel selects before the standard Sazerac Rye because alphabetical order ignores relevance. Fix: replace `.order("display_name")` with an RPC that scores results by: (1) starts-with match +10 points, (2) shorter display_name ranked higher, (3) has community tastings +5 points, (4) alphabetical as final tiebreaker. Also reduce result limit from 10 to 7 to reduce noise.
+
+**Scope / Requirements:**
+- New Supabase RPC `search_whiskeys_ranked(query text)` that applies the scoring logic server-side
+- Score breakdown: starts-with match +10, shorter name ranked higher, community tastings count > 0 +5, alphabetical as final tiebreaker
+- Reduce result limit from 10 to 7
+- Update `fetchSuggestions` in `app/(tabs)/log.tsx` to call the new RPC instead of `.order("display_name")`
+
+**Dependencies:**
+- F055 Fuzzy/Trigram Search — ranking complements typo tolerance; ideally ships together
+
+---
+
 ## Section Indexes
 
 ### Events
@@ -489,6 +512,7 @@ Bulk import of the UPC Data 4 Spirits dataset (purchased from Gregg London, $1,7
 - F018 — Shareable Flavor Profile Card (v1.1.0)
 - F022 — Nearby Whiskey Alerts (v1.2.0)
 - F039 — App Store / Play Store Review Prompt ✅ Done
+- F057 — Search Relevance Ranking (v1.0.9)
 
 ### Infrastructure
 - F004 — Verify personal_notes in public mirror ✅ Done
@@ -539,6 +563,7 @@ Bulk import of the UPC Data 4 Spirits dataset (purchased from Gregg London, $1,7
 
 | Date | Update |
 |---|---|
+| May 10, 2026 | F057 added — Search Relevance Ranking (v1.0.9) |
 | May 10, 2026 | F056 added — Whiskey catalog import ✅ Done. 12,701 whiskeys, 13,080 barcodes |
 | May 10, 2026 | F055 added — Fuzzy/trigram search (v1.0.9) |
 | May 10, 2026 | Catalog import complete: 11,596 new whiskeys promoted, 13,080 barcodes loaded |
