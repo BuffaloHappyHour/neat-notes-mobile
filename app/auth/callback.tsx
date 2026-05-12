@@ -50,7 +50,7 @@ export default function AuthCallback() {
     let cancelled = false;
 
     // 🔁 Pattern B web reset page (replace with your real domain)
-    const WEB_RESET_URL = "https://neatnotes-web.vercel.app/auth/reset";
+    const WEB_RESET_URL = "https://neatnotesapp.com/auth/reset";
 
     async function handleUrl(url: string | null) {
       if (!url) {
