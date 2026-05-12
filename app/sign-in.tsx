@@ -514,7 +514,7 @@ export default function SignInScreen() {
     }
 
     setBusy(true);
-    const redirectTo = "https://neatnotes-web.vercel.app/auth/reset";
+    const redirectTo = "https://neatnotesapp.com/auth/reset";
     const { error } = await supabase.auth.resetPasswordForEmail(em, { redirectTo });
     setBusy(false);
 
