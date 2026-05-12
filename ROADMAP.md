@@ -70,7 +70,7 @@ Each feature includes:
 | F032 | Log Again from Previous Tasting | Tasting | Medium | v1.0.8 | Low | Low | ✅ Done | "Log again" shortcut on tastings with 2+ records — available in All Tastings actions sheet, expands inline |
 | F033 | Palate Clarity Unique Whiskey Calculation | Insights | High | v1.1.0 | Medium | Medium | 💡 Idea | Recalculate Palate Clarity and core insights using unique whiskey records only — prevents inflation from logging the same bottle repeatedly |
 | F034 | Whiskey Evolution Insights | Insights | Medium | v1.1.0 | Medium | Low | 💡 Idea | Track how perception of the same whiskey changes over time across multiple logs — first pour vs. mid-bottle vs. last dram. Unique differentiator vs. other apps |
-| F035 | Website — Core Marketing Site | Website | High | Website | Medium | Low | 💡 Idea | Formal Neat Notes website — app download CTAs, feature overview, brand story |
+| F035 | Website — Core Marketing Site | Website | High | Website | Medium | Low | 💡 Idea | Unified web platform — official marketing site, auth/callback/reset handler, future admin portal and partner dashboard. One repo, one domain, one source of truth under neatnotesapp.com. |
 | F036 | Website — Public Events Finder | Website | High | Website | Medium | Low | 💡 Idea | Public-facing table/map of upcoming whiskey events near the visitor — drives app downloads, great SEO. Requires F021 Location Platform |
 | F037 | Bottle Collection Tracker | Tasting | High | v1.1.0 | Medium | Low | 💡 Idea | Track personal whiskey collection — add via manual entry or barcode scan, bottle status (sealed/open/half/nearly gone/finished), ties to existing tasting records |
 | F038 | Claude "What Should I Drink?" Recommendation | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | Natural language prompt against your collection — type the notes you want to taste, Claude cross-references your collection and tasting history to recommend what to pour tonight. |
@@ -93,6 +93,7 @@ Each feature includes:
 | F055 | Fuzzy/Trigram Search for Whiskey Lookup | Infrastructure | High | v1.0.9 | Low | Low | 💡 Idea | Current search uses ILIKE %substring% — no typo tolerance. A user typing "lagovolin" gets no results and creates a duplicate custom record. Fix: enable pg_trgm extension, add GIN index on whiskeys.display_name, update search query in log.tsx to use similarity() or word_similarity() instead of ILIKE. Directly protects catalog data quality now that we have 12,701 whiskeys. |
 | F056 | Whiskey Catalog Import (UPC Data 4 Spirits) | Infrastructure | High | v1.1.0 | High | Medium | ✅ Done (May 10, 2026) | Bulk import of 11,596 whiskeys and 13,080 UPC barcodes from working-whiskey.xlsx (UPC Data 4 Spirits dataset). Catalog grew from 1,161 to 12,701 active whiskeys. All records classified by whiskey_type, category, region. 95.6% proof coverage. Import pipeline: classification script → staging table → fuzzy dedup against existing catalog → enrich matched records → promote new records → load barcodes. Scripts: whiskey_import_classifier.py, fuzzy_match.py, enrich_matched.py, promote_new.py. |
 | F057 | Search Relevance Ranking | UX | High | v1.0.9 | Low | Low | 💡 Idea | With 12,701 whiskeys in the catalog, alphabetical search ranking is broken — "Sazerac" surfaces obscure barrel selects before standard Sazerac Rye. Fix: replace .order("display_name") with an RPC scoring starts-with +10pts, shorter name ranked higher, has community tastings +5pts, alphabetical as tiebreaker. Also reduce result limit from 10 to 7. |
+| F058 | Web Platform Consolidation & Migration | Website | High | v1.0.9 | Medium | Low | 💡 Idea | Migrate auth/callback + password reset from neatnotes-web (buried in mobile repo) to new unified neatnotesapp.com platform. Decommission neatnotes-web and neatnotes-landing as separate surfaces. Update mobile app to point to new URLs. |
 
 ---
 
@@ -456,6 +457,54 @@ With 12,701 whiskeys in the catalog, the current alphabetical search ranking is 
 
 ---
 
+### F058 — Web Platform Consolidation & Migration
+**Area:** Website
+**Priority:** High
+**Release Target:** v1.0.9
+**Complexity:** Medium
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+We currently have two fragmented web surfaces with no single source of truth:
+- **neatnotes-landing** — static HTML/CSS marketing site, hosted on Vercel, NOT Git-connected, lives on local C drive
+- **neatnotes-web** — small Next.js app buried inside the mobile repo (WhiskeyAppBeta), handles auth callback + password reset only
+
+The goal is to consolidate everything into one unified standalone web platform (F035) hosted at neatnotesapp.com. This feature tracks the migration work specifically — standing up the new platform, recreating the auth routes, updating the mobile app to point to the new URLs, and decommissioning the old surfaces.
+
+**Scope / Requirements:**
+- Create new standalone Next.js repo: `neatnotes-web-platform`
+- Connect to GitHub and deploy to Vercel under neatnotesapp.com
+- Recreate `/auth/callback` route (currently in neatnotes-web/app/auth/callback/CallbackClient.tsx)
+- Recreate `/auth/reset` route (currently hardcoded to https://neatnotes-web.vercel.app/auth/reset on line 505 of sign-in.tsx)
+- Test both auth routes thoroughly before cutting over mobile app
+- Update sign-in.tsx line 505 to point to https://neatnotesapp.com/auth/reset
+- Update any other mobile references to neatnotes-web.vercel.app
+- Decommission neatnotes-web from the mobile repo (remove or archive the folder)
+- neatnotes-landing static site: migrate content to new platform, then retire
+
+**Migration Strategy (safe path — do not break production auth):**
+1. Build new platform first
+2. Recreate callback/reset routes and test thoroughly
+3. Update mobile app in v1.0.9 to point to neatnotesapp.com routes
+4. Only then decommission old surfaces
+
+**Open Questions:**
+- Does neatnotes-landing have any content not yet in the new platform scope?
+- Are there any other hardcoded references to neatnotes-web.vercel.app beyond sign-in.tsx line 505?
+- Should neatnotes-web folder be deleted from mobile repo or just archived?
+
+**Dependencies:**
+- F035 — unified platform must exist before migration can complete
+- GoDaddy domain (neatnotesapp.com) already owned
+- Vercel account already active
+- Supabase already configured for auth callbacks
+
+**Critical Dependency — Do Not Decommission Early:**
+neatnotes-web.vercel.app MUST remain live and functional until v1.0.9 is in the App Store and adoption is high enough that no meaningful user base remains on v1.0.8 or older. v1.0.8 (submitted May 10, 2026) still hardcodes neatnotes-web.vercel.app/auth/reset for password reset. Decommissioning early will break password reset for all users on older builds. Safe decommission window: after v1.0.9 has been live in production for 60+ days.
+
+---
+
 ## Section Indexes
 
 ### Events
@@ -534,6 +583,7 @@ With 12,701 whiskeys in the catalog, the current alphabetical search ranking is 
 ### Website
 - F035 — Core Marketing Site (Website)
 - F036 — Public Events Finder (Website — depends on F021 Location Platform)
+- F058 — Web Platform Consolidation & Migration (v1.0.9)
 
 ---
 
@@ -549,7 +599,7 @@ With 12,701 whiskeys in the catalog, the current alphabetical search ranking is 
 | v1.0.6 | Apr 3, 2026 | Barcode & UX | ✅ Internal Only | Barcode scan, review prompt, RevenueCat UUID sync, event candidate work — tested internally, never pushed to public |
 | v1.0.7 | May 1, 2026 | Events system | 🧪 Testing | Event system: check-in flow, event page refactor, host view, Supabase sync |
 | v1.0.8 | TBD | Auth revamp, UX polish, barcode, analytics | 🔨 In Progress | All Tastings revamp, auth revamp (confirm password, two-step verification, phone sign-in), account settings phone management, app store review prompt, paywall analytics funnel, single-tap actions on recent tastings, category mix → whiskey_type, bulletproof barcode flow, duplicate email fix, change phone fix, Log Again inline, insights analytics premium gate, nav bar fix (unstable_settings + font gate), whiskey catalog import groundwork |
-| v1.0.9 | TBD | Security, web consolidation & catalog quality | 💡 Planning | Web consolidation neatnotes-web → neatnotesapp.com, user submit edits for whiskey records (F054), schema security |
+| v1.0.9 | TBD | Security, web consolidation & catalog quality | 💡 Planning | Web consolidation neatnotes-web → neatnotesapp.com, user submit edits for whiskey records (F054), schema security, web platform consolidation (F058) |
 | v1.1.0 | TBD | Intelligence, Catalog & Social | 💡 Planning | Whiskey card revamp, Hero Card, Go-UPC fallback + bottle images, shareable flavor profile card, push notifications, custom whiskey submission redesign, whiskey type correlation insights |
 | v1.1.1 | TBD | Venue Foundation & Analytics Revamp | 💡 Planning | Venue check-in infrastructure, tastings mapped to venues, event host analytics revamp, Bar/Venue Menu feature |
 | v1.1.2 | TBD | B2B Monetization | 💡 Planning | Venue owner analytics dashboard, B2B access & subscription model, Palate Match for venue menus |
@@ -563,6 +613,7 @@ With 12,701 whiskeys in the catalog, the current alphabetical search ranking is 
 
 | Date | Update |
 |---|---|
+| May 12, 2026 | F058 added — Web Platform Consolidation & Migration (v1.0.9). F035 updated to reflect unified platform vision. |
 | May 10, 2026 | F057 added — Search Relevance Ranking (v1.0.9) |
 | May 10, 2026 | F056 added — Whiskey catalog import ✅ Done. 12,701 whiskeys, 13,080 barcodes |
 | May 10, 2026 | F055 added — Fuzzy/trigram search (v1.0.9) |
