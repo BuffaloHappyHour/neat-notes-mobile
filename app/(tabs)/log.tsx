@@ -42,6 +42,7 @@ type Suggestion = {
   whiskeyId: string;
   whiskeyName: string;
   bhhScore: number | null;
+  isFuzzyMatch?: boolean;
 };
 
 function SoftDivider() {
@@ -350,6 +351,8 @@ export default function LogTab() {
     runLookup();
   }, [barcode]);
 
+  const hasFuzzyMatches = suggestions.length > 0 && suggestions.every((s) => s.isFuzzyMatch);
+
   const helperLine = useMemo(() => {
     if (barcodeLookupStatus === "loading") return "Checking barcode…";
     if (barcodeLookupStatus === "not_found") {
@@ -357,14 +360,16 @@ export default function LogTab() {
     }
     if (!hasEnoughQuery) return "Start typing a bottle name to search.";
     if (selected) return "Tap Continue to open the whiskey profile.";
+    if (hasFuzzyMatches) return "No exact matches — but we found similar whiskies. Did you mean one of these?";
     if (suggestions.length > 0) return "Tap a result, or press Continue to open the top match.";
     return "No matches. Tap Add custom entry to log it anyway.";
-  }, [barcodeLookupStatus, hasEnoughQuery, selected, suggestions.length]);
+  }, [barcodeLookupStatus, hasEnoughQuery, selected, hasFuzzyMatches, suggestions.length]);
 
   const canContinue = useMemo(() => {
     if (!hasEnoughQuery) return false;
+    if (hasFuzzyMatches) return false; // force explicit selection on fuzzy results
     return !!selected || suggestions.length > 0;
-  }, [hasEnoughQuery, selected, suggestions.length]);
+  }, [hasEnoughQuery, selected, suggestions.length, hasFuzzyMatches]);
 
   function onType(text: string) {
     setQuery(text);
@@ -546,6 +551,31 @@ export default function LogTab() {
           return a.whiskeyName.localeCompare(b.whiskeyName);
         })
         .slice(0, 10);
+
+      // If ILIKE returned no results, try fuzzy duplicate detection
+      if (list.length === 0 && t.length >= 3) {
+        const { data: fuzzyData, error: fuzzyErr } = await supabase.rpc(
+          "find_duplicate_whiskey_candidates",
+          { p_name: t, p_limit: 5 }
+        );
+
+        if (!fuzzyErr && fuzzyData && fuzzyData.length > 0) {
+          const fuzzyList: Suggestion[] = (fuzzyData as any[])
+            .filter((r) => r.similarity >= 0.3)
+            .map((r) => ({
+              whiskeyId: String(r.id),
+              whiskeyName: String(r.display_name ?? "Whiskey"),
+              bhhScore: null,
+              isFuzzyMatch: true,
+            }));
+
+          if (fuzzyList.length > 0) {
+            setSuggestions(fuzzyList);
+            setLoading(false);
+            return;
+          }
+        }
+      }
 
       setSuggestions(list);
     } catch (e: any) {

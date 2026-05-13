@@ -223,9 +223,9 @@ export function SearchSection({
                 style={[type.microcopyItalic, { opacity: 0.75, fontSize: 12 }]}
                 numberOfLines={1}
               >
-                Tap to view profile
+                {(s as any).isFuzzyMatch ? "Similar match — tap to view profile" : "Tap to view profile"}
                 {typeof s.bhhScore === "number" ? ` • BHH ${Math.round(s.bhhScore)}` : ""}
-                {idx === 0 ? " • Top match" : ""}
+                {idx === 0 && !(s as any).isFuzzyMatch ? " • Top match" : ""}
               </Text>
             </Pressable>
           ))}
