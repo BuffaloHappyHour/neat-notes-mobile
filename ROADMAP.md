@@ -1,6 +1,6 @@
 WhiskeyAppBeta — Feature Ideas & Roadmap
 
-> Last updated: May 10, 2026  
+> Last updated: May 13, 2026  
 > Maintained by: Derek  
 
 ---
@@ -94,6 +94,18 @@ Each feature includes:
 | F056 | Whiskey Catalog Import (UPC Data 4 Spirits) | Infrastructure | High | v1.1.0 | High | Medium | ✅ Done (May 10, 2026) | Bulk import of 11,596 whiskeys and 13,080 UPC barcodes from working-whiskey.xlsx (UPC Data 4 Spirits dataset). Catalog grew from 1,161 to 12,701 active whiskeys. All records classified by whiskey_type, category, region. 95.6% proof coverage. Import pipeline: classification script → staging table → fuzzy dedup against existing catalog → enrich matched records → promote new records → load barcodes. Scripts: whiskey_import_classifier.py, fuzzy_match.py, enrich_matched.py, promote_new.py. |
 | F057 | Search Relevance Ranking | UX | High | v1.0.9 | Low | Low | 💡 Idea | With 12,701 whiskeys in the catalog, alphabetical search ranking is broken — "Sazerac" surfaces obscure barrel selects before standard Sazerac Rye. Fix: replace .order("display_name") with an RPC scoring starts-with +10pts, shorter name ranked higher, has community tastings +5pts, alphabetical as tiebreaker. Also reduce result limit from 10 to 7. |
 | F058 | Web Platform Consolidation & Migration | Website | High | v1.0.9 | Medium | Low | 💡 Idea | Migrate auth/callback + password reset from neatnotes-web (buried in mobile repo) to new unified neatnotesapp.com platform. Decommission neatnotes-web and neatnotes-landing as separate surfaces. Update mobile app to point to new URLs. |
+| F059 | Admin Dashboard Redesign | Admin | High | v1.0.9 | Medium | Low | ✅ Done | Full premium dark redesign — new component library (SectionDivider, MetricBarRow, PowerGrid, TotalChip), status colors aligned to design tokens, amber accent bars on cards |
+| F060 | Admin Dashboard — New KPIs & Monetization Tab | Admin | High | v1.0.9 | Low | Low | ✅ Done | New Monetization tab (premium users, premium %, avg tastings by tier), 5-tier input adoption card, Pour source breakdown card, Unlinked tastings KRI, source_type values corrected to match actual data |
+| F061 | Admin Reject RPC — Orphaned Tasting Fix | Admin/Infra | High | v1.0.9 | Low | Low | ✅ Done | admin_reject_candidate now accepts optional p_merge_into_whiskey_id — re-links orphaned tastings on reject, logs unfixable orphans to client_logs |
+| F062 | Fuzzy Duplicate Detection RPC | Infra | High | v1.0.9 | Low | Low | ✅ Done | find_duplicate_whiskey_candidates using pg_trgm — catches near-duplicate whiskey names at review time and submission time. GIN trigram index added on display_name |
+| F063 | search_whiskeys RPC | Infra | High | v1.0.9 | Low | Low | ✅ Done | Relevance-sorted whiskey search — prefix match first, trigram similarity second, alphabetical tiebreaker. Replaces ILIKE-only search. Type filter support built in |
+| F064 | Log Screen — Full-Screen Search Modal | UX | High | v1.0.9 | Medium | Low | ✅ Done | WhiskeySearchModal — full-screen slide modal with rich result cards (distillery, type badge, proof, region, age), dynamic type filter chips loaded from DB, fuzzy fallback section, safe area aware footer, relevance sorted |
+| F065 | Log Screen — Submission-Time Duplicate Detection | UX/Infra | High | v1.0.9 | Low | Low | ✅ Done | Fuzzy match fallback in search modal — shows "Did you mean one of these?" before user can submit a candidate. Forces explicit selection on fuzzy results. Prevents duplicate catalog entries at source |
+| F066 | Candidate Review — Duplicate Detection Panel | Admin | Medium | v1.1.0 | Medium | Low | 💡 Idea | Wire find_duplicate_whiskey_candidates into the candidate review screen — surface top 5 fuzzy matches before admin sees Approve button. Prevent duplicate promotions at the review stage |
+| F067 | Candidate Review — Merge Target on Reject | Admin | Medium | v1.1.0 | Low | Low | 💡 Idea | Update reject UI to accept a merge target whiskey — passes p_merge_into_whiskey_id to admin_reject_candidate RPC so orphaned tastings are re-linked automatically without manual SQL |
+| F068 | Candidate Review — Pre-Promotion Metadata Validation | Admin | Medium | v1.1.0 | Low | Low | 💡 Idea | Block Approve button until whiskey_type is set to a valid non-Other value. Show inline validation warning before promotion |
+| F069 | Whiskey Profile Page Rework | UX | High | v1.1.0 | High | Low | 💡 Idea | Full rework of the whiskey/:id screen users land on after searching — better layout, prominent log tasting CTA, community data, tasting history, metadata display. Replaces F050 scope or merges with it |
+| F070 | Catalog Duplicate Audit — Bulk Brands | Infra | Medium | v1.1.0 | Medium | Low | 💡 Idea | Run same duplicate detection and cleanup process across remaining high-volume brands — Ardbeg, Buffalo Trace, Glenfiddich likely have same import-doubling issues as the 41 pairs cleaned today |
 
 ---
 
@@ -562,6 +574,17 @@ neatnotes-web.vercel.app MUST remain live and functional until v1.0.9 is in the 
 - F022 — Nearby Whiskey Alerts (v1.2.0)
 - F039 — App Store / Play Store Review Prompt ✅ Done
 - F057 — Search Relevance Ranking (v1.0.9)
+- F064 — Log Screen Full-Screen Search Modal ✅ Done
+- F065 — Log Screen Submission-Time Duplicate Detection ✅ Done
+- F069 — Whiskey Profile Page Rework (v1.1.0)
+
+### Admin
+- F059 — Admin Dashboard Redesign ✅ Done
+- F060 — Admin Dashboard New KPIs & Monetization Tab ✅ Done
+- F061 — Admin Reject RPC Orphaned Tasting Fix ✅ Done
+- F066 — Candidate Review Duplicate Detection Panel (v1.1.0)
+- F067 — Candidate Review Merge Target on Reject (v1.1.0)
+- F068 — Candidate Review Pre-Promotion Metadata Validation (v1.1.0)
 
 ### Infrastructure
 - F004 — Verify personal_notes in public mirror ✅ Done
@@ -579,6 +602,9 @@ neatnotes-web.vercel.app MUST remain live and functional until v1.0.9 is in the 
 - F053 — Go-UPC Fallback + Bottle Images (v1.1.0)
 - F055 — Fuzzy/Trigram Search for Whiskey Lookup (v1.0.9)
 - F056 — Whiskey Catalog Import (UPC Data 4 Spirits) ✅ Done
+- F062 — Fuzzy Duplicate Detection RPC ✅ Done
+- F063 — search_whiskeys RPC ✅ Done
+- F070 — Catalog Duplicate Audit Bulk Brands (v1.1.0)
 
 ### Website
 - F035 — Core Marketing Site (Website)
@@ -599,8 +625,8 @@ neatnotes-web.vercel.app MUST remain live and functional until v1.0.9 is in the 
 | v1.0.6 | Apr 3, 2026 | Barcode & UX | ✅ Internal Only | Barcode scan, review prompt, RevenueCat UUID sync, event candidate work — tested internally, never pushed to public |
 | v1.0.7 | May 1, 2026 | Events system | 🧪 Testing | Event system: check-in flow, event page refactor, host view, Supabase sync |
 | v1.0.8 | TBD | Auth revamp, UX polish, barcode, analytics | 🔨 In Progress | All Tastings revamp, auth revamp (confirm password, two-step verification, phone sign-in), account settings phone management, app store review prompt, paywall analytics funnel, single-tap actions on recent tastings, category mix → whiskey_type, bulletproof barcode flow, duplicate email fix, change phone fix, Log Again inline, insights analytics premium gate, nav bar fix (unstable_settings + font gate), whiskey catalog import groundwork |
-| v1.0.9 | TBD | Security, web consolidation & catalog quality | 💡 Planning | Web consolidation neatnotes-web → neatnotesapp.com, user submit edits for whiskey records (F054), schema security, web platform consolidation (F058) |
-| v1.1.0 | TBD | Intelligence, Catalog & Social | 💡 Planning | Whiskey card revamp, Hero Card, Go-UPC fallback + bottle images, shareable flavor profile card, push notifications, custom whiskey submission redesign, whiskey type correlation insights |
+| v1.0.9 | TBD | Security, web consolidation & catalog quality | 💡 Planning | Web consolidation neatnotes-web → neatnotesapp.com, user submit edits for whiskey records (F054), schema security, web platform consolidation (F058), admin dashboard redesign (F059), new admin KPIs + Monetization tab (F060), admin reject RPC fix (F061), find_duplicate_whiskey_candidates RPC (F062), search_whiskeys RPC (F063), full-screen search modal (F064), submission-time duplicate detection (F065) |
+| v1.1.0 | TBD | Intelligence, Catalog & Social | 💡 Planning | Whiskey card revamp, Hero Card, Go-UPC fallback + bottle images, shareable flavor profile card, push notifications, custom whiskey submission redesign, whiskey type correlation insights, candidate review duplicate detection panel (F066), candidate review merge target on reject (F067), candidate review pre-promotion validation (F068), whiskey profile page rework (F069), catalog duplicate audit bulk brands (F070) |
 | v1.1.1 | TBD | Venue Foundation & Analytics Revamp | 💡 Planning | Venue check-in infrastructure, tastings mapped to venues, event host analytics revamp, Bar/Venue Menu feature |
 | v1.1.2 | TBD | B2B Monetization | 💡 Planning | Venue owner analytics dashboard, B2B access & subscription model, Palate Match for venue menus |
 | v1.2.0 | TBD | Location Platform | 💡 Planning | Location foundation, nearby whiskey alerts, bar discovery fed by venue data, event discovery by location |
@@ -613,6 +639,7 @@ neatnotes-web.vercel.app MUST remain live and functional until v1.0.9 is in the 
 
 | Date | Update |
 |---|---|
+| May 13, 2026 | F059–F065 shipped: admin dashboard redesign, new KPIs + Monetization tab, admin reject RPC fixed, find_duplicate_whiskey_candidates RPC, search_whiskeys RPC, full-screen search modal, submission-time duplicate detection. F066–F070 added to backlog: candidate review improvements, whiskey profile rework, bulk brand duplicate audit. Catalog cleanup: 41 duplicate pairs removed (bulk import doubling), 11 Lagavulin duplicates cleaned, ~55 records total removed. |
 | May 12, 2026 | F058 added — Web Platform Consolidation & Migration (v1.0.9). F035 updated to reflect unified platform vision. |
 | May 10, 2026 | F057 added — Search Relevance Ranking (v1.0.9) |
 | May 10, 2026 | F056 added — Whiskey catalog import ✅ Done. 12,701 whiskeys, 13,080 barcodes |

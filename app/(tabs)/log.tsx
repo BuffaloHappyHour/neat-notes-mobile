@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -7,7 +7,6 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 
@@ -19,8 +18,9 @@ import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
-import { withSuccess, withTick } from "../../lib/hapticsPress";
+import { withTick } from "../../lib/hapticsPress";
 import { SearchSection } from "../../src/logTab/components/SearchSection";
+import { WhiskeySearchModal } from "../../src/logTab/components/WhiskeySearchModal";
 import { useRecentTastings } from "../../src/logTab/hooks/useRecentTastings";
 
 function isUuid(v: string) {
@@ -37,13 +37,6 @@ function formatWhen(v: string | null | undefined) {
   const d = new Date(t);
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
-
-type Suggestion = {
-  whiskeyId: string;
-  whiskeyName: string;
-  bhhScore: number | null;
-  isFuzzyMatch?: boolean;
-};
 
 function SoftDivider() {
   return (
@@ -216,21 +209,14 @@ export default function LogTab() {
   const [barcodeLookupStatus, setBarcodeLookupStatus] = useState<
     "idle" | "loading" | "not_found" | "found"
   >("idle");
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Suggestion | null>(null);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [barcodeTitle, setBarcodeTitle] = useState<string | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [actionsRow, setActionsRow] = useState<{ id: string; whiskeyName: string } | null>(null);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inputRef = useRef<TextInput | null>(null);
   const autoHandledBarcodeRef = useRef<string | null>(null);
 
   const recent = useRecentTastings({ staleMs: 60_000 });
-
-  const qTrim = query.trim();
-  const hasEnoughQuery = qTrim.length >= 2;
 
   useEffect(() => {
     if (!barcode) return;
@@ -251,9 +237,7 @@ export default function LogTab() {
       return;
     }
 
-    setSelected(null);
     setBarcodeLookupStatus("loading");
-    setQuery(code);
 
     const runLookup = async () => {
       console.log("[log] VERSION: barcode-db-check");
@@ -299,14 +283,6 @@ export default function LogTab() {
           console.log("[log] barcode mapping found:", barcodeMatch);
 
           setBarcodeLookupStatus("found");
-          setQuery(matchedWhiskeyName);
-          setSuggestions([
-            {
-              whiskeyId: matchedWhiskeyId,
-              whiskeyName: matchedWhiskeyName,
-              bhhScore: null,
-            },
-          ]);
 
           if (autoHandledBarcodeRef.current !== code) {
             autoHandledBarcodeRef.current = code;
@@ -333,61 +309,20 @@ export default function LogTab() {
         console.log("[log] lookup-upc response:", data);
 
         if (data?.found && data?.title) {
-          setQuery(data.title);
+          setBarcodeTitle(data.title);
+          setSearchModalOpen(true);
           setBarcodeLookupStatus("not_found");
         } else {
           setBarcodeLookupStatus("not_found");
-          setQuery("");
-          setSuggestions([]);
         }
       } catch (err) {
         console.log("[log] barcode lookup flow failed:", err);
         setBarcodeLookupStatus("not_found");
-        setQuery("");
-        setSuggestions([]);
       }
     };
 
     runLookup();
   }, [barcode]);
-
-  const hasFuzzyMatches = suggestions.length > 0 && suggestions.every((s) => s.isFuzzyMatch);
-
-  const helperLine = useMemo(() => {
-    if (barcodeLookupStatus === "loading") return "Checking barcode…";
-    if (barcodeLookupStatus === "not_found") {
-      return "We couldn’t identify this bottle automatically yet. Search below or add a custom bottle.";
-    }
-    if (!hasEnoughQuery) return "Start typing a bottle name to search.";
-    if (selected) return "Tap Continue to open the whiskey profile.";
-    if (hasFuzzyMatches) return "No exact matches — but we found similar whiskies. Did you mean one of these?";
-    if (suggestions.length > 0) return "Tap a result, or press Continue to open the top match.";
-    return "No matches. Tap Add custom entry to log it anyway.";
-  }, [barcodeLookupStatus, hasEnoughQuery, selected, hasFuzzyMatches, suggestions.length]);
-
-  const canContinue = useMemo(() => {
-    if (!hasEnoughQuery) return false;
-    if (hasFuzzyMatches) return false; // force explicit selection on fuzzy results
-    return !!selected || suggestions.length > 0;
-  }, [hasEnoughQuery, selected, suggestions.length, hasFuzzyMatches]);
-
-  function onType(text: string) {
-    setQuery(text);
-    setSelected(null);
-    if (barcodeLookupStatus !== "found") {
-      setBarcodeLookupStatus("idle");
-    }
-  }
-
-  const clearQuery = withTick(() => {
-    setQuery("");
-    setSelected(null);
-    setSuggestions([]);
-    if (barcodeLookupStatus !== "found") {
-      setBarcodeLookupStatus("idle");
-    }
-    setTimeout(() => inputRef.current?.focus?.(), 50);
-  });
 
   function goToWhiskeyProfile(id: string) {
     const safeId = String(id ?? "").trim();
@@ -405,19 +340,14 @@ export default function LogTab() {
     router.push(`/log/cloud-tasting?whiskeyName=${encodeURIComponent(n)}&lockName=0${barcodeParam}` as any);
   }
 
-  const onPickSuggestion = withTick(async (s: Suggestion) => {
-    setQuery(s.whiskeyName);
-    setSelected(s);
-    setBarcodeLookupStatus("idle");
-
+  async function handleSearchSelect(whiskeyId: string) {
     if (barcode) {
       try {
         const code = String(barcode).trim();
-
         if (code) {
           const { data, error } = await supabase.rpc("save_barcode_mapping", {
             p_barcode: code,
-            p_whiskey_id: s.whiskeyId,
+            p_whiskey_id: whiskeyId,
             p_source: "user_confirmed",
             p_confidence: 0.7,
             p_verified: false,
@@ -435,172 +365,8 @@ export default function LogTab() {
       }
     }
 
-    goToWhiskeyProfile(s.whiskeyId);
-  });
-
-  const onUseCustom = withTick(() => {
-    if (!hasEnoughQuery) return;
-    if (selected) return;
-    // Reject raw barcode strings (8-14 digit numbers) as custom whiskey names
-    if (/^\d{8,14}$/.test(query.trim())) {
-      Alert.alert("Invalid name", "Please enter a whiskey name, not a barcode number.");
-      return;
-    }
-    goToCustomTasting(query.trim());
-  });
-
-  const onContinue = withSuccess(() => {
-    if (!canContinue) return;
-
-    if (selected) {
-      goToWhiskeyProfile(selected.whiskeyId);
-      return;
-    }
-
-    if (suggestions.length > 0) {
-      goToWhiskeyProfile(suggestions[0].whiskeyId);
-      return;
-    }
-  });
-
-  async function fetchSuggestions(term: string) {
-    const t = term.trim();
-    if (t.length < 2) {
-      setSuggestions([]);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const safe = t.replace(/[%_]/g, "\\$&");
-
-      if (isUuid(t)) {
-        const { data: byId, error: byIdErr } = await supabase
-          .from("whiskeys")
-          .select("id, display_name")
-          .eq("id", t)
-          .eq("is_active", true)
-          .limit(1);
-
-        if (byIdErr) throw new Error(byIdErr.message);
-
-        if (byId && byId.length > 0) {
-          const row = byId[0] as any;
-          setSuggestions([
-            {
-              whiskeyId: String(row.id),
-              whiskeyName: String(row.display_name ?? "Whiskey"),
-              bhhScore: null,
-            },
-          ]);
-          setLoading(false);
-          return;
-        }
-      }
-
-      const { data: wData, error: wErr } = await supabase
-        .from("whiskeys")
-        .select("id, display_name")
-        .eq("is_active", true)
-        .ilike("display_name", `%${safe}%`)
-        .order("display_name", { ascending: true })
-        .limit(20);
-
-      if (wErr) throw new Error(wErr.message);
-
-      const base: Suggestion[] = (wData as any[]).map((w) => ({
-        whiskeyId: String(w.id),
-        whiskeyName: String(w.display_name ?? "Whiskey"),
-        bhhScore: null,
-      }));
-
-      const ids = base.map((b) => b.whiskeyId).filter(isUuid);
-      if (ids.length > 0) {
-        const { data: bData, error: bErr } = await supabase
-          .from("bhh_reviews")
-          .select("whiskey_id, rating_100")
-          .in("whiskey_id", ids)
-          .limit(2000);
-
-        if (!bErr && bData) {
-          const best = new Map<string, number>();
-          (bData as any[]).forEach((r) => {
-            const id = r.whiskey_id ? String(r.whiskey_id) : "";
-            if (!isUuid(id)) return;
-            const score =
-              r.rating_100 == null || !Number.isFinite(Number(r.rating_100))
-                ? null
-                : Number(r.rating_100);
-            if (score == null) return;
-            const ex = best.get(id);
-            if (ex == null || score > ex) best.set(id, score);
-          });
-
-          base.forEach((s) => {
-            const v = best.get(s.whiskeyId);
-            if (v != null) s.bhhScore = v;
-          });
-        }
-      }
-
-      const list = base
-        .sort((a, b) => {
-          const as = a.bhhScore ?? -Infinity;
-          const bs = b.bhhScore ?? -Infinity;
-          if (bs !== as) return bs - as;
-          return a.whiskeyName.localeCompare(b.whiskeyName);
-        })
-        .slice(0, 10);
-
-      // If ILIKE returned no results, try fuzzy duplicate detection
-      if (list.length === 0 && t.length >= 3) {
-        const { data: fuzzyData, error: fuzzyErr } = await supabase.rpc(
-          "find_duplicate_whiskey_candidates",
-          { p_name: t, p_limit: 5 }
-        );
-
-        if (!fuzzyErr && fuzzyData && fuzzyData.length > 0) {
-          const fuzzyList: Suggestion[] = (fuzzyData as any[])
-            .filter((r) => r.similarity >= 0.3)
-            .map((r) => ({
-              whiskeyId: String(r.id),
-              whiskeyName: String(r.display_name ?? "Whiskey"),
-              bhhScore: null,
-              isFuzzyMatch: true,
-            }));
-
-          if (fuzzyList.length > 0) {
-            setSuggestions(fuzzyList);
-            setLoading(false);
-            return;
-          }
-        }
-      }
-
-      setSuggestions(list);
-    } catch (e: any) {
-      console.log("Log suggestion search failed:", e?.message ?? e);
-      setSuggestions([]);
-    } finally {
-      setLoading(false);
-    }
+    goToWhiskeyProfile(whiskeyId);
   }
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      inputRef.current?.focus?.();
-    }, 250);
-    return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchSuggestions(query), 220);
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query]);
 
   function openActions(row: { id: string; whiskeyName: string }) {
     setActionsRow(row);
@@ -610,13 +376,6 @@ export default function LogTab() {
   function closeActions() {
     setActionsOpen(false);
     setActionsRow(null);
-  }
-
-  function goTasting(tastingId: string) {
-    const id = String(tastingId ?? "").trim();
-    if (!id) return;
-
-    router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(id)}&mode=edit&readonly=0` as any);
   }
 
   return (
@@ -646,17 +405,10 @@ export default function LogTab() {
         </View>
 
         <SearchSection
-          query={query}
-          onChangeQuery={onType}
-          onClear={clearQuery}
-          suggestions={suggestions}
-          loading={loading}
-          helperLine={helperLine}
-          hasEnoughQuery={hasEnoughQuery}
-          canContinue={canContinue}
-          onPick={onPickSuggestion}
-          onCustom={onUseCustom}
-          onContinue={onContinue}
+          onOpenSearch={() => {
+            setBarcodeTitle(null);
+            setSearchModalOpen(true);
+          }}
           onScanPress={() => router.push("/scan" as any)}
         />
 
@@ -701,6 +453,20 @@ export default function LogTab() {
           )}
         </Card>
       </ScrollView>
+
+      <WhiskeySearchModal
+        visible={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        initialQuery={barcodeTitle ?? undefined}
+        onSelect={(whiskeyId) => {
+          setSearchModalOpen(false);
+          handleSearchSelect(whiskeyId);
+        }}
+        onCustomEntry={(name) => {
+          setSearchModalOpen(false);
+          goToCustomTasting(name);
+        }}
+      />
 
       <Modal
         visible={actionsOpen}
