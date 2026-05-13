@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
 import {
@@ -14,11 +13,14 @@ import { type } from "../../lib/typography";
 
 import {
   HeroStat,
+  MetricBarRow,
   MetricRow,
   MetricRowNoDivider,
   MetricsCard,
-  OverviewStat,
+  PowerGrid,
+  SectionDivider,
   TabPill,
+  TotalChip,
 } from "../../components/admin/metrics/MetricsPrimitives";
 import {
   fmtCount,
@@ -40,12 +42,14 @@ type MetricsTab =
   | "catalog"
   | "quality"
   | "insights"
-  | "retention";
+  | "retention"
+  | "monetization";
 
 export default function AdminMetricsScreen() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AdminDashboardMetrics | null>(null);
   const [error, setError] = useState<string>("");
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [tab, setTab] = useState<MetricsTab>("overview");
   const insights = data?.insights;
 
@@ -56,6 +60,7 @@ export default function AdminMetricsScreen() {
     try {
       const next = await fetchAdminMetrics();
       setData(next);
+      setFetchedAt(new Date().toISOString());
     } catch (e: any) {
       setError(String(e?.message ?? e));
       setData(null);
@@ -68,7 +73,7 @@ export default function AdminMetricsScreen() {
     load();
   }, [load]);
 
-  const updatedAt = useMemo(() => fmtDateTime(new Date().toISOString()), [data]);
+  const updatedAt = fetchedAt ? fmtDateTime(fetchedAt) : "—";
 
   const totals = data?.totals;
   const overview = data?.overview;
@@ -78,13 +83,14 @@ export default function AdminMetricsScreen() {
   const catalog = data?.catalog;
   const quality = data?.quality;
   const retention = data?.retention;
+  const monetization = data?.monetization;
 
   const wauMauRatio =
     overview?.wau != null && overview?.mau
       ? overview.wau / overview.mau
       : null;
 
-  const usersWith2Plus =
+  const usersUnder5 =
     engagement && powerUsers
       ? Math.max(0, engagement.users_with_tastings - powerUsers.users_5_plus)
       : null;
@@ -92,11 +98,13 @@ export default function AdminMetricsScreen() {
   function renderOverviewTab() {
     return (
       <>
-        <View style={{ flexDirection: "row", gap: spacing.md }}>
-          <OverviewStat label="Total Users" value={fmtCount(totals?.total_users)} />
-          <OverviewStat label="Total Whiskies" value={fmtCount(totals?.total_whiskeys)} />
-          <OverviewStat label="Total Tastings" value={fmtCount(totals?.total_tastings)} />
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          <TotalChip label="Users" value={fmtCount(totals?.total_users)} />
+          <TotalChip label="Whiskies" value={fmtCount(totals?.total_whiskeys)} />
+          <TotalChip label="Tastings" value={fmtCount(totals?.total_tastings)} />
         </View>
+
+        <SectionDivider label="Health signals" />
 
         <View style={{ flexDirection: "row", gap: spacing.md }}>
           <View style={{ flex: 1 }}>
@@ -119,8 +127,35 @@ export default function AdminMetricsScreen() {
           </View>
         </View>
 
-                <MetricsCard
-          title="Growth Snapshot"
+        <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="7d Retention"
+              value={fmtPct(
+                retention?.retention_7d != null ? retention.retention_7d * 100 : null
+              )}
+              subtitle="Eligible users only"
+              status={statusRetention(retention?.retention_7d)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Low-effort logs"
+              value={fmtPct(
+                quality?.pct_low_effort_tastings != null
+                  ? quality.pct_low_effort_tastings * 100
+                  : null
+              )}
+              subtitle="No tags and no notes"
+              status={statusLowEffort(quality?.pct_low_effort_tastings)}
+            />
+          </View>
+        </View>
+
+        <SectionDivider label="Growth" />
+
+        <MetricsCard
+          title="Growth snapshot"
           insight="Growth is strong post-launch. This card shows whether usage is expanding or flattening."
           thresholdTitle="Growth Snapshot thresholds"
           thresholdDescription="These are reference ranges for reading the growth snapshot during the early app phase."
@@ -128,21 +163,33 @@ export default function AdminMetricsScreen() {
             { label: "New users (7d) — green", value: "Strong upward trend vs your recent baseline", tone: "good" },
             { label: "New users (7d) — amber", value: "Flat to modest growth", tone: "warn" },
             { label: "New users (7d) — red", value: "Sustained decline vs recent baseline", tone: "bad" },
-
             { label: "Tastings (7d) — green", value: "Meaningful week-over-week increase", tone: "good" },
             { label: "Tastings (7d) — amber", value: "Stable / normal variance", tone: "warn" },
             { label: "Tastings (7d) — red", value: "Sustained drop vs recent baseline", tone: "bad" },
-
             { label: "Tastings (30d)", value: "Context metric, not directly color-scored yet", tone: "neutral" },
           ]}
         >
-          <MetricRow label="New users (7d)" value={fmtCount(overview?.new_users_7d)} />
-          <MetricRow label="Tastings (7d)" value={fmtCount(overview?.tastings_7d)} />
-          <MetricRowNoDivider label="Tastings (30d)" value={fmtCount(overview?.tastings_30d)} />
+          <MetricBarRow
+            label="New users (7d)"
+            value={fmtCount(overview?.new_users_7d)}
+            fillPct={overview?.new_users_7d != null ? Math.min(100, (overview.new_users_7d / 30) * 100) : 0}
+          />
+          <MetricBarRow
+            label="Tastings (7d)"
+            value={fmtCount(overview?.tastings_7d)}
+            fillPct={overview?.tastings_7d != null ? Math.min(100, (overview.tastings_7d / 50) * 100) : 0}
+          />
+          <MetricBarRow
+            label="Tastings (30d)"
+            value={fmtCount(overview?.tastings_30d)}
+            fillPct={overview?.tastings_30d != null ? Math.min(100, (overview.tastings_30d / 200) * 100) : 0}
+          />
         </MetricsCard>
-        
-               <MetricsCard
-          title="Power Users"
+
+        <SectionDivider label="Power users" />
+
+        <MetricsCard
+          title="Power users"
           insight="These are your highest-intent users and the clearest monetization signal in the product."
           thresholdTitle="Power User thresholds"
           thresholdDescription="These ranges are directional. The more users that reach 5+ and 10+ tastings, the stronger the product habit and monetization signal."
@@ -152,10 +199,13 @@ export default function AdminMetricsScreen() {
             { label: "Interpretation", value: "More users crossing these thresholds is better", tone: "neutral" },
           ]}
         >
-          <MetricRow label="Users with 5+ tastings" value={fmtCount(powerUsers?.users_5_plus)} />
-          <MetricRowNoDivider
-            label="Users with 10+ tastings"
-            value={fmtCount(powerUsers?.users_10_plus)}
+          <PowerGrid
+            items={[
+              { label: "5+ tastings", value: fmtCount(powerUsers?.users_5_plus) },
+              { label: "10+ tastings", value: fmtCount(powerUsers?.users_10_plus) },
+              { label: "Under 5 tastings", value: fmtCount(usersUnder5) },
+              { label: "Premium users", value: fmtCount(monetization?.total_premium_users) },
+            ]}
           />
         </MetricsCard>
       </>
@@ -197,9 +247,19 @@ export default function AdminMetricsScreen() {
           <MetricRow label="Users with 5+ tastings" value={fmtCount(powerUsers?.users_5_plus)} />
           <MetricRow label="Users with 10+ tastings" value={fmtCount(powerUsers?.users_10_plus)} />
           <MetricRowNoDivider
-            label="Activated but under 5 tastings"
-            value={fmtCount(usersWith2Plus)}
+            label="Activated, under 5 tastings"
+            value={fmtCount(usersUnder5)}
           />
+        </MetricsCard>
+
+        <MetricsCard
+          title="Pour source breakdown"
+          insight="Shows how users are consuming whiskey — bar pours vs. home bottles vs. events."
+        >
+          <MetricRow label="Bar" value={fmtCount(engagement?.source_bar)} />
+          <MetricRow label="Purchased" value={fmtCount(engagement?.source_bottle)} />
+          <MetricRow label="Event" value={fmtCount(engagement?.source_event)} />
+          <MetricRowNoDivider label="Other / unset" value={fmtCount(engagement?.source_other)} />
         </MetricsCard>
       </>
     );
@@ -474,6 +534,72 @@ export default function AdminMetricsScreen() {
             status={statusNotes(quality?.pct_with_written_notes)}
           />
         </MetricsCard>
+
+        <MetricsCard
+          title="Input adoption"
+          insight="Tracks how many users are filling structured intensity and texture fields — signals depth of tasting behavior beyond just flavor tags."
+          thresholdTitle="Input adoption thresholds"
+          thresholdDescription="Higher fill rates mean richer palate data for future personalization features."
+          thresholdItems={[
+            { label: "Any input field — green", value: "50%+", tone: "good" },
+            { label: "Any input field — amber", value: "25% to 49.9%", tone: "warn" },
+            { label: "Any input field — red", value: "Below 25%", tone: "bad" },
+            { label: "Unlinked tastings — green", value: "0 (none orphaned)", tone: "good" },
+            { label: "Unlinked tastings — red", value: "Any count above 0", tone: "bad" },
+          ]}
+        >
+          <MetricRow
+            label="Texture level filled"
+            value={fmtPct(
+              quality?.pct_with_texture != null ? quality.pct_with_texture * 100 : null
+            )}
+            status={
+              quality?.pct_with_texture != null && quality.pct_with_texture >= 0.5
+                ? "good"
+                : quality?.pct_with_texture != null && quality.pct_with_texture >= 0.25
+                ? "warn"
+                : "bad"
+            }
+          />
+          <MetricRow
+            label="Proof intensity filled"
+            value={fmtPct(
+              quality?.pct_with_proof_intensity != null
+                ? quality.pct_with_proof_intensity * 100
+                : null
+            )}
+            status={
+              quality?.pct_with_proof_intensity != null && quality.pct_with_proof_intensity >= 0.5
+                ? "good"
+                : quality?.pct_with_proof_intensity != null &&
+                  quality.pct_with_proof_intensity >= 0.25
+                ? "warn"
+                : "bad"
+            }
+          />
+          <MetricRow
+            label="Flavor intensity filled"
+            value={fmtPct(
+              quality?.pct_with_flavor_intensity != null
+                ? quality.pct_with_flavor_intensity * 100
+                : null
+            )}
+            status={
+              quality?.pct_with_flavor_intensity != null &&
+              quality.pct_with_flavor_intensity >= 0.5
+                ? "good"
+                : quality?.pct_with_flavor_intensity != null &&
+                  quality.pct_with_flavor_intensity >= 0.25
+                ? "warn"
+                : "bad"
+            }
+          />
+          <MetricRowNoDivider
+            label="Unlinked tastings"
+            value={fmtCount(quality?.tastings_unlinked)}
+            status={quality?.tastings_unlinked != null && quality.tastings_unlinked > 0 ? "bad" : "good"}
+          />
+        </MetricsCard>
       </>
     );
   }
@@ -527,6 +653,69 @@ export default function AdminMetricsScreen() {
       </>
     );
   }
+
+  function renderMonetizationTab() {
+    return (
+      <>
+        <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Premium Users"
+              value={fmtCount(monetization?.total_premium_users)}
+              subtitle="Active premium accounts"
+              status={
+                monetization?.premium_pct != null && monetization.premium_pct >= 0.05
+                  ? "good"
+                  : monetization?.premium_pct != null && monetization.premium_pct >= 0.01
+                  ? "warn"
+                  : "bad"
+              }
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Premium %"
+              value={fmtPct(
+                monetization?.premium_pct != null ? monetization.premium_pct * 100 : null
+              )}
+              subtitle="Share of total users"
+              status={
+                monetization?.premium_pct != null && monetization.premium_pct >= 0.05
+                  ? "good"
+                  : monetization?.premium_pct != null && monetization.premium_pct >= 0.01
+                  ? "warn"
+                  : "bad"
+              }
+            />
+          </View>
+        </View>
+
+        <MetricsCard
+          title="Engagement by tier"
+          insight="Premium users logging more tastings on average confirms the paywall is attracting high-intent users, not blocking them."
+          thresholdTitle="Tier engagement thresholds"
+          thresholdDescription="These are directional benchmarks. Premium avg tastings should consistently exceed free avg tastings to validate monetization health."
+          thresholdItems={[
+            { label: "Premium avg tastings", value: "Higher than free avg is healthy", tone: "good" },
+            { label: "Free avg tastings", value: "Context metric — tracks casual user depth", tone: "neutral" },
+            { label: "Premium % — green", value: "5%+ of users are premium", tone: "good" },
+            { label: "Premium % — amber", value: "1% to 4.9%", tone: "warn" },
+            { label: "Premium % — red", value: "Below 1%", tone: "bad" },
+          ]}
+        >
+          <MetricRow
+            label="Avg tastings (premium)"
+            value={fmtNum2(monetization?.premium_avg_tastings)}
+          />
+          <MetricRowNoDivider
+            label="Avg tastings (free)"
+            value={fmtNum2(monetization?.free_avg_tastings)}
+          />
+        </MetricsCard>
+      </>
+    );
+  }
+
 function renderInsightsTab() {
   return (
     <>
@@ -627,7 +816,7 @@ function renderInsightsTab() {
           <View style={{ gap: 6, flex: 1 }}>
             <Text style={[type.screenTitle, { color: colors.textPrimary }]}>Metrics</Text>
             <Text style={[type.microcopyItalic, { color: colors.textSecondary }]}>
-              Updated: {updatedAt}
+              {updatedAt}
             </Text>
           </View>
 
@@ -654,29 +843,6 @@ function renderInsightsTab() {
               )}
             </Pressable>
 
-            <Pressable
-              onPress={() => router.push("/admin")}
-              style={({ pressed }) => ({
-                height: 40,
-                paddingHorizontal: 12,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: colors.divider,
-                backgroundColor: colors.surface,
-                opacity: pressed ? 0.9 : 1,
-              })}
-            >
-              <Text
-                style={[
-                  type.button,
-                  { fontSize: 13, lineHeight: 16, color: colors.textPrimary },
-                ]}
-              >
-                Back
-              </Text>
-            </Pressable>
           </View>
         </View>
 
@@ -690,7 +856,7 @@ function renderInsightsTab() {
           <TabPill label="Pipeline" active={tab === "pipeline"} onPress={() => setTab("pipeline")} />
           <TabPill label="Catalog" active={tab === "catalog"} onPress={() => setTab("catalog")} />
           <TabPill
-            label="Tasting Quality"
+            label="Quality"
             active={tab === "quality"}
             onPress={() => setTab("quality")}
           />
@@ -700,10 +866,15 @@ function renderInsightsTab() {
             onPress={() => setTab("retention")}
           />
           <TabPill
-  label="Insights"
-  active={tab === "insights"}
-  onPress={() => setTab("insights")}
-/>
+            label="Insights"
+            active={tab === "insights"}
+            onPress={() => setTab("insights")}
+          />
+          <TabPill
+            label="Monetization"
+            active={tab === "monetization"}
+            onPress={() => setTab("monetization")}
+          />
         </View>
 
         {error ? (
@@ -727,6 +898,7 @@ function renderInsightsTab() {
             {tab === "quality" ? renderQualityTab() : null}
             {tab === "retention" ? renderRetentionTab() : null}
             {tab === "insights" ? renderInsightsTab() : null}
+            {tab === "monetization" ? renderMonetizationTab() : null}
           </>
         ) : null}
       </View>

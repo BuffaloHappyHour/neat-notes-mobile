@@ -85,11 +85,7 @@ function ThresholdModal({
             <Text
               style={[
                 type.microcopyItalic,
-                {
-                  color: colors.textSecondary,
-                  fontSize: 12,
-                  lineHeight: 17,
-                },
+                { color: colors.textSecondary, fontSize: 12, lineHeight: 17 },
               ]}
             >
               {description}
@@ -116,12 +112,7 @@ function ThresholdModal({
                   <Text
                     style={[
                       type.body,
-                      {
-                        color: colors.textSecondary,
-                        flex: 1,
-                        fontSize: 14,
-                        lineHeight: 18,
-                      },
+                      { color: colors.textSecondary, flex: 1, fontSize: 14, lineHeight: 18 },
                     ]}
                   >
                     {item.label}
@@ -130,12 +121,7 @@ function ThresholdModal({
                   <Text
                     style={[
                       type.body,
-                      {
-                        color: toneColor,
-                        fontWeight: "900",
-                        fontSize: 14,
-                        lineHeight: 18,
-                      },
+                      { color: toneColor, fontWeight: "900", fontSize: 14, lineHeight: 18 },
                     ]}
                   >
                     {item.value}
@@ -178,15 +164,30 @@ export function MetricsCard({
         style={{
           backgroundColor: colors.surface,
           borderRadius: radii.lg,
-          padding: spacing.lg,
           borderWidth: 1,
-          borderColor: colors.divider,
+          borderColor: colors.borderStrong,
           ...shadows.card,
-          gap: spacing.md,
+          overflow: "hidden",
         }}
       >
+        {/* Left amber accent bar */}
         <View
           style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 3,
+            backgroundColor: colors.accent,
+          }}
+        />
+
+        {/* Header */}
+        <View
+          style={{
+            paddingTop: spacing.lg,
+            paddingHorizontal: spacing.lg,
+            paddingBottom: insight ? spacing.xs : spacing.sm,
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
@@ -214,11 +215,7 @@ export function MetricsCard({
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
-                <Ionicons
-                  name="information-circle-outline"
-                  size={14}
-                  color={colors.textSecondary}
-                />
+                <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
               </Pressable>
             ) : null}
           </View>
@@ -234,6 +231,8 @@ export function MetricsCard({
                 color: colors.textSecondary,
                 fontSize: 12,
                 lineHeight: 17,
+                paddingHorizontal: spacing.lg,
+                paddingBottom: spacing.sm,
               },
             ]}
           >
@@ -268,61 +267,47 @@ export function HeroStat({
   subtitle?: string;
   status?: MetricStatus;
 }) {
-  const accent = getStatusColor(status);
+  const accentColor = getStatusColor(status);
 
   return (
     <View
       style={{
-        backgroundColor: colors.surface,
+        backgroundColor: colors.surfaceSunken,
         borderRadius: radii.lg,
-        padding: spacing.lg,
-        borderWidth: 1.5,
-        borderColor: accent,
+        borderWidth: 1,
+        borderColor: colors.borderStrong,
         ...shadows.card,
-        gap: spacing.xs,
+        overflow: "hidden",
       }}
     >
-      <Text
-        style={[
-          type.microcopyItalic,
-          {
-            color: colors.textSecondary,
-            fontSize: 12,
-            lineHeight: 16,
-          },
-        ]}
-      >
-        {label}
-      </Text>
+      {/* Top status bar */}
+      <View style={{ height: 3, backgroundColor: accentColor }} />
 
-      <Text
-        style={[
-          type.sectionHeader,
-          {
-            color: colors.textPrimary,
-            fontSize: 30,
-            lineHeight: 34,
-          },
-        ]}
-        numberOfLines={1}
-      >
-        {value}
-      </Text>
+      <View style={{ padding: spacing.md, gap: 5 }}>
+        <Text style={[type.labelCaps, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
 
-      {subtitle ? (
         <Text
           style={[
-            type.microcopyItalic,
-            {
-              color: colors.textSecondary,
-              fontSize: 12,
-              lineHeight: 16,
-            },
+            type.sectionHeader,
+            { color: colors.textPrimary, fontSize: 28, lineHeight: 32 },
           ]}
+          numberOfLines={1}
         >
-          {subtitle}
+          {value}
         </Text>
-      ) : null}
+
+        {subtitle ? (
+          <Text
+            style={[
+              type.microcopyItalic,
+              { color: colors.textSecondary, fontSize: 11, lineHeight: 15 },
+            ]}
+            numberOfLines={2}
+          >
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -345,7 +330,8 @@ export function MetricRow({
         alignItems: "baseline",
         justifyContent: "space-between",
         gap: spacing.md,
-        paddingVertical: 6,
+        paddingVertical: 8,
+        paddingHorizontal: spacing.lg,
         borderBottomWidth: 1,
         borderBottomColor: colors.divider,
       }}
@@ -353,12 +339,7 @@ export function MetricRow({
       <Text
         style={[
           type.body,
-          {
-            flex: 1,
-            color: colors.textSecondary,
-            fontSize: 14,
-            lineHeight: 18,
-          },
+          { flex: 1, color: colors.textSecondary, fontSize: 13, lineHeight: 18 },
         ]}
       >
         {label}
@@ -367,12 +348,7 @@ export function MetricRow({
       <Text
         style={[
           type.body,
-          {
-            color: accent,
-            fontSize: 14,
-            lineHeight: 18,
-            fontWeight: "900",
-          },
+          { color: accent, fontSize: 13, lineHeight: 18, fontWeight: "700" },
         ]}
       >
         {value}
@@ -399,18 +375,15 @@ export function MetricRowNoDivider({
         alignItems: "baseline",
         justifyContent: "space-between",
         gap: spacing.md,
-        paddingVertical: 6,
+        paddingTop: 8,
+        paddingBottom: 14,
+        paddingHorizontal: spacing.lg,
       }}
     >
       <Text
         style={[
           type.body,
-          {
-            flex: 1,
-            color: colors.textSecondary,
-            fontSize: 14,
-            lineHeight: 18,
-          },
+          { flex: 1, color: colors.textSecondary, fontSize: 13, lineHeight: 18 },
         ]}
       >
         {label}
@@ -419,12 +392,7 @@ export function MetricRowNoDivider({
       <Text
         style={[
           type.body,
-          {
-            color: accent,
-            fontSize: 14,
-            lineHeight: 18,
-            fontWeight: "900",
-          },
+          { color: accent, fontSize: 13, lineHeight: 18, fontWeight: "700" },
         ]}
       >
         {value}
@@ -433,7 +401,105 @@ export function MetricRowNoDivider({
   );
 }
 
-export function OverviewStat({
+export function SectionDivider({ label }: { label: string }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.sm,
+        marginVertical: spacing.xs,
+      }}
+    >
+      <View
+        style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: colors.accent }}
+      />
+      <Text style={[type.labelCaps, { color: colors.textSecondary }]}>{label}</Text>
+      <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
+    </View>
+  );
+}
+
+export function MetricBarRow({
+  label,
+  value,
+  fillPct,
+}: {
+  label: string;
+  value: string;
+  fillPct: number;
+}) {
+  const clampedPct = Math.min(100, Math.max(0, fillPct));
+
+  return (
+    <View style={{ paddingHorizontal: spacing.lg, paddingVertical: 8, gap: 6 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+        }}
+      >
+        <Text style={[type.body, { color: colors.textSecondary, fontSize: 13, lineHeight: 18 }]}>
+          {label}
+        </Text>
+        <Text
+          style={[
+            type.body,
+            { color: colors.textPrimary, fontSize: 13, lineHeight: 18, fontWeight: "700" },
+          ]}
+        >
+          {value}
+        </Text>
+      </View>
+
+      <View style={{ height: 2, borderRadius: 1, backgroundColor: colors.accentFaint, flexDirection: "row" }}>
+        <View
+          style={{
+            flex: clampedPct,
+            height: 2,
+            borderRadius: 1,
+            backgroundColor: colors.accent,
+          }}
+        />
+        <View style={{ flex: 100 - clampedPct }} />
+      </View>
+    </View>
+  );
+}
+
+export function PowerGrid({ items }: { items: { label: string; value: string; accent?: boolean }[] }) {
+  const rows: { label: string; value: string; accent?: boolean }[][] = [];
+  for (let i = 0; i < items.length; i += 2) {
+    rows.push(items.slice(i, i + 2));
+  }
+  return (
+    <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.md, gap: spacing.sm }}>
+      {rows.map((row, rowIndex) => (
+        <View key={rowIndex} style={{ flexDirection: "row", gap: spacing.sm }}>
+          {row.map((item) => (
+            <View
+              key={item.label}
+              style={{
+                flex: 1,
+                backgroundColor: colors.surfaceSunken,
+                borderRadius: radii.md,
+                paddingVertical: spacing.sm,
+                paddingHorizontal: spacing.md,
+                gap: 4,
+              }}
+            >
+              <Text style={[type.labelCaps, { color: colors.textSecondary, fontSize: 9 }]} numberOfLines={1} adjustsFontSizeToFit>{item.label}</Text>
+              <Text style={[type.statNumber, { color: item.accent !== false ? colors.accent : colors.textPrimary }]}>{item.value}</Text>
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function TotalChip({
   label,
   value,
 }: {
@@ -445,39 +511,29 @@ export function OverviewStat({
       style={{
         flex: 1,
         minWidth: 0,
-        backgroundColor: colors.background,
+        backgroundColor: colors.surfaceSunken,
         borderRadius: radii.md,
         borderWidth: 1,
         borderColor: colors.divider,
         paddingVertical: spacing.md,
-        paddingHorizontal: spacing.md,
-        gap: 6,
+        paddingHorizontal: spacing.sm,
+        gap: 4,
+        alignItems: "center",
       }}
     >
       <Text
         style={[
-          type.microcopyItalic,
-          {
-            color: colors.textSecondary,
-            opacity: 0.9,
-            fontSize: 12,
-            lineHeight: 16,
-            textAlign: "center",
-            minHeight: 32,
-          },
+          type.labelCaps,
+          { color: colors.textSecondary, textAlign: "center" },
         ]}
+        numberOfLines={1}
       >
         {label}
       </Text>
       <Text
         style={[
-          type.sectionHeader,
-          {
-            color: colors.textPrimary,
-            fontSize: 24,
-            lineHeight: 28,
-            textAlign: "center",
-          },
+          type.statNumber,
+          { color: colors.textPrimary, textAlign: "center" },
         ]}
         numberOfLines={1}
       >
@@ -505,7 +561,7 @@ export function TabPill({
         borderRadius: 999,
         borderWidth: 1,
         borderColor: active ? colors.accent : colors.divider,
-        backgroundColor: active ? colors.surface : "transparent",
+        backgroundColor: active ? colors.accentSoft : "transparent",
         opacity: pressed ? 0.9 : 1,
       })}
     >
@@ -515,7 +571,7 @@ export function TabPill({
           {
             fontSize: 13,
             lineHeight: 16,
-            color: active ? colors.textPrimary : colors.textSecondary,
+            color: active ? colors.textPrimary : colors.textMuted,
           },
         ]}
       >

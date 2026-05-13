@@ -17,6 +17,10 @@ export type AdminDashboardMetrics = {
   engagement: {
     total_tastings: number;
     users_with_tastings: number;
+    source_bar: number;
+    source_bottle: number;
+    source_event: number;
+    source_other: number;
   };
   power_users: {
     users_5_plus: number;
@@ -59,6 +63,10 @@ export type AdminDashboardMetrics = {
     pct_with_written_notes: number | null;
     low_effort_tastings: number;
     pct_low_effort_tastings: number | null;
+    pct_with_texture: number | null;
+    pct_with_proof_intensity: number | null;
+    pct_with_flavor_intensity: number | null;
+    tastings_unlinked: number;
   };
   insights: {
     total_whiskeys: number;
@@ -85,6 +93,12 @@ export type AdminDashboardMetrics = {
     eligible_users_7d: number;
     retained_users_7d: number;
     retention_7d: number | null;
+  };
+  monetization: {
+    total_premium_users: number;
+    premium_pct: number | null;
+    premium_avg_tastings: number | null;
+    free_avg_tastings: number | null;
   };
 };
 

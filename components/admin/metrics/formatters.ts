@@ -32,13 +32,13 @@ export type MetricStatus = "good" | "warn" | "bad" | "neutral";
 export function getStatusColor(status: MetricStatus) {
   switch (status) {
     case "good":
-      return "#22c55e"; // green
+      return "#79B58B"; // colors.success
     case "warn":
-      return "#f59e0b"; // amber
+      return "#BE9663"; // colors.accent
     case "bad":
-      return "#ef4444"; // red
+      return "#D46A6A"; // colors.danger
     default:
-      return "#9ca3af"; // gray
+      return "rgba(244, 241, 234, 0.35)"; // neutral
   }
 }
 

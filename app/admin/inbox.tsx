@@ -106,10 +106,16 @@ function statusLabel(r: CandidateRow) {
 
 function metaLine(r: CandidateRow) {
   const parts: string[] = [];
+
+  if ((r.whiskey_type ?? "").trim()) parts.push(r.whiskey_type ?? "");
   if (r.proof != null) parts.push(`Proof ${r.proof}`);
   if (r.age != null) parts.push(`${r.age} yr`);
-  if ((r.distillery ?? "").trim()) parts.push(String(r.distillery).trim());
-  if ((r.whiskey_type ?? "").trim()) parts.push(String(r.whiskey_type).trim());
+  if ((r.distillery ?? "").trim()) parts.push(r.distillery ?? "");
+
+  if ((r.category ?? "").trim()) parts.push(r.category ?? "");
+  if ((r.region ?? "").trim()) parts.push(r.region ?? "");
+  if ((r.sub_region ?? "").trim()) parts.push(r.sub_region ?? "");
+
   return parts.join(" • ") || "—";
 }
 
