@@ -243,6 +243,11 @@ export default function LogTab() {
       console.log("[log] VERSION: barcode-db-check");
 
       try {
+        const exact = String(code).trim();
+        const padded = exact.padStart(12, "0");
+        const trimmed = exact.replace(/^0+/, "") || exact;
+        const variants = [...new Set([exact, padded, trimmed])];
+
         const { data: barcodeMatch, error: barcodeErr } = await supabase
           .from("whiskey_barcodes")
           .select(
@@ -257,7 +262,7 @@ export default function LogTab() {
             )
           `
           )
-          .eq("barcode", code)
+          .in("barcode", variants)
           .order("verified", { ascending: false })
           .order("confidence", { ascending: false, nullsFirst: false })
           .limit(1)
@@ -307,6 +312,13 @@ export default function LogTab() {
 
         const data = await res.json();
         console.log("[log] lookup-upc response:", data);
+
+        if (data?.found && data?.source === "database" && data?.whiskey_id) {
+          router.replace(
+            `/log/cloud-tasting?whiskeyId=${encodeURIComponent(data.whiskey_id)}&whiskeyName=${encodeURIComponent(data.display_name ?? "")}&lockName=1` as any
+          );
+          return;
+        }
 
         if (data?.found && data?.title) {
           setBarcodeTitle(data.title);
