@@ -1,11 +1,12 @@
 import { router } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
+  Pressable,
   RefreshControl,
   ScrollView,
   Text,
   View,
-  useWindowDimensions
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -20,12 +21,23 @@ import { DiscoverHeaderCard } from "../../src/discover/components/DiscoverHeader
 import { DiscoverModals } from "../../src/discover/components/DiscoverModals";
 import { SectionDivider } from "../../src/discover/components/SectionDivider";
 import { SectionRow } from "../../src/discover/components/SectionRow";
+import { VenuesTab } from "../../src/discover/components/VenuesTab";
 import { useDiscover } from "../../src/discover/hooks/useDiscover";
 import type { SectionKey } from "../../src/discover/services/discover.service";
+
+type DiscoverTabKey = "forYou" | "venues" | "trending";
+
+const DISCOVER_TABS: { key: DiscoverTabKey; label: string }[] = [
+  { key: "forYou", label: "For You" },
+  { key: "venues", label: "Venues" },
+  { key: "trending", label: "Trending" },
+];
 
 export default function DiscoverTab() {
   const insets = useSafeAreaInsets();
   const { height: windowH } = useWindowDimensions();
+
+  const [activeDiscoverTab, setActiveDiscoverTab] = useState<DiscoverTabKey>("forYou");
 
   const sheetMaxHeight = useMemo(() => {
     return Math.max(
@@ -90,121 +102,194 @@ export default function DiscoverTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "transparent" }}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
+      {/* ── Title block ────────────────────────────────────────── */}
+      <View
+        style={{
           paddingHorizontal: spacing.lg,
           paddingTop: spacing.xl + spacing.lg,
-          paddingBottom: spacing.xl * 2,
-          gap: spacing.md,
+          gap: spacing.xs,
         }}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled
-        refreshControl={
-          <RefreshControl
-            refreshing={d.refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.accent}
-          />
-        }
       >
-        <View style={{ gap: spacing.xs }}>
-          <Text style={[type.screenTitle, { fontSize: 34, lineHeight: 40 }]}>
-            Discover
-          </Text>
+        <Text style={[type.screenTitle, { fontSize: 34, lineHeight: 40 }]}>
+          Discover
+        </Text>
 
-          <Text
-            style={[
-              type.microcopyItalic,
-              { fontSize: 16, lineHeight: 22, opacity: 0.86 },
-            ]}
-          >
-            See what the community is tasting
-          </Text>
+        <Text
+          style={[
+            type.microcopyItalic,
+            { fontSize: 16, lineHeight: 22, opacity: 0.86 },
+          ]}
+        >
+          See what the community is tasting
+        </Text>
 
-          <View
-            style={{
-              height: 1,
-              backgroundColor: colors.glassDivider ?? colors.divider,
-              marginTop: spacing.md,
-              opacity: 0.55,
-            }}
-          />
-        </View>
-
-
-        <DiscoverHeaderCard
-          onOpenFilters={onOpenFilters}
-          filterBadgeActive={!!d.filterBadge}
-          filterBadgeText={d.filterBadge}
-          loading={d.loading}
-          statusError={d.statusError}
+        <View
+          style={{
+            height: 1,
+            backgroundColor: (colors as any).glassDivider ?? colors.divider,
+            marginTop: spacing.md,
+            opacity: 0.55,
+          }}
         />
+      </View>
 
-        {d.atHome.length > 0 ? (
-          <>
-            <AtHomeShelf
-              rows={d.atHome}
-              onPressRow={(row) => onPressRow(row.whiskeyId, "AT_HOME")}
+      {/* ── Top tab bar ────────────────────────────────────────── */}
+      <View
+        style={{
+          flexDirection: "row",
+          borderBottomWidth: 1,
+          borderBottomColor: colors.divider,
+        }}
+      >
+        {DISCOVER_TABS.map((tab) => {
+          const isActive = activeDiscoverTab === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              onPress={logPressWrap(
+                "discover",
+                "tab_switch",
+                withTick(() => setActiveDiscoverTab(tab.key)),
+                { tab: tab.key }
+              )}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text
+                style={[
+                  type.labelCaps,
+                  { color: isActive ? colors.textPrimary : colors.textMuted },
+                ]}
+              >
+                {tab.label}
+              </Text>
+              {isActive && (
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 2,
+                    backgroundColor: colors.accent,
+                  }}
+                />
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* ── For You tab ────────────────────────────────────────── */}
+      {activeDiscoverTab === "forYou" && (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: spacing.lg,
+            paddingTop: spacing.md,
+            paddingBottom: spacing.xl * 2,
+            gap: spacing.md,
+          }}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          refreshControl={
+            <RefreshControl
+              refreshing={d.refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.accent}
             />
-            <SectionDivider />
-          </>
-        ) : null}
+          }
+        >
+          <DiscoverHeaderCard
+            onOpenFilters={onOpenFilters}
+            filterBadgeActive={!!d.filterBadge}
+            filterBadgeText={d.filterBadge}
+            loading={d.loading}
+            statusError={d.statusError}
+          />
 
-        <SectionRow
-          title="Trending"
-          subtitle="Most tasted in the last 7 days (community)."
-          rows={d.trending}
-          onSeeAll={() => onSeeAll("TRENDING" as SectionKey)}
-          onPressRow={(r) => onPressRow(r.whiskeyId, "TRENDING")}
-          emptyMessage={emptyMessage}
-        />
+          {d.atHome.length > 0 ? (
+            <>
+              <AtHomeShelf
+                rows={d.atHome}
+                onPressRow={(row) => onPressRow(row.whiskeyId, "AT_HOME")}
+              />
+              <SectionDivider />
+            </>
+          ) : null}
 
-        <SectionDivider />
+          <SectionRow
+            title="Trending"
+            subtitle="Most tasted in the last 7 days (community)."
+            rows={d.trending}
+            onSeeAll={() => onSeeAll("TRENDING" as SectionKey)}
+            onPressRow={(r) => onPressRow(r.whiskeyId, "TRENDING")}
+            emptyMessage={emptyMessage}
+          />
 
-        <SectionRow
-          title="Recently Reviewed"
-          subtitle="Latest community tastings (anonymous)."
-          rows={d.recent}
-          onSeeAll={() => onSeeAll("RECENT" as SectionKey)}
-          onPressRow={(r) => onPressRow(r.whiskeyId, "RECENT")}
-          emptyMessage={emptyMessage}
-        />
+          <SectionDivider />
 
-        <SectionDivider />
+          <SectionRow
+            title="Recently Reviewed"
+            subtitle="Latest community tastings (anonymous)."
+            rows={d.recent}
+            onSeeAll={() => onSeeAll("RECENT" as SectionKey)}
+            onPressRow={(r) => onPressRow(r.whiskeyId, "RECENT")}
+            emptyMessage={emptyMessage}
+          />
 
-        <SectionRow
-          title="Highest Rated"
-          subtitle="Top community averages (min review threshold)."
-          rows={d.highest}
-          onSeeAll={() => onSeeAll("HIGHEST" as SectionKey)}
-          onPressRow={(r) => onPressRow(r.whiskeyId, "HIGHEST")}
-          emptyMessage={emptyMessage}
-        />
+          <SectionDivider />
 
-        <SectionDivider />
+          <SectionRow
+            title="Highest Rated"
+            subtitle="Top community averages (min review threshold)."
+            rows={d.highest}
+            onSeeAll={() => onSeeAll("HIGHEST" as SectionKey)}
+            onPressRow={(r) => onPressRow(r.whiskeyId, "HIGHEST")}
+            emptyMessage={emptyMessage}
+          />
 
-        <SectionRow
-          title="Newest Additions"
-          subtitle="Fresh additions to the library."
-          rows={d.newest}
-          onSeeAll={() => onSeeAll("NEWEST" as SectionKey)}
-          onPressRow={(r) => onPressRow(r.whiskeyId, "NEWEST")}
-          emptyMessage={emptyMessage}
-        />
+          <SectionDivider />
 
-        <View style={{ marginTop: spacing.lg, paddingTop: spacing.md }}>
-          <Text
-            style={[
-              type.caption,
-              { opacity: 0.65, fontSize: 12, textAlign: "center" },
-            ]}
-          >
-            Powered by anonymous community tastings and Buffalo Happy Hour reviews
+          <SectionRow
+            title="Newest Additions"
+            subtitle="Fresh additions to the library."
+            rows={d.newest}
+            onSeeAll={() => onSeeAll("NEWEST" as SectionKey)}
+            onPressRow={(r) => onPressRow(r.whiskeyId, "NEWEST")}
+            emptyMessage={emptyMessage}
+          />
+
+          <View style={{ marginTop: spacing.lg, paddingTop: spacing.md }}>
+            <Text
+              style={[
+                type.caption,
+                { opacity: 0.65, fontSize: 12, textAlign: "center" },
+              ]}
+            >
+              Powered by anonymous community tastings and Buffalo Happy Hour reviews
+            </Text>
+          </View>
+        </ScrollView>
+      )}
+
+      {/* ── Venues tab ─────────────────────────────────────────── */}
+      {activeDiscoverTab === "venues" && <VenuesTab />}
+
+      {/* ── Trending tab — placeholder ─────────────────────────── */}
+      {activeDiscoverTab === "trending" && (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <Text style={[type.body, { color: colors.textMuted }]}>
+            Trending coming soon
           </Text>
         </View>
-      </ScrollView>
+      )}
 
       <DiscoverModals
         sheetMaxHeight={sheetMaxHeight}
