@@ -269,8 +269,10 @@ export default function LogTab() {
           .maybeSingle();
 
         if (barcodeErr) {
-          console.log("[log] whiskey_barcodes lookup error:", barcodeErr);
+          console.log("[log] whiskey_barcodes lookup error:", JSON.stringify(barcodeErr));
         }
+        console.log("[log] barcodeMatch raw:", JSON.stringify(barcodeMatch));
+        console.log("[log] variants searched:", variants);
 
         const matchedWhiskey = (barcodeMatch as any)?.whiskeys;
         const matchedWhiskeyId = matchedWhiskey?.id ? String(matchedWhiskey.id) : "";
