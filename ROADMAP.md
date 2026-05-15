@@ -115,6 +115,8 @@ Each feature includes:
 | F077 | Host an Event Profile CTA | UX | High | v1.0.9 | Low | Low | ✅ Done | "Host an Event" card on Profile screen placed between InsightsCTA and Journal Snapshot. Visible to all authenticated users. Routes to /host-events. |
 | F078 | Role Management Admin Screen | Admin | High | v1.0.9 | Low | Low | ✅ Done | Admin screen at /admin/roles. Email search via admin_lookup_user_by_email RPC. Grant/revoke any app_role via toggle pills. Protected by isAdmin() check. Admin index redesigned with amber accent bars, icon-left layout, chevron affordance, scroll fix. |
 | F079 | Venue Request Admin Screen | Admin | High | v1.0.9 | Low | Low | ✅ Done | Admin screen at /admin/venue-requests. Review pending venue applications, approve with role assignment (venue_starter or venue_pro), reject with confirmation. Pull-to-refresh, empty state, auth guard. RPCs: admin_approve_venue_request, admin_reject_venue_request. |
+| F082 | QR Code Event Sharing | Events | High | v1.1.0 | Medium | Low | ✅ Done | Host generates branded QR code (amber, NN logo) from event detail screen. Attendee scans → deep links into app → auto-joins via join_event RPC → lands on event page. Save to camera roll. Universal link handler in _layout.tsx. |
+| F083 | Event Location / Venue | Events | High | v1.1.0 | Medium | Low | ✅ Done | Host searches venues table during event creation, or enters manually. Linked venue shows full details on host and attendee screens. event_attendees table added for attendance tracking. |
 ---
 
 ## Feature Detail
@@ -563,6 +565,8 @@ Host-facing post-event analytics report generated on demand from Supabase event 
 - F025 — Upcoming Public Events Near You (v1.2.0)
 - F075 — Create Event Form ✅ Done
 - F076 — My Events Landing Screen ✅ Done
+- F082 — QR Code Event Sharing ✅ Done
+- F083 — Event Location / Venue ✅ Done
 
 ### Profile
 - F007 — Add user_id filters to profile queries (v1.1.0)
@@ -685,6 +689,7 @@ Host-facing post-event analytics report generated on demand from Supabase event 
 
 | Date | Update |
 |---|---|
+| May 15, 2026 | F082, F083 added and shipped — QR event sharing with deep link join flow, event location with venue search. New tables: event_attendees. New RPCs: join_event. New components: EventQRModal. New libs: eventAttendees.ts, venueSearch.ts. |
 | May 15, 2026 | F079 added and shipped — Venue Request Admin Screen. Admin can review, approve with role assignment, and reject venue applications. Two RPCs written manually in Supabase. |
 | May 14, 2026 | F074-F078 added. Role management infrastructure complete (user_roles, app_role enum, RPCs, useRoles hook). Host an Event flow shipped: Profile CTA, My Events screen, Create Event two-step form. Admin index redesigned. Native build triggered with datetimepicker, expo-notifications, expo-location, expo-media-library installed. |
 | May 14, 2026 | v1.0.9 build order prioritized: F050 → F053 → F054 → F058 → F055 → F057. Theme updated to reflect final UI push framing. |
