@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useMemo } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
@@ -118,6 +119,76 @@ function CTAButton({
       ]}
     >
       <Text style={[type.body, { color: colors.textPrimary }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function HostEventCTA({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        backgroundColor: colors.glassSurface,
+        overflow: "hidden",
+        ...shadows.card,
+        flexDirection: "row",
+        alignItems: "center",
+        opacity: pressed ? 0.88 : 1,
+      })}
+    >
+      {/* Left amber accent bar */}
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 2,
+          backgroundColor: colors.accent,
+        }}
+      />
+
+      {/* Icon */}
+      <View
+        style={{
+          marginLeft: spacing.md,
+          marginVertical: spacing.md,
+          marginRight: spacing.md,
+          width: 36,
+          height: 36,
+          borderRadius: radii.md,
+          backgroundColor: colors.accentSoft,
+          borderWidth: 1,
+          borderColor: colors.borderSubtle,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name="calendar-outline" size={18} color={colors.accent} />
+      </View>
+
+      {/* Text */}
+      <View style={{ flex: 1, gap: 3, paddingVertical: spacing.md }}>
+        <Text
+          style={[
+            type.sectionHeader,
+            { color: colors.textPrimary, fontSize: 20, lineHeight: 26 },
+          ]}
+        >
+          Host an Event
+        </Text>
+        <Text style={[type.caption, { color: colors.textSecondary }]}>
+          Create and manage your whiskey tastings
+        </Text>
+      </View>
+
+      {/* Chevron */}
+      <View style={{ paddingRight: spacing.md, paddingLeft: spacing.sm }}>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </View>
     </Pressable>
   );
 }
@@ -257,18 +328,22 @@ export default function ProfileTab() {
               ) : null}
             </View>
 
-            {isEarlyUser ? (
-              <InsightsCTA
-                compact
-                isPremium={isPremium}
-                onPress={() => router.push("/insights" as any)}
-              />
-            ) : (
-              <InsightsCTA
-                isPremium={isPremium}
-                onPress={() => router.push("/insights" as any)}
-              />
-            )}
+            <View style={{ gap: spacing.sm }}>
+              {isEarlyUser ? (
+                <InsightsCTA
+                  compact
+                  isPremium={isPremium}
+                  onPress={() => router.push("/insights" as any)}
+                />
+              ) : (
+                <InsightsCTA
+                  isPremium={isPremium}
+                  onPress={() => router.push("/insights" as any)}
+                />
+              )}
+
+              <HostEventCTA onPress={() => router.push("/host-events" as any)} />
+            </View>
 
             <View style={{ gap: spacing.sm }}>
               <View style={{ gap: 8 }}>

@@ -19,6 +19,8 @@ module.exports = {
       buildNumber: "50",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
+        NSUserNotificationUsageDescription:
+          "Allow Neat Notes to send you palate updates and event notifications",
       },
     },
 
@@ -42,10 +44,33 @@ module.exports = {
 
     plugins: [
       "expo-router",
+      "@react-native-community/datetimepicker",
       [
         "expo-camera",
         {
           cameraPermission: "Allow Neat Notes to access your camera",
+        },
+      ],
+      [
+        "expo-notifications",
+        {
+          iosDisplayInForeground: true,
+        },
+      ],
+      [
+        "expo-location",
+        {
+          locationWhenInUsePermission:
+            "Neat Notes uses your location to find nearby whiskey events and venues",
+          locationAlwaysPermission:
+            "Neat Notes uses your location to alert you when favorite whiskies are nearby",
+        },
+      ],
+      [
+        "expo-media-library",
+        {
+          photosPermission: "Allow Neat Notes to access your photos",
+          savePhotosPermission: "Allow Neat Notes to save photos",
         },
       ],
       [
