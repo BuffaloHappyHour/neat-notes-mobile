@@ -11,6 +11,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   Text,
   TextInput,
   View,
@@ -202,7 +203,7 @@ function WhiskeyMenuRow({
           {/* Price + action */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 2 }}>
             {priceStr != null && (
-              <Text style={[type.caption, { color: colors.textTertiary }]}>{priceStr} / oz</Text>
+              <Text style={[type.caption, { color: colors.textTertiary }]}>{priceStr}</Text>
             )}
             {available ? (
               <Pressable
@@ -295,6 +296,8 @@ function VenueFilterSheet({
   onApply: (f: FilterState) => void;
 }) {
   const [draft, setDraft] = useState<FilterState>(filter);
+  const [typeSectionOpen, setTypeSectionOpen] = useState(false);
+  const [regionSectionOpen, setRegionSectionOpen] = useState(false);
 
   useEffect(() => {
     if (visible) setDraft(filter);
@@ -375,8 +378,16 @@ function VenueFilterSheet({
       }
     >
       {/* Whiskey Type */}
-      <Text style={[type.labelCaps, { color: colors.textMuted }]}>Whiskey Type</Text>
-      {whiskeyTypes.map(wt => (
+      <Pressable
+        onPress={() => setTypeSectionOpen(v => !v)}
+        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}
+      >
+        <Text style={[type.labelCaps, { color: colors.textMuted }]}>Whiskey Type</Text>
+        <View style={{ transform: [{ rotate: typeSectionOpen ? "180deg" : "0deg" }] }}>
+          <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+        </View>
+      </Pressable>
+      {typeSectionOpen && whiskeyTypes.map(wt => (
         <Pressable
           key={wt.id}
           onPress={() => toggleType(wt.id)}
@@ -405,40 +416,48 @@ function VenueFilterSheet({
       ))}
 
       {/* Region */}
-      <Text style={[type.labelCaps, { color: colors.textMuted, marginTop: spacing.md }]}>
-        Region
-      </Text>
-      <View
-        style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, marginTop: spacing.xs }}
+      <Pressable
+        onPress={() => setRegionSectionOpen(v => !v)}
+        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4, marginTop: spacing.md }}
       >
-        {REGIONS.map(r => {
-          const selected = draft.regions.includes(r);
-          return (
-            <Pressable
-              key={r}
-              onPress={() => toggleRegion(r)}
-              style={{
-                paddingVertical: 6,
-                paddingHorizontal: 12,
-                borderRadius: 999,
-                backgroundColor: selected ? colors.accentSoft : "transparent",
-                borderWidth: 1,
-                borderColor: selected ? colors.accent : "rgba(255,255,255,0.12)",
-              }}
-            >
-              <Text
+        <Text style={[type.labelCaps, { color: colors.textMuted }]}>Region</Text>
+        <View style={{ transform: [{ rotate: regionSectionOpen ? "180deg" : "0deg" }] }}>
+          <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+        </View>
+      </Pressable>
+      {regionSectionOpen && (
+        <View
+          style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, marginTop: spacing.xs }}
+        >
+          {REGIONS.map(r => {
+            const selected = draft.regions.includes(r);
+            return (
+              <Pressable
+                key={r}
+                onPress={() => toggleRegion(r)}
                 style={{
-                  fontFamily: "Montserrat_400Regular",
-                  fontSize: 13,
-                  color: selected ? colors.accent : "rgba(244,241,234,0.75)",
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  backgroundColor: selected ? colors.accentSoft : "transparent",
+                  borderWidth: 1,
+                  borderColor: selected ? colors.accent : "rgba(255,255,255,0.12)",
                 }}
               >
-                {r}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+                <Text
+                  style={{
+                    fontFamily: "Montserrat_400Regular",
+                    fontSize: 13,
+                    color: selected ? colors.accent : "rgba(244,241,234,0.75)",
+                  }}
+                >
+                  {r}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
 
       {/* Proof Range */}
       <Text style={[type.labelCaps, { color: colors.textMuted, marginTop: spacing.md }]}>
@@ -544,11 +563,33 @@ function VenueFilterSheet({
 function VenueSearchModal({
   visible,
   onClose,
+  menuItems,
 }: {
   visible: boolean;
   onClose: () => void;
+  menuItems: any[];
 }) {
   const insets = useSafeAreaInsets();
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (visible) {
+      const t = setTimeout(() => inputRef.current?.focus(), 300);
+      return () => clearTimeout(t);
+    } else {
+      setQuery("");
+    }
+  }, [visible]);
+
+  const results = useMemo(() => {
+    if (!query.trim()) return [];
+    const q = query.toLowerCase();
+    return menuItems.filter((item: any) =>
+      String((item.whiskeys as any)?.display_name ?? "").toLowerCase().includes(q)
+    );
+  }, [query, menuItems]);
+
   return (
     <Modal
       visible={visible}
@@ -557,29 +598,110 @@ function VenueSearchModal({
       onRequestClose={onClose}
     >
       <View style={{ flex: 1, backgroundColor: colors.background }}>
+        {/* Top bar */}
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "space-between",
             paddingHorizontal: spacing.lg,
             paddingTop: insets.top + spacing.md,
             paddingBottom: spacing.md,
             borderBottomWidth: 1,
-            borderBottomColor: colors.borderSubtle,
+            borderBottomColor: colors.divider,
+            gap: spacing.md,
           }}
         >
-          <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>Search</Text>
+          <TextInput
+            ref={inputRef}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search whiskeys…"
+            placeholderTextColor={colors.textMuted}
+            style={[type.body, { flex: 1, color: colors.textPrimary }]}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
           <Pressable
             onPress={onClose}
-            style={({ pressed }) => ({ padding: 4, opacity: pressed ? 0.7 : 1 })}
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Text style={[type.labelCaps, { color: colors.textMuted }]}>Cancel</Text>
           </Pressable>
         </View>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <Text style={[type.body, { color: colors.textMuted }]}>Search coming soon</Text>
-        </View>
+
+        {/* Results */}
+        <ScrollView
+          style={{ flex: 1 }}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+        >
+          {!query.trim() ? (
+            <View style={{ alignItems: "center", paddingTop: spacing.xl * 2 }}>
+              <Text style={[type.microcopyItalic, { color: colors.textMuted }]}>
+                {menuItems.length} whiskeys on the menu
+              </Text>
+            </View>
+          ) : results.length === 0 ? (
+            <View style={{ alignItems: "center", paddingTop: spacing.xl * 2 }}>
+              <Text style={[type.caption, { color: colors.textMuted }]}>
+                No results for "{query}"
+              </Text>
+            </View>
+          ) : (
+            results.map((item: any, idx: number) => {
+              const w = (item.whiskeys as any) ?? {};
+              const name = String(w.display_name ?? "Unknown");
+              const isLocal = w.region === "New York";
+              const proof = w.proof != null ? `${w.proof} proof` : null;
+              const pourOz = item.pour_size_ml != null ? Math.round(Number(item.pour_size_ml) / 30) : 1;
+              const priceStr = item.price_cents != null
+                ? `$${(Number(item.price_cents) / 100).toFixed(0)} / ${pourOz}oz`
+                : null;
+
+              return (
+                <View key={item.id}>
+                  <Pressable
+                    onPress={() => {
+                      hapticTick();
+                      onClose();
+                      router.push((`/whiskey/${w.id}`) as any);
+                    }}
+                    style={({ pressed }) => ({
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      paddingVertical: spacing.sm,
+                      paddingHorizontal: spacing.lg,
+                      backgroundColor: pressed ? colors.surfaceSunken : "transparent",
+                      gap: spacing.sm,
+                    })}
+                  >
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5 }}>
+                        <Text style={[type.body, { fontFamily: "Montserrat_500Medium" }]} numberOfLines={2}>
+                          {name}
+                        </Text>
+                        {isLocal && (
+                          <View style={{ backgroundColor: colors.accentFaint, borderRadius: radii.sm, paddingVertical: 2, paddingHorizontal: 6, borderWidth: 1, borderColor: colors.borderSubtle }}>
+                            <Text style={[type.labelCaps, { fontSize: 10, color: colors.accent }]}>Local</Text>
+                          </View>
+                        )}
+                      </View>
+                      {proof != null && (
+                        <Text style={[type.caption, { color: colors.textTertiary }]}>{proof}</Text>
+                      )}
+                      {priceStr != null && (
+                        <Text style={[type.caption, { color: colors.textTertiary }]}>{priceStr}</Text>
+                      )}
+                    </View>
+                  </Pressable>
+                  {idx < results.length - 1 && (
+                    <View style={{ height: 1, backgroundColor: colors.divider, marginHorizontal: spacing.lg, opacity: 0.4 }} />
+                  )}
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -777,6 +899,8 @@ export default function VenueScreen() {
       ] as [string, any[]]);
   }, [filteredItems]);
 
+  const venueName = (venueData as any)?.display_name ?? (venueData as any)?.name ?? "";
+
   const addressLine = venueData
     ? [
         (venueData as any).address,
@@ -799,10 +923,10 @@ export default function VenueScreen() {
   };
 
   const statRows = [
-    { value: String(menuItems.length), label: "whiskeys" },
-    { value: avgRating ?? "—", label: "avg rating" },
-    { value: String(totalTastings), label: "tastings logged" },
-    { value: "2 days ago", label: "last updated" },
+    { value: String(menuItems.length), label: "whiskeys", color: colors.accent },
+    { value: "—", label: "venue rating", color: colors.textMuted },
+    { value: String(totalTastings), label: "tastings logged", color: colors.accent },
+    { value: "2 days ago", label: "last updated", color: colors.accent },
   ];
 
   return (
@@ -860,7 +984,7 @@ export default function VenueScreen() {
                     minWidth: 88,
                   }}
                 >
-                  <Text style={[type.statNumber, { color: colors.accent }]}>
+                  <Text style={[type.statNumber, { color: (stat as any).color ?? colors.accent }]}>
                     {stat.value}
                   </Text>
                   <Text style={[type.labelCaps, { color: colors.textMuted, fontSize: 10 }]}>
@@ -887,7 +1011,15 @@ export default function VenueScreen() {
           {/* ── Action Row ──────────────────────────────────────── */}
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
             <Pressable
-              onPress={withTick(() => {})}
+              onPress={async () => {
+                await hapticTick();
+                try {
+                  await Share.share({
+                    message: `Check out ${venueName} on Neat Notes`,
+                    url: `https://neatnotes.app/venue/${id}`,
+                  });
+                } catch {}
+              }}
               style={({ pressed }) => ({
                 flex: 1,
                 flexDirection: "row",
@@ -1161,6 +1293,7 @@ export default function VenueScreen() {
       <VenueSearchModal
         visible={searchVisible}
         onClose={() => setSearchVisible(false)}
+        menuItems={menuItems}
       />
     </>
   );
