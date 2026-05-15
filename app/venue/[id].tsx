@@ -4,6 +4,7 @@ import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   Linking,
@@ -377,64 +378,173 @@ function VenueFilterSheet({
         </View>
       }
     >
-      {/* Whiskey Type */}
-      <Pressable
-        onPress={() => setTypeSectionOpen(v => !v)}
-        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{ gap: spacing.md, paddingBottom: spacing.lg }}
       >
-        <Text style={[type.labelCaps, { color: colors.textMuted }]}>Whiskey Type</Text>
-        <View style={{ transform: [{ rotate: typeSectionOpen ? "180deg" : "0deg" }] }}>
-          <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
-        </View>
-      </Pressable>
-      {typeSectionOpen && whiskeyTypes.map(wt => (
+        {/* Whiskey Type */}
         <Pressable
-          key={wt.id}
-          onPress={() => toggleType(wt.id)}
+          onPress={() => setTypeSectionOpen(v => !v)}
+          style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}
+        >
+          <Text style={[type.labelCaps, { color: colors.textMuted }]}>Whiskey Type</Text>
+          <View style={{ transform: [{ rotate: typeSectionOpen ? "180deg" : "0deg" }] }}>
+            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+          </View>
+        </Pressable>
+        {typeSectionOpen && (
+          <View style={{ maxHeight: 220 }}>
+            <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+              {whiskeyTypes.map(wt => (
+                <Pressable
+                  key={wt.id}
+                  onPress={() => toggleType(wt.id)}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: 10,
+                    borderBottomWidth: 1,
+                    borderBottomColor: "rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: "Montserrat_400Regular",
+                      fontSize: 15,
+                      color: "rgba(244,241,234,0.9)",
+                    }}
+                  >
+                    {wt.name}
+                  </Text>
+                  {draft.types.includes(wt.id) && (
+                    <Ionicons name="checkmark" size={18} color={colors.accent} />
+                  )}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Region */}
+        <Pressable
+          onPress={() => setRegionSectionOpen(v => !v)}
+          style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}
+        >
+          <Text style={[type.labelCaps, { color: colors.textMuted }]}>Region</Text>
+          <View style={{ transform: [{ rotate: regionSectionOpen ? "180deg" : "0deg" }] }}>
+            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+          </View>
+        </Pressable>
+        {regionSectionOpen && (
+          <View
+            style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}
+          >
+            {REGIONS.map(r => {
+              const selected = draft.regions.includes(r);
+              return (
+                <Pressable
+                  key={r}
+                  onPress={() => toggleRegion(r)}
+                  style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    borderRadius: 999,
+                    backgroundColor: selected ? colors.accentSoft : "transparent",
+                    borderWidth: 1,
+                    borderColor: selected ? colors.accent : "rgba(255,255,255,0.12)",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: "Montserrat_400Regular",
+                      fontSize: 13,
+                      color: selected ? colors.accent : "rgba(244,241,234,0.75)",
+                    }}
+                  >
+                    {r}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Proof Range */}
+        <Text style={[type.labelCaps, { color: colors.textMuted }]}>
+          Proof Range
+        </Text>
+        <View
           style={{
             flexDirection: "row",
+            gap: spacing.sm,
             alignItems: "center",
-            justifyContent: "space-between",
-            paddingVertical: 10,
-            borderBottomWidth: 1,
-            borderBottomColor: "rgba(255,255,255,0.06)",
           }}
         >
-          <Text
-            style={{
-              fontFamily: "Montserrat_400Regular",
-              fontSize: 15,
-              color: "rgba(244,241,234,0.9)",
-            }}
-          >
-            {wt.name}
-          </Text>
-          {draft.types.includes(wt.id) && (
-            <Ionicons name="checkmark" size={18} color={colors.accent} />
-          )}
-        </Pressable>
-      ))}
-
-      {/* Region */}
-      <Pressable
-        onPress={() => setRegionSectionOpen(v => !v)}
-        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4, marginTop: spacing.md }}
-      >
-        <Text style={[type.labelCaps, { color: colors.textMuted }]}>Region</Text>
-        <View style={{ transform: [{ rotate: regionSectionOpen ? "180deg" : "0deg" }] }}>
-          <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+          <TextInput
+            value={draft.proofMin}
+            onChangeText={v => setDraft(prev => ({ ...prev, proofMin: v }))}
+            placeholder="Min"
+            placeholderTextColor="rgba(244,241,234,0.35)"
+            keyboardType="numeric"
+            style={sheetInputStyle}
+          />
+          <Text style={{ color: "rgba(244,241,234,0.4)", fontSize: 16 }}>–</Text>
+          <TextInput
+            value={draft.proofMax}
+            onChangeText={v => setDraft(prev => ({ ...prev, proofMax: v }))}
+            placeholder="Max"
+            placeholderTextColor="rgba(244,241,234,0.35)"
+            keyboardType="numeric"
+            style={sheetInputStyle}
+          />
         </View>
-      </Pressable>
-      {regionSectionOpen && (
+
+        {/* Price Range */}
+        <Text style={[type.labelCaps, { color: colors.textMuted }]}>
+          Price per oz ($)
+        </Text>
         <View
-          style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, marginTop: spacing.xs }}
+          style={{
+            flexDirection: "row",
+            gap: spacing.sm,
+            alignItems: "center",
+          }}
         >
-          {REGIONS.map(r => {
-            const selected = draft.regions.includes(r);
+          <TextInput
+            value={draft.priceMin}
+            onChangeText={v => setDraft(prev => ({ ...prev, priceMin: v }))}
+            placeholder="Min"
+            placeholderTextColor="rgba(244,241,234,0.35)"
+            keyboardType="numeric"
+            style={sheetInputStyle}
+          />
+          <Text style={{ color: "rgba(244,241,234,0.4)", fontSize: 16 }}>–</Text>
+          <TextInput
+            value={draft.priceMax}
+            onChangeText={v => setDraft(prev => ({ ...prev, priceMax: v }))}
+            placeholder="Max"
+            placeholderTextColor="rgba(244,241,234,0.35)"
+            keyboardType="numeric"
+            style={sheetInputStyle}
+          />
+        </View>
+
+        {/* Sort By */}
+        <Text style={[type.labelCaps, { color: colors.textMuted }]}>
+          Sort By
+        </Text>
+        <View
+          style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}
+        >
+          {SORT_OPTIONS.map(opt => {
+            const selected = draft.sortBy === opt;
             return (
               <Pressable
-                key={r}
-                onPress={() => toggleRegion(r)}
+                key={opt}
+                onPress={() => setDraft(prev => ({ ...prev, sortBy: opt }))}
                 style={{
                   paddingVertical: 6,
                   paddingHorizontal: 12,
@@ -451,111 +561,13 @@ function VenueFilterSheet({
                     color: selected ? colors.accent : "rgba(244,241,234,0.75)",
                   }}
                 >
-                  {r}
+                  {opt}
                 </Text>
               </Pressable>
             );
           })}
         </View>
-      )}
-
-      {/* Proof Range */}
-      <Text style={[type.labelCaps, { color: colors.textMuted, marginTop: spacing.md }]}>
-        Proof Range
-      </Text>
-      <View
-        style={{
-          flexDirection: "row",
-          gap: spacing.sm,
-          alignItems: "center",
-          marginTop: spacing.xs,
-        }}
-      >
-        <TextInput
-          value={draft.proofMin}
-          onChangeText={v => setDraft(prev => ({ ...prev, proofMin: v }))}
-          placeholder="Min"
-          placeholderTextColor="rgba(244,241,234,0.35)"
-          keyboardType="numeric"
-          style={sheetInputStyle}
-        />
-        <Text style={{ color: "rgba(244,241,234,0.4)", fontSize: 16 }}>–</Text>
-        <TextInput
-          value={draft.proofMax}
-          onChangeText={v => setDraft(prev => ({ ...prev, proofMax: v }))}
-          placeholder="Max"
-          placeholderTextColor="rgba(244,241,234,0.35)"
-          keyboardType="numeric"
-          style={sheetInputStyle}
-        />
-      </View>
-
-      {/* Price Range */}
-      <Text style={[type.labelCaps, { color: colors.textMuted, marginTop: spacing.md }]}>
-        Price per oz ($)
-      </Text>
-      <View
-        style={{
-          flexDirection: "row",
-          gap: spacing.sm,
-          alignItems: "center",
-          marginTop: spacing.xs,
-        }}
-      >
-        <TextInput
-          value={draft.priceMin}
-          onChangeText={v => setDraft(prev => ({ ...prev, priceMin: v }))}
-          placeholder="Min"
-          placeholderTextColor="rgba(244,241,234,0.35)"
-          keyboardType="numeric"
-          style={sheetInputStyle}
-        />
-        <Text style={{ color: "rgba(244,241,234,0.4)", fontSize: 16 }}>–</Text>
-        <TextInput
-          value={draft.priceMax}
-          onChangeText={v => setDraft(prev => ({ ...prev, priceMax: v }))}
-          placeholder="Max"
-          placeholderTextColor="rgba(244,241,234,0.35)"
-          keyboardType="numeric"
-          style={sheetInputStyle}
-        />
-      </View>
-
-      {/* Sort By */}
-      <Text style={[type.labelCaps, { color: colors.textMuted, marginTop: spacing.md }]}>
-        Sort By
-      </Text>
-      <View
-        style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, marginTop: spacing.xs }}
-      >
-        {SORT_OPTIONS.map(opt => {
-          const selected = draft.sortBy === opt;
-          return (
-            <Pressable
-              key={opt}
-              onPress={() => setDraft(prev => ({ ...prev, sortBy: opt }))}
-              style={{
-                paddingVertical: 6,
-                paddingHorizontal: 12,
-                borderRadius: 999,
-                backgroundColor: selected ? colors.accentSoft : "transparent",
-                borderWidth: 1,
-                borderColor: selected ? colors.accent : "rgba(255,255,255,0.12)",
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: "Montserrat_400Regular",
-                  fontSize: 13,
-                  color: selected ? colors.accent : "rgba(244,241,234,0.75)",
-                }}
-              >
-                {opt}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      </ScrollView>
     </BulletproofSheet>
   );
 }
@@ -720,6 +732,8 @@ export default function VenueScreen() {
   const [communityStats, setCommunityStats] = useState<any[]>([]);
   const [whiskeyTypes, setWhiskeyTypes] = useState<any[]>([]);
   const [checkedIn, setCheckedIn] = useState(false);
+  const [checkInId, setCheckInId] = useState<string | null>(null);
+  const [checkInTime, setCheckInTime] = useState<Date | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<"whiskey" | "full">("whiskey");
@@ -778,6 +792,35 @@ export default function VenueScreen() {
         if (typesErr) throw new Error(typesErr.message);
         if (!alive) return;
         setWhiskeyTypes(((types as any) ?? []) as any[]);
+
+        const { data: authData } = await supabase.auth.getSession();
+        const userId = authData.session?.user?.id;
+        if (userId) {
+          const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+          const { data: ci } = await supabase
+            .from("venue_checkins")
+            .select("id, checked_in_at")
+            .eq("venue_id", id)
+            .eq("user_id", userId)
+            .is("checked_out_at", null)
+            .gte("checked_in_at", threeHoursAgo)
+            .maybeSingle();
+          if (ci) {
+            if (alive) {
+              setCheckedIn(true);
+              setCheckInId((ci as any).id);
+              setCheckInTime(new Date((ci as any).checked_in_at));
+            }
+          } else {
+            await supabase
+              .from("venue_checkins")
+              .update({ checked_out_at: new Date().toISOString(), auto_expired: true })
+              .eq("venue_id", id)
+              .eq("user_id", userId)
+              .is("checked_out_at", null)
+              .lt("checked_in_at", threeHoursAgo);
+          }
+        }
       } catch (e: any) {
         if (alive) setStatusError(String(e?.message ?? e));
       } finally {
@@ -1005,6 +1048,27 @@ export default function VenueScreen() {
           </ScrollView>
         </View>
 
+        {/* ── Live Strip ──────────────────────────────────────── */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.sm,
+            paddingVertical: spacing.sm,
+            paddingHorizontal: spacing.lg,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.divider,
+          }}
+        >
+          <PulsingDot color={colors.success} />
+          <Text style={[type.caption, { flex: 1, color: colors.textSecondary }]}>
+            4 Neat Notes users checked in right now
+          </Text>
+          <Text style={[type.caption, { color: colors.textMuted, fontSize: 12 }]}>
+            14 tastings logged today
+          </Text>
+        </View>
+
         <View
           style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.md }}
         >
@@ -1015,8 +1079,7 @@ export default function VenueScreen() {
                 await hapticTick();
                 try {
                   await Share.share({
-                    message: `Check out ${venueName} on Neat Notes`,
-                    url: `https://neatnotes.app/venue/${id}`,
+                    message: `Check out ${venueName} on Neat Notes — ${venueName} has ${menuItems.length} whiskeys on their menu. https://www.neatnotesapp.com/venue/${id}`,
                   });
                 } catch {}
               }}
@@ -1038,7 +1101,45 @@ export default function VenueScreen() {
             </Pressable>
 
             <Pressable
-              onPress={withTick(() => setCheckedIn(true))}
+              onPress={async () => {
+                await hapticTick();
+                const { data: authData } = await supabase.auth.getSession();
+                const userId = authData.session?.user?.id;
+                if (!userId) return;
+                if (checkedIn) {
+                  if (checkInId) {
+                    await supabase
+                      .from("venue_checkins")
+                      .update({ checked_out_at: new Date().toISOString() })
+                      .eq("id", checkInId);
+                  }
+                  setCheckedIn(false);
+                  setCheckInId(null);
+                  setCheckInTime(null);
+                  Alert.alert(
+                    "Before you go",
+                    "Would you like to log a tasting while you were here?",
+                    [
+                      { text: "No thanks", style: "cancel" },
+                      {
+                        text: "Log a Tasting",
+                        onPress: () => router.push("/log/cloud-tasting" as any),
+                      },
+                    ]
+                  );
+                } else {
+                  const { data: ci } = await supabase
+                    .from("venue_checkins")
+                    .insert({ venue_id: id, user_id: userId, checked_in_at: new Date().toISOString() })
+                    .select("id")
+                    .single();
+                  if (ci) {
+                    setCheckedIn(true);
+                    setCheckInId((ci as any).id);
+                    setCheckInTime(new Date());
+                  }
+                }
+              }}
               style={({ pressed }) => ({
                 flex: 2,
                 flexDirection: "row",
@@ -1070,30 +1171,6 @@ export default function VenueScreen() {
                 {checkedIn ? "Checked In" : "Check In"}
               </Text>
             </Pressable>
-          </View>
-
-          {/* ── Live Strip ──────────────────────────────────────── */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: spacing.sm,
-              padding: spacing.md,
-              borderRadius: radii.md,
-              backgroundColor: colors.accentFaint,
-              borderWidth: 1,
-              borderColor: colors.borderSubtle,
-            }}
-          >
-            <PulsingDot color={colors.success} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[type.caption, { color: colors.textSecondary }]}>
-                4 Neat Notes users checked in right now
-              </Text>
-              <Text style={[type.caption, { color: colors.textMuted, fontSize: 12 }]}>
-                14 tastings logged today
-              </Text>
-            </View>
           </View>
 
           {/* ── Search Trigger ──────────────────────────────────── */}
@@ -1131,7 +1208,7 @@ export default function VenueScreen() {
           {/* ── Upsell Banner ───────────────────────────────────── */}
           {!isPremium && (
             <Pressable
-              onPress={withTick(() => {})}
+              onPress={withTick(() => router.push("/insights" as any))}
               style={({ pressed }) => ({
                 flexDirection: "row",
                 alignItems: "center",

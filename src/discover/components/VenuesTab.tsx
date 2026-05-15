@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { hapticTick } from "../../../lib/hapticsPress";
 import { radii } from "../../../lib/radii";
@@ -240,6 +240,7 @@ function SkeletonVenueCard() {
 
 export function VenuesTab() {
   const [venues, setVenues] = useState<any[]>([]);
+  const [venueQuery, setVenueQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [isPremium, setIsPremium] = useState(false);
   const didInitialLoadRef = useRef(false);
@@ -295,6 +296,12 @@ export function VenuesTab() {
     })();
   }, []);
 
+  const filteredVenues = venueQuery.trim()
+    ? venues.filter(v =>
+        String(v.name ?? "").toLowerCase().includes(venueQuery.toLowerCase())
+      )
+    : venues;
+
   return (
     <ScrollView
       style={{ flex: 1 }}
@@ -305,17 +312,41 @@ export function VenuesTab() {
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
     >
+      <TextInput
+        value={venueQuery}
+        onChangeText={setVenueQuery}
+        placeholder="Search venues…"
+        placeholderTextColor={colors.textMuted}
+        style={[
+          type.body,
+          {
+            marginHorizontal: spacing.lg,
+            marginBottom: spacing.md,
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+            backgroundColor: colors.surface,
+            borderColor: (colors as any).borderSubtle ?? colors.divider,
+            borderWidth: 1,
+            borderRadius: 8,
+            color: colors.textPrimary,
+          },
+        ]}
+        autoCorrect={false}
+        autoCapitalize="none"
+      />
       {loading ? (
         <>
           <SkeletonVenueCard />
           <SkeletonVenueCard />
         </>
-      ) : venues.length === 0 ? (
+      ) : filteredVenues.length === 0 ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}>
-          <Text style={[type.body, { color: colors.textMuted }]}>No venues yet</Text>
+          <Text style={[type.body, { color: colors.textMuted }]}>
+            {venueQuery.trim() ? `No venues match "${venueQuery}"` : "No venues yet"}
+          </Text>
         </View>
       ) : (
-        venues.map((venue) => (
+        filteredVenues.map((venue) => (
           <VenueCard key={venue.id} venue={venue} isPremium={isPremium} />
         ))
       )}
