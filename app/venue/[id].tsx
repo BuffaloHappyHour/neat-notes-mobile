@@ -113,10 +113,13 @@ function WhiskeyMenuRow({
   const w = (item.whiskeys as any) ?? {};
   const available = item.available !== false;
   const name = (w.display_name as string | null) ?? "Unknown";
-  const isLocal = String(w.region ?? "").toLowerCase().includes("new york");
+  const isLocal = w.region === "New York";
   const proof = w.proof != null ? `${w.proof} proof` : null;
+  const pourOz = item.pour_size_ml != null ? Math.round(Number(item.pour_size_ml) / 30) : 1;
   const priceStr =
-    item.price_cents != null ? `$${(Number(item.price_cents) / 100).toFixed(0)}` : null;
+    item.price_cents != null
+      ? `$${(Number(item.price_cents) / 100).toFixed(0)} / ${pourOz}oz`
+      : null;
   const communityAvg =
     stats?.community_avg != null ? Number(stats.community_avg).toFixed(1) : null;
   const communityCount = stats?.community_count ?? 0;
@@ -601,15 +604,7 @@ export default function VenueScreen() {
   const [appliedFilter, setAppliedFilter] = useState<FilterState>(defaultFilter);
 
   const isPremium = false;
-
-  // Hardcoded placeholder — replace with live venues query when ready
-  const venueData = {
-    display_name: "Hartman's Barrel Room",
-    venue_type: "Whiskey Bar",
-    address: "123 Barrel St",
-    city: "Buffalo",
-    state: "NY",
-  };
+  const [venueData, setVenueData] = useState<any>(null);
 
   useEffect(() => {
     let alive = true;
@@ -618,13 +613,22 @@ export default function VenueScreen() {
         setLoading(true);
         setStatusError("");
 
+        const { data: venue, error: venueErr } = await supabase
+          .from("venues")
+          .select("id, name, display_name, venue_type, address, city, state, phone, website, is_active")
+          .eq("id", id)
+          .single();
+        if (venueErr) throw new Error(venueErr.message);
+        if (!alive) return;
+        setVenueData(venue as any);
+
         const { data: items, error: itemsErr } = await supabase
           .from("venue_menu_items")
           .select(
-            "id, whiskey_id, price_cents, available, whiskeys(id, display_name, whiskey_type, whiskey_type_id, category, region, sub_region, proof, distillery)"
+            "id, whiskey_id, price_cents, pour_size_ml, available, whiskeys(id, display_name, whiskey_type, whiskey_type_id, category, region, sub_region, proof, distillery)"
           )
           .eq("venue_id", id)
-          .order("whiskey_type");
+          .order("available", { ascending: false });
 
         if (itemsErr) throw new Error(itemsErr.message);
         if (!alive) return;
@@ -674,6 +678,12 @@ export default function VenueScreen() {
     () => communityStats.reduce((acc, s) => acc + Number(s.community_count ?? 0), 0),
     [communityStats]
   );
+
+  const statsMap = useMemo(() => {
+    const m: Record<string, any> = {};
+    communityStats.forEach((s: any) => { m[s.whiskey_id] = s; });
+    return m;
+  }, [communityStats]);
 
   const filteredItems = useMemo(() => {
     let items = [...menuItems];
@@ -752,12 +762,29 @@ export default function VenueScreen() {
       if (!groups[key]) groups[key] = [];
       groups[key].push(item);
     }
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+    return Object.entries(groups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, items]) => [
+        key,
+        [...items].sort((a, b) => {
+          const aAvail = a.available !== false ? 0 : 1;
+          const bAvail = b.available !== false ? 0 : 1;
+          if (aAvail !== bAvail) return aAvail - bAvail;
+          return String((a.whiskeys as any)?.display_name ?? "").localeCompare(
+            String((b.whiskeys as any)?.display_name ?? "")
+          );
+        }),
+      ] as [string, any[]]);
   }, [filteredItems]);
 
-  const addressLine = [venueData.address, venueData.city, venueData.state]
-    .filter(Boolean)
-    .join(", ");
+  const addressLine = venueData
+    ? [
+        (venueData as any).address,
+        [(venueData as any).city, (venueData as any).state].filter(Boolean).join(" "),
+      ]
+        .filter(Boolean)
+        .join(", ")
+    : "";
 
   const openMaps = async () => {
     await hapticTick();
@@ -795,10 +822,10 @@ export default function VenueScreen() {
           }}
         >
           <Text style={[type.labelCaps, { color: colors.textMuted }]}>
-            {venueData.venue_type}
+            {(venueData as any)?.venue_type ?? ""}
           </Text>
           <Text style={[type.screenTitle, { fontSize: 34, lineHeight: 40 }]}>
-            {venueData.display_name}
+            {(venueData as any)?.display_name ?? (venueData as any)?.name ?? ""}
           </Text>
           <Pressable
             onPress={openMaps}
@@ -1089,9 +1116,7 @@ export default function VenueScreen() {
                     </Text>
                   </View>
                   {items.map((item: any, idx: number) => {
-                    const itemStats = communityStats.find(
-                      s => s.whiskey_id === item.whiskey_id
-                    );
+                    const itemStats = statsMap[item.whiskey_id];
                     return (
                       <View key={item.id}>
                         <WhiskeyMenuRow

@@ -10,43 +10,6 @@ import { supabase } from "../../../lib/supabase";
 import { colors } from "../../../lib/theme";
 import { type } from "../../../lib/typography";
 
-const PLACEHOLDER_VENUES = [
-  {
-    id: "hartmans-1",
-    name: "Hartman's Barrel Room",
-    venue_type: "Whiskey Bar & Distillery",
-    address: "55 Chicago Street, Buffalo NY",
-    whiskey_count: 103,
-    community_rating: 4.8,
-    tastings_logged: 187,
-    tag: "palate_match",
-    tag_value: "94% palate match",
-  },
-  {
-    id: "lucky-day-1",
-    name: "Lucky Day Whiskey Bar",
-    venue_type: "Whiskey Bar",
-    address: "Buffalo, NY",
-    whiskey_count: 67,
-    community_rating: 4.6,
-    tastings_logged: 89,
-    tag: "new_arrivals",
-    tag_value: "3 new bottles this week",
-  },
-  {
-    id: "colonial-1",
-    name: "Colonial Wine & Spirits",
-    venue_type: "Retail",
-    address: "Buffalo, NY",
-    whiskey_count: 210,
-    community_rating: 4.5,
-    tastings_logged: 44,
-    tag: "new_arrivals",
-    tag_value: "New arrivals in stock",
-  },
-];
-
-type Venue = (typeof PLACEHOLDER_VENUES)[number];
 
 function TagBadge({ tag }: { tag: string }) {
   if (tag === "palate_match") {
@@ -125,7 +88,7 @@ function VerticalDivider() {
   );
 }
 
-function TagValueRow({ venue, isPremium }: { venue: Venue; isPremium: boolean }) {
+function TagValueRow({ venue, isPremium }: { venue: any; isPremium: boolean }) {
   if (venue.tag === "palate_match") {
     if (isPremium) {
       return (
@@ -155,7 +118,7 @@ function TagValueRow({ venue, isPremium }: { venue: Venue; isPremium: boolean })
   return null;
 }
 
-function VenueCard({ venue, isPremium }: { venue: Venue; isPremium: boolean }) {
+function VenueCard({ venue, isPremium }: { venue: any; isPremium: boolean }) {
   return (
     <Pressable
       onPress={() => {
@@ -276,7 +239,7 @@ function SkeletonVenueCard() {
 }
 
 export function VenuesTab() {
-  const [venues, setVenues] = useState<Venue[]>([]);
+  const [venues, setVenues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPremium, setIsPremium] = useState(false);
   const didInitialLoadRef = useRef(false);
@@ -297,7 +260,37 @@ export function VenuesTab() {
         setIsPremium((profile as any)?.is_premium === true);
       }
 
-      setVenues(PLACEHOLDER_VENUES);
+      const { data: venuesData } = await supabase
+        .from("venues")
+        .select("id, name, display_name, venue_type, address, city, state")
+        .eq("is_active", true)
+        .order("name");
+
+      const rawVenues = ((venuesData as any) ?? []) as any[];
+
+      const counts = await Promise.all(
+        rawVenues.map((venue: any) =>
+          supabase
+            .from("venue_menu_items")
+            .select("id", { count: "exact", head: true })
+            .eq("venue_id", venue.id)
+            .then(({ count }) => count ?? 0)
+        )
+      );
+
+      const mappedVenues = rawVenues.map((venue: any, i: number) => ({
+        id: venue.id,
+        name: (venue as any).display_name ?? (venue as any).name,
+        venue_type: (venue as any).venue_type,
+        address: [(venue as any).city, (venue as any).state].filter(Boolean).join(", "),
+        whiskey_count: counts[i],
+        community_rating: 4.8,
+        tastings_logged: 0,
+        tag: "new_arrivals",
+        tag_value: "Now on Neat Notes",
+      }));
+
+      setVenues(mappedVenues);
       setLoading(false);
     })();
   }, []);
