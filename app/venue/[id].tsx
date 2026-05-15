@@ -247,12 +247,12 @@ function WhiskeyMenuRow({
         </View>
 
         {/* Right column */}
-        <View style={{ alignItems: "center", gap: 6, paddingTop: 2 }}>
+        <View style={{ width: 72, alignItems: "flex-end", gap: 4, paddingTop: 2 }}>
           {/* Match circle */}
           <View
             style={{
-              width: 27,
-              height: 27,
+              width: 28,
+              height: 28,
               borderRadius: 14,
               backgroundColor: colors.surfaceSunken,
               borderWidth: 1,
@@ -739,7 +739,7 @@ export default function VenueScreen() {
   const [activeTab, setActiveTab] = useState<"whiskey" | "full">("whiskey");
   const [appliedFilter, setAppliedFilter] = useState<FilterState>(defaultFilter);
 
-  const isPremium = false;
+  const [isPremium, setIsPremium] = useState(false);
   const [venueData, setVenueData] = useState<any>(null);
 
   useEffect(() => {
@@ -796,6 +796,13 @@ export default function VenueScreen() {
         const { data: authData } = await supabase.auth.getSession();
         const userId = authData.session?.user?.id;
         if (userId) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("is_premium")
+            .eq("id", userId)
+            .maybeSingle();
+          if (alive) setIsPremium((profile as any)?.is_premium === true);
+
           const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
           const { data: ci } = await supabase
             .from("venue_checkins")
@@ -1123,7 +1130,7 @@ export default function VenueScreen() {
                       { text: "No thanks", style: "cancel" },
                       {
                         text: "Log a Tasting",
-                        onPress: () => router.push("/log/cloud-tasting" as any),
+                        onPress: () => setSearchVisible(true),
                       },
                     ]
                   );
