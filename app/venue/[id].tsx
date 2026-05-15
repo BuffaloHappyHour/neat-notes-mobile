@@ -145,7 +145,10 @@ function WhiskeyMenuRow({
 
   return (
     <Pressable
-      onPress={withTick(() => router.push(`/whiskey/${w.id}` as any))}
+      onPress={withTick(() => {
+        if (!w?.id) return;
+        router.push(`/whiskey/${w.id}` as any);
+      })}
       style={({ pressed }) => ({
         backgroundColor: pressed ? colors.surfaceSunken : "transparent",
         paddingVertical: spacing.sm,
@@ -839,13 +842,6 @@ export default function VenueScreen() {
     };
   }, [id]);
 
-  const avgRating = useMemo(() => {
-    const valid = communityStats.filter(s => s.community_avg != null);
-    if (!valid.length) return null;
-    const sum = valid.reduce((acc, s) => acc + Number(s.community_avg), 0);
-    return (Math.round((sum / valid.length) * 10) / 10).toFixed(1);
-  }, [communityStats]);
-
   const totalTastings = useMemo(
     () => communityStats.reduce((acc, s) => acc + Number(s.community_count ?? 0), 0),
     [communityStats]
@@ -974,7 +970,6 @@ export default function VenueScreen() {
 
   const statRows = [
     { value: String(menuItems.length), label: "whiskeys", color: colors.accent },
-    { value: "—", label: "venue rating", color: colors.textMuted },
     { value: String(totalTastings), label: "tastings logged", color: colors.accent },
     { value: "2 days ago", label: "last updated", color: colors.accent },
   ];
@@ -1053,27 +1048,6 @@ export default function VenueScreen() {
               </View>
             ))}
           </ScrollView>
-        </View>
-
-        {/* ── Live Strip ──────────────────────────────────────── */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: spacing.sm,
-            paddingVertical: spacing.sm,
-            paddingHorizontal: spacing.lg,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.divider,
-          }}
-        >
-          <PulsingDot color={colors.success} />
-          <Text style={[type.caption, { flex: 1, color: colors.textSecondary }]}>
-            4 Neat Notes users checked in right now
-          </Text>
-          <Text style={[type.caption, { color: colors.textMuted, fontSize: 12 }]}>
-            14 tastings logged today
-          </Text>
         </View>
 
         <View

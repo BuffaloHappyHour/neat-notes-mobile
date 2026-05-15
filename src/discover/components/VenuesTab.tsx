@@ -164,11 +164,9 @@ function VenueCard({ venue, isPremium }: { venue: any; isPremium: boolean }) {
         }}
       />
 
-      {/* Row 3: three stats */}
+      {/* Row 3: two stats */}
       <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10 }}>
         <StatCell value={String(venue.whiskey_count)} label="Whiskies" />
-        <VerticalDivider />
-        <StatCell value={String(venue.community_rating)} label="Rating" />
         <VerticalDivider />
         <StatCell value={String(venue.tastings_logged)} label="Tastings" />
       </View>
@@ -248,52 +246,59 @@ export function VenuesTab() {
   useEffect(() => {
     if (didInitialLoadRef.current) return;
     didInitialLoadRef.current = true;
+    let alive = true;
 
     (async () => {
-      const { data: authData } = await supabase.auth.getSession();
-      const userId = authData.session?.user?.id;
-      if (userId) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("is_premium")
-          .eq("id", userId)
-          .maybeSingle();
-        setIsPremium((profile as any)?.is_premium === true);
+      try {
+        const { data: authData } = await supabase.auth.getSession();
+        const userId = authData.session?.user?.id;
+        if (userId) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("is_premium")
+            .eq("id", userId)
+            .maybeSingle();
+          if (alive) setIsPremium((profile as any)?.is_premium === true);
+        }
+
+        const { data: venuesData } = await supabase
+          .from("venues")
+          .select("id, name, display_name, venue_type, address, city, state")
+          .eq("is_active", true)
+          .order("name");
+
+        const rawVenues = ((venuesData as any) ?? []) as any[];
+
+        const counts = await Promise.all(
+          rawVenues.map((venue: any) =>
+            supabase
+              .from("venue_menu_items")
+              .select("id", { count: "exact", head: true })
+              .eq("venue_id", venue.id)
+              .then(({ count }) => count ?? 0)
+          )
+        );
+
+        const mappedVenues = rawVenues.map((venue: any, i: number) => ({
+          id: venue.id,
+          name: (venue as any).display_name ?? (venue as any).name,
+          venue_type: (venue as any).venue_type,
+          address: [(venue as any).city, (venue as any).state].filter(Boolean).join(", "),
+          whiskey_count: counts[i],
+          tastings_logged: 0,
+          tag: "new_arrivals",
+          tag_value: "Now on Neat Notes",
+        }));
+
+        if (alive) setVenues(mappedVenues);
+      } catch (e) {
+        console.log("[VenuesTab] load error:", e);
+      } finally {
+        if (alive) setLoading(false);
       }
-
-      const { data: venuesData } = await supabase
-        .from("venues")
-        .select("id, name, display_name, venue_type, address, city, state")
-        .eq("is_active", true)
-        .order("name");
-
-      const rawVenues = ((venuesData as any) ?? []) as any[];
-
-      const counts = await Promise.all(
-        rawVenues.map((venue: any) =>
-          supabase
-            .from("venue_menu_items")
-            .select("id", { count: "exact", head: true })
-            .eq("venue_id", venue.id)
-            .then(({ count }) => count ?? 0)
-        )
-      );
-
-      const mappedVenues = rawVenues.map((venue: any, i: number) => ({
-        id: venue.id,
-        name: (venue as any).display_name ?? (venue as any).name,
-        venue_type: (venue as any).venue_type,
-        address: [(venue as any).city, (venue as any).state].filter(Boolean).join(", "),
-        whiskey_count: counts[i],
-        community_rating: 4.8,
-        tastings_logged: 0,
-        tag: "new_arrivals",
-        tag_value: "Now on Neat Notes",
-      }));
-
-      setVenues(mappedVenues);
-      setLoading(false);
     })();
+
+    return () => { alive = false; };
   }, []);
 
   const filteredVenues = venueQuery.trim()
