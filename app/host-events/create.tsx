@@ -3,7 +3,7 @@ import DateTimePicker, {
 } from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -24,6 +24,9 @@ import { spacing } from "../../lib/spacing";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
+import { saveEventLineup, type LineupDraft } from "../../lib/eventLineup";
+import { searchVenues, type VenueResult } from "../../lib/venueSearch";
+import { WhiskeySearchModal } from "../../src/logTab/components/WhiskeySearchModal";
 
 const EVENT_TYPES = [
   "Tasting Class",
@@ -161,10 +164,127 @@ function DateField({
   );
 }
 
+function LineupCard({
+  item,
+  index,
+  total,
+  showPairingNote,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
+  onPairingNoteChange,
+}: {
+  item: LineupDraft;
+  index: number;
+  total: number;
+  showPairingNote: boolean;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onPairingNoteChange: (note: string) => void;
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: colors.surfaceSunken,
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.borderStrong,
+        padding: spacing.md,
+        gap: spacing.sm,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: spacing.sm }}>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={[type.labelCaps, { color: colors.accent, fontSize: 9 }]}>
+            Pour {index + 1}
+          </Text>
+          <Text
+            style={[type.sectionHeader, { color: colors.textPrimary, fontSize: 15, lineHeight: 20 }]}
+            numberOfLines={2}
+          >
+            {item.displayName}
+          </Text>
+          <View style={{ flexDirection: "row", gap: spacing.xs, flexWrap: "wrap" }}>
+            {item.whiskeyType ? (
+              <View
+                style={{
+                  backgroundColor: colors.accentSoft,
+                  borderRadius: radii.sm ?? radii.md,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text style={[type.labelCaps, { fontSize: 9, color: colors.accent }]}>
+                  {item.whiskeyType}
+                </Text>
+              </View>
+            ) : null}
+            {item.proof != null ? (
+              <Text style={[type.caption, { color: colors.textMuted }]}>{item.proof} proof</Text>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Pressable
+            onPress={onMoveUp}
+            disabled={index === 0}
+            style={({ pressed }) => ({
+              padding: 6,
+              opacity: index === 0 ? 0.3 : pressed ? 0.7 : 1,
+            })}
+          >
+            <Ionicons name="chevron-up" size={16} color={colors.textMuted} />
+          </Pressable>
+          <Pressable
+            onPress={onMoveDown}
+            disabled={index === total - 1}
+            style={({ pressed }) => ({
+              padding: 6,
+              opacity: index === total - 1 ? 0.3 : pressed ? 0.7 : 1,
+            })}
+          >
+            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+          </Pressable>
+          <Pressable
+            onPress={onRemove}
+            style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.7 : 1 })}
+          >
+            <Ionicons name="close" size={16} color={colors.danger} />
+          </Pressable>
+        </View>
+      </View>
+
+      {showPairingNote ? (
+        <TextInput
+          value={item.pairingNote}
+          onChangeText={onPairingNoteChange}
+          placeholder={`Pour ${index + 1} pairing…`}
+          placeholderTextColor={colors.textMuted}
+          style={[
+            type.body,
+            {
+              color: colors.textPrimary,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.divider,
+              borderRadius: radii.md,
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.sm,
+              fontSize: 14,
+            },
+          ]}
+        />
+      ) : null}
+    </View>
+  );
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function CreateEventScreen() {
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Step 1
   const [name, setName] = useState("");
@@ -177,14 +297,28 @@ export default function CreateEventScreen() {
   const [isBlind, setIsBlind] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
 
+  // Step 3
+  const [hasLineup, setHasLineup] = useState(false);
+  const [lineupItems, setLineupItems] = useState<LineupDraft[]>([]);
+  const [hasPairing, setHasPairing] = useState(false);
+  const [pairingNotes, setPairingNotes] = useState("");
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+
+  // Venue
+  const [venueQuery, setVenueQuery] = useState("");
+  const [venueResults, setVenueResults] = useState<VenueResult[]>([]);
+  const [selectedVenue, setSelectedVenue] = useState<VenueResult | null>(null);
+  const [venueManual, setVenueManual] = useState(false);
+  const [venueName, setVenueName] = useState("");
+  const [venueCity, setVenueCity] = useState("");
+  const [venueState, setVenueState] = useState("");
+
   // Form meta
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   // iOS date picker
-  const [activePicker, setActivePicker] = useState<"start" | "end" | null>(
-    null
-  );
+  const [activePicker, setActivePicker] = useState<"start" | "end" | null>(null);
   const [iosPickerValue, setIosPickerValue] = useState(new Date());
 
   // Tier cap
@@ -201,9 +335,52 @@ export default function CreateEventScreen() {
     : "Free";
   const showUpgradeCaption = !roles.includes("host_pro");
 
+  useEffect(() => {
+    if (selectedVenue || venueManual || venueQuery.trim().length < 2) {
+      setVenueResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      searchVenues(venueQuery.trim()).then(setVenueResults).catch(() => {});
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [venueQuery, selectedVenue, venueManual]);
+
   const step1Valid = name.trim().length > 0 && startsAt !== null;
   const endsBeforeStart =
     endsAt !== null && startsAt !== null && endsAt <= startsAt;
+
+  // ── Lineup helpers ───────────────────────────────────────────────────────
+
+  function handleLineupSelect(whiskeyId: string, whiskeyName: string) {
+    if (lineupItems.length >= 8) return;
+    if (lineupItems.some((i) => i.whiskeyId === whiskeyId)) return;
+    setLineupItems((prev) => [
+      ...prev,
+      { whiskeyId, displayName: whiskeyName, whiskeyType: null, proof: null, pairingNote: "" },
+    ]);
+    setSearchModalOpen(false);
+  }
+
+  function handleLineupRemove(index: number) {
+    setLineupItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleLineupMove(index: number, dir: "up" | "down") {
+    setLineupItems((prev) => {
+      const next = [...prev];
+      const swap = dir === "up" ? index - 1 : index + 1;
+      if (swap < 0 || swap >= next.length) return prev;
+      [next[index], next[swap]] = [next[swap], next[index]];
+      return next;
+    });
+  }
+
+  function handlePairingNoteChange(index: number, note: string) {
+    setLineupItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, pairingNote: note } : item))
+    );
+  }
 
   // ── Date picker helpers ──────────────────────────────────────────────────
 
@@ -256,6 +433,16 @@ export default function CreateEventScreen() {
         data: { user },
       } = await supabase.auth.getUser();
 
+      const venuePayload = selectedVenue
+        ? { venue_id: selectedVenue.id }
+        : venueManual && venueName.trim()
+        ? {
+            venue_name_free: venueName.trim(),
+            venue_city: venueCity.trim() || null,
+            venue_state: venueState.trim() || null,
+          }
+        : {};
+
       const { data, error: insertErr } = await supabase
         .from("events")
         .insert({
@@ -270,11 +457,20 @@ export default function CreateEventScreen() {
           max_attendees: tierCap,
           host_user_id: user?.id,
           is_active: true,
+          has_lineup: hasLineup,
+          has_pairing: hasPairing,
+          pairing_notes: hasPairing && !hasLineup ? pairingNotes.trim() || null : null,
+          ...venuePayload,
         })
         .select("id")
         .single();
 
       if (insertErr) throw insertErr;
+
+      if (hasLineup && lineupItems.length > 0) {
+        await saveEventLineup(data.id, lineupItems);
+      }
+
       router.replace(`/host-events/${data.id}` as any);
     } catch (e: any) {
       setError(String(e?.message ?? e));
@@ -286,10 +482,11 @@ export default function CreateEventScreen() {
   // ── Progress bar ─────────────────────────────────────────────────────────
 
   function ProgressBar() {
+    const pct = step === 1 ? "33%" : step === 2 ? "66%" : "100%";
     return (
       <View style={{ gap: 6 }}>
         <Text style={[type.caption, { color: colors.textSecondary }]}>
-          Step {step} of 2
+          Step {step} of 3
         </Text>
         <View
           style={{
@@ -301,7 +498,7 @@ export default function CreateEventScreen() {
           <View
             style={{
               height: 2,
-              width: step === 1 ? "50%" : "100%",
+              width: pct,
               backgroundColor: colors.accent,
               borderRadius: 999,
             }}
@@ -339,6 +536,181 @@ export default function CreateEventScreen() {
                 },
               ]}
             />
+          </View>
+
+          {/* Venue */}
+          <View style={{ gap: spacing.xs }}>
+            <FieldLabel label="Venue (optional)" />
+            {selectedVenue ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  gap: spacing.sm,
+                  backgroundColor: colors.surfaceSunken,
+                  borderRadius: radii.md,
+                  borderWidth: 1,
+                  borderColor: colors.accent,
+                  padding: spacing.md,
+                }}
+              >
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={[type.body, { color: colors.textPrimary, fontSize: 15 }]}>
+                    {selectedVenue.display_name}
+                  </Text>
+                  {selectedVenue.venue_type ? (
+                    <Text style={[type.labelCaps, { fontSize: 9, color: colors.accent }]}>
+                      {selectedVenue.venue_type}
+                    </Text>
+                  ) : null}
+                  {(selectedVenue.city || selectedVenue.state) ? (
+                    <Text style={[type.caption, { color: colors.textSecondary }]}>
+                      {[selectedVenue.city, selectedVenue.state].filter(Boolean).join(", ")}
+                    </Text>
+                  ) : null}
+                </View>
+                <Pressable
+                  onPress={() => { setSelectedVenue(null); setVenueQuery(""); setVenueResults([]); }}
+                  style={({ pressed }) => ({ padding: 4, opacity: pressed ? 0.7 : 1 })}
+                >
+                  <Ionicons name="close" size={18} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            ) : venueManual ? (
+              <View style={{ gap: spacing.sm }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={[type.caption, { color: colors.textSecondary }]}>Manual entry</Text>
+                  <Pressable
+                    onPress={() => { setVenueManual(false); setVenueName(""); setVenueCity(""); setVenueState(""); }}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                  >
+                    <Text style={[type.caption, { color: colors.accent }]}>Search instead</Text>
+                  </Pressable>
+                </View>
+                <TextInput
+                  value={venueName}
+                  onChangeText={setVenueName}
+                  placeholder="Venue name"
+                  placeholderTextColor={colors.textMuted}
+                  style={[type.body, {
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surfaceSunken,
+                    borderWidth: 1,
+                    borderColor: colors.borderStrong,
+                    borderRadius: radii.md,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                  }]}
+                />
+                <View style={{ flexDirection: "row", gap: spacing.sm }}>
+                  <TextInput
+                    value={venueCity}
+                    onChangeText={setVenueCity}
+                    placeholder="City"
+                    placeholderTextColor={colors.textMuted}
+                    style={[type.body, {
+                      flex: 1,
+                      color: colors.textPrimary,
+                      backgroundColor: colors.surfaceSunken,
+                      borderWidth: 1,
+                      borderColor: colors.borderStrong,
+                      borderRadius: radii.md,
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: spacing.sm,
+                    }]}
+                  />
+                  <TextInput
+                    value={venueState}
+                    onChangeText={setVenueState}
+                    placeholder="State"
+                    placeholderTextColor={colors.textMuted}
+                    style={[type.body, {
+                      width: 80,
+                      color: colors.textPrimary,
+                      backgroundColor: colors.surfaceSunken,
+                      borderWidth: 1,
+                      borderColor: colors.borderStrong,
+                      borderRadius: radii.md,
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: spacing.sm,
+                    }]}
+                  />
+                </View>
+              </View>
+            ) : (
+              <View>
+                <TextInput
+                  value={venueQuery}
+                  onChangeText={setVenueQuery}
+                  placeholder="Search for a venue..."
+                  placeholderTextColor={colors.textMuted}
+                  style={[type.body, {
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surfaceSunken,
+                    borderWidth: 1,
+                    borderColor: colors.borderStrong,
+                    borderRadius: radii.md,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                  }]}
+                />
+                {venueQuery.trim().length >= 2 ? (
+                  <View
+                    style={{
+                      marginTop: 2,
+                      backgroundColor: colors.surface,
+                      borderRadius: radii.md,
+                      borderWidth: 1,
+                      borderColor: colors.borderStrong,
+                      overflow: "hidden",
+                      ...shadows.card,
+                    }}
+                  >
+                    {venueResults.map((v, i) => (
+                      <Pressable
+                        key={v.id}
+                        onPress={() => { setSelectedVenue(v); setVenueQuery(""); setVenueResults([]); }}
+                        style={({ pressed }) => ({
+                          paddingHorizontal: spacing.md,
+                          paddingVertical: spacing.sm,
+                          backgroundColor: pressed ? colors.surfaceSunken : "transparent",
+                          borderBottomWidth: 1,
+                          borderBottomColor: colors.divider,
+                        })}
+                      >
+                        <Text style={[type.body, { color: colors.textPrimary, fontSize: 14 }]}>
+                          {v.display_name}
+                        </Text>
+                        {(v.city || v.state) ? (
+                          <Text style={[type.caption, { color: colors.textSecondary }]}>
+                            {[v.city, v.state].filter(Boolean).join(", ")}
+                          </Text>
+                        ) : null}
+                      </Pressable>
+                    ))}
+                    <Pressable
+                      onPress={() => {
+                        setVenueManual(true);
+                        setVenueName(venueQuery.trim());
+                        setVenueQuery("");
+                        setVenueResults([]);
+                      }}
+                      style={({ pressed }) => ({
+                        paddingHorizontal: spacing.md,
+                        paddingVertical: spacing.sm,
+                        backgroundColor: pressed ? colors.surfaceSunken : "transparent",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: spacing.sm,
+                      })}
+                    >
+                      <Ionicons name="add-circle-outline" size={16} color={colors.accent} />
+                      <Text style={[type.body, { color: colors.accent, fontSize: 14 }]}>Add manually</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+            )}
           </View>
 
           {/* Event Type */}
@@ -542,13 +914,163 @@ export default function CreateEventScreen() {
           </View>
         </SectionCard>
 
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          <Pressable
+            onPress={() => { setError(""); setStep(1); }}
+            style={({ pressed }) => ({
+              flex: 1,
+              paddingVertical: spacing.md,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.borderStrong,
+              alignItems: "center",
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={[type.button, { color: colors.textSecondary }]}>
+              Back
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => { setError(""); setStep(3); }}
+            style={({ pressed }) => ({
+              flex: 2,
+              paddingVertical: spacing.md,
+              borderRadius: 999,
+              backgroundColor: colors.accent,
+              alignItems: "center",
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={[type.button, { color: colors.background }]}>
+              Next
+            </Text>
+          </Pressable>
+        </View>
+      </>
+    );
+  }
+
+  // ── Step 3 ────────────────────────────────────────────────────────────────
+
+  function Step3() {
+    return (
+      <>
+        {/* Lineup */}
+        <SectionCard>
+          <ToggleRow
+            label="Is there a lineup?"
+            subtitle="Add the whiskies that will be poured at this event"
+            value={hasLineup}
+            onChange={(v) => {
+              setHasLineup(v);
+              if (!v) setLineupItems([]);
+            }}
+          />
+
+          {hasLineup ? (
+            <>
+              {lineupItems.length > 0 ? (
+                <>
+                  <RowDivider />
+                  <View style={{ gap: spacing.sm }}>
+                    {lineupItems.map((item, index) => (
+                      <LineupCard
+                        key={item.whiskeyId}
+                        item={item}
+                        index={index}
+                        total={lineupItems.length}
+                        showPairingNote={hasPairing}
+                        onRemove={() => handleLineupRemove(index)}
+                        onMoveUp={() => handleLineupMove(index, "up")}
+                        onMoveDown={() => handleLineupMove(index, "down")}
+                        onPairingNoteChange={(note) => handlePairingNoteChange(index, note)}
+                      />
+                    ))}
+                  </View>
+                </>
+              ) : null}
+
+              {lineupItems.length < 8 ? (
+                <>
+                  <RowDivider />
+                  <Pressable
+                    onPress={() => setSearchModalOpen(true)}
+                    style={({ pressed }) => ({
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: spacing.sm,
+                      paddingVertical: spacing.sm,
+                      opacity: pressed ? 0.75 : 1,
+                    })}
+                  >
+                    <Ionicons name="add-circle-outline" size={20} color={colors.accent} />
+                    <Text style={[type.body, { color: colors.accent, fontSize: 15 }]}>
+                      Add Whiskey ({lineupItems.length}/8)
+                    </Text>
+                  </Pressable>
+                </>
+              ) : null}
+            </>
+          ) : null}
+        </SectionCard>
+
+        {/* Pairing */}
+        <SectionCard>
+          <ToggleRow
+            label="Is there a pairing?"
+            subtitle="Food, cigars, or other pairings for attendees"
+            value={hasPairing}
+            onChange={setHasPairing}
+          />
+
+          {hasPairing && !hasLineup ? (
+            <>
+              <RowDivider />
+              <View style={{ gap: spacing.xs }}>
+                <FieldLabel label="Pairing Notes" />
+                <TextInput
+                  value={pairingNotes}
+                  onChangeText={setPairingNotes}
+                  placeholder="e.g. Charcuterie board, dark chocolate, Fuente cigars…"
+                  placeholderTextColor={colors.textMuted}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                  style={[
+                    type.body,
+                    {
+                      color: colors.textPrimary,
+                      backgroundColor: colors.surfaceSunken,
+                      borderWidth: 1,
+                      borderColor: colors.borderStrong,
+                      borderRadius: radii.md,
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: spacing.sm,
+                      minHeight: 80,
+                      fontSize: 14,
+                    },
+                  ]}
+                />
+              </View>
+            </>
+          ) : null}
+
+          {hasPairing && hasLineup ? (
+            <Text style={[type.caption, { color: colors.textSecondary }]}>
+              Pairing note fields appear on each lineup card above.
+            </Text>
+          ) : null}
+        </SectionCard>
+
         {error ? (
           <Text style={[type.caption, { color: colors.danger }]}>{error}</Text>
         ) : null}
 
         <View style={{ flexDirection: "row", gap: spacing.sm }}>
           <Pressable
-            onPress={() => { setError(""); setStep(1); }}
+            onPress={() => { setError(""); setStep(2); }}
             style={({ pressed }) => ({
               flex: 1,
               paddingVertical: spacing.md,
@@ -605,10 +1127,10 @@ export default function CreateEventScreen() {
           <Text style={[type.screenTitle, { color: colors.textPrimary }]}>
             Create Event
           </Text>
-          <ProgressBar />
+          {ProgressBar()}
         </View>
 
-        {step === 1 ? <Step1 /> : <Step2 />}
+        {step === 1 ? Step1() : step === 2 ? Step2() : Step3()}
       </ScrollView>
 
       {/* iOS date picker modal */}
@@ -664,6 +1186,19 @@ export default function CreateEventScreen() {
           </View>
         </Modal>
       ) : null}
+
+      {/* Whiskey search modal for lineup */}
+      <WhiskeySearchModal
+        visible={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        onSelect={handleLineupSelect}
+        onCustomEntry={(name) => {
+          setSearchModalOpen(false);
+          router.push(
+            `/log/cloud-tasting?whiskeyName=${encodeURIComponent(name)}&lockName=0` as any
+          );
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

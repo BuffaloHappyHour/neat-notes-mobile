@@ -11,9 +11,9 @@ import {
   useFonts as useMontserratFonts,
 } from "@expo-google-fonts/montserrat";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import React, { useEffect, useMemo } from "react";
-import { ImageBackground, Platform, StyleSheet, View } from "react-native";
+import { Alert, ImageBackground, Linking, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Purchases from "react-native-purchases";
 import { bootstrapApp } from "../lib/bootstrapApp";
@@ -45,6 +45,37 @@ export default function RootLayout() {
     }
 
     run();
+  }, []);
+
+  useEffect(() => {
+    async function handleEventJoinUrl(url: string) {
+      try {
+        const parsed = new URL(url);
+        if (
+          parsed.hostname !== "neatnotesapp.com" ||
+          parsed.pathname !== "/event/join"
+        ) return;
+        const code = parsed.searchParams.get("code");
+        if (!code) return;
+        const { data, error } = await supabase.rpc("join_event", { p_join_code: code });
+        if (error || !data) {
+          Alert.alert("Invalid Code", "Invalid or expired event code.");
+          return;
+        }
+        router.push(`/event/${data}` as any);
+      } catch {}
+    }
+
+    // Cold start: app opened from a link
+    Linking.getInitialURL().then((url) => {
+      if (url) handleEventJoinUrl(url);
+    });
+
+    // Warm: link opened while app is running
+    const sub = Linking.addEventListener("url", ({ url }) => {
+      handleEventJoinUrl(url);
+    });
+    return () => sub.remove();
   }, []);
 
   const [cormorantLoaded, cormorantError] = useCormorantFonts({

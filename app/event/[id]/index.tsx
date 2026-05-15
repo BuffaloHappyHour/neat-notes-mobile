@@ -1,7 +1,9 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import React, { useMemo } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useEventPageData } from "../../../src/events/hooks/useEventPageData";
+import { getEventLineup, type LineupItem } from "../../../lib/eventLineup";
+import { supabase } from "../../../lib/supabase";
 
 import { radii } from "../../../lib/radii";
 import { shadows } from "../../../lib/shadows";
@@ -356,6 +358,28 @@ function MostRatedWhiskeyRowCard({ row }: { row: MostRatedWhiskeyRow }) {
   );
 }
 
+type EventFlags = {
+  is_blind: boolean;
+  has_lineup: boolean;
+  has_pairing: boolean;
+  pairing_notes: string | null;
+  revealed_at: string | null;
+  venue_id: string | null;
+  venue_name_free: string | null;
+  venue_city: string | null;
+  venue_state: string | null;
+  venues: {
+    display_name: string;
+    venue_type: string | null;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    logo_url: string | null;
+    website: string | null;
+    phone: string | null;
+  } | null;
+};
+
 export default function EventPage() {
   const params = useLocalSearchParams();
   const eventId = useMemo(() => {
@@ -372,6 +396,26 @@ export default function EventPage() {
     canViewHostAnalytics,
     summary,
   } = useEventPageData(eventId);
+
+  const [flags, setFlags] = useState<EventFlags | null>(null);
+  const [lineup, setLineup] = useState<LineupItem[]>([]);
+
+  useEffect(() => {
+    if (!eventId) return;
+    supabase
+      .from("events")
+      .select("is_blind, has_lineup, has_pairing, pairing_notes, revealed_at, venue_id, venue_name_free, venue_city, venue_state, venues(display_name, venue_type, address, city, state, logo_url, website, phone)")
+      .eq("id", eventId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setFlags(data as unknown as EventFlags);
+      });
+  }, [eventId]);
+
+  useEffect(() => {
+    if (!flags?.has_lineup) return;
+    getEventLineup(eventId).then(setLineup).catch(() => {});
+  }, [flags?.has_lineup, eventId]);
 
   if (loading) {
     return (
@@ -652,6 +696,180 @@ export default function EventPage() {
             </View>
           </SectionCard>
         </View>
+
+        {/* Venue */}
+        {(flags?.venues || flags?.venue_name_free) ? (
+          <View style={{ marginBottom: spacing.sm }}>
+            <SectionCard title="Venue">
+              {flags.venues ? (
+                <View style={{ gap: spacing.sm }}>
+                  {flags.venues.logo_url ? (
+                    <Image
+                      source={{ uri: flags.venues.logo_url }}
+                      style={{ width: 56, height: 56, borderRadius: radii.lg, backgroundColor: colors.glassRaised }}
+                      resizeMode="contain"
+                    />
+                  ) : null}
+                  <View style={{ gap: 4 }}>
+                    <Text style={[type.body, { fontSize: 16.5, lineHeight: 21, color: colors.textPrimary }]}>
+                      {flags.venues.display_name}
+                    </Text>
+                    {flags.venues.venue_type ? (
+                      <View style={{ backgroundColor: colors.accentSoft, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start" }}>
+                        <Text style={[type.labelCaps, { fontSize: 9, color: colors.accent }]}>
+                          {flags.venues.venue_type}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {flags.venues.address ? (
+                    <Text style={[type.microcopyItalic, { fontSize: 13.5, color: colors.textPrimary, opacity: 0.78 }]}>
+                      {flags.venues.address}
+                    </Text>
+                  ) : null}
+                  {(flags.venues.city || flags.venues.state) ? (
+                    <Text style={[type.microcopyItalic, { fontSize: 13.5, color: colors.textPrimary, opacity: 0.78 }]}>
+                      {[flags.venues.city, flags.venues.state].filter(Boolean).join(", ")}
+                    </Text>
+                  ) : null}
+                  {flags.venues.website ? (
+                    <Pressable
+                      onPress={() => Linking.openURL(flags.venues!.website!)}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                    >
+                      <Text style={[type.caption, { color: colors.accent }]}>{flags.venues.website}</Text>
+                    </Pressable>
+                  ) : null}
+                  {flags.venues.phone ? (
+                    <Pressable
+                      onPress={() => Linking.openURL(`tel:${flags.venues!.phone}`)}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                    >
+                      <Text style={[type.caption, { color: colors.accent }]}>{flags.venues.phone}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : (
+                <View style={{ gap: 4 }}>
+                  <Text style={[type.body, { fontSize: 16.5, lineHeight: 21, color: colors.textPrimary }]}>
+                    {flags.venue_name_free}
+                  </Text>
+                  {(flags.venue_city || flags.venue_state) ? (
+                    <Text style={[type.microcopyItalic, { fontSize: 13.5, color: colors.textPrimary, opacity: 0.78 }]}>
+                      {[flags.venue_city, flags.venue_state].filter(Boolean).join(", ")}
+                    </Text>
+                  ) : null}
+                </View>
+              )}
+            </SectionCard>
+          </View>
+        ) : null}
+
+        {/* Lineup section */}
+        {flags?.has_lineup && lineup.length > 0 ? (
+          <View style={{ marginBottom: spacing.sm }}>
+            <SectionCard
+              title="Tonight's Lineup"
+              subtitle={
+                flags.is_blind && !flags.revealed_at
+                  ? "Whiskey identities hidden until the host reveals."
+                  : undefined
+              }
+            >
+              <View style={{ gap: spacing.sm }}>
+                {lineup.map((item, index) => {
+                  const hidden = flags.is_blind && !flags.revealed_at;
+                  return (
+                    <View
+                      key={item.id}
+                      style={{
+                        borderRadius: radii.lg,
+                        borderWidth: 1,
+                        borderColor: colors.glassBorder,
+                        backgroundColor: colors.glassRaised,
+                        paddingVertical: spacing.md,
+                        paddingHorizontal: spacing.md,
+                        gap: 6,
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: spacing.sm }}>
+                        <View style={{ flex: 1, gap: 3 }}>
+                          <Text
+                            style={[type.caption, { color: colors.accent, letterSpacing: 0.5, textTransform: "uppercase" }]}
+                          >
+                            Pour {index + 1}
+                          </Text>
+                          {hidden ? (
+                            <Text style={[type.body, { fontSize: 16.5, lineHeight: 21, color: colors.textPrimary, opacity: 0.5 }]}>
+                              ● ● ●
+                            </Text>
+                          ) : (
+                            <>
+                              <Text style={[type.body, { fontSize: 16.5, lineHeight: 21, color: colors.textPrimary }]}>
+                                {item.display_name}
+                              </Text>
+                              {item.whiskey_type || item.proof != null ? (
+                                <View style={{ flexDirection: "row", gap: spacing.xs, alignItems: "center" }}>
+                                  {item.whiskey_type ? (
+                                    <View style={{ backgroundColor: colors.accentSoft, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                                      <Text style={[type.labelCaps, { fontSize: 9, color: colors.accent }]}>{item.whiskey_type}</Text>
+                                    </View>
+                                  ) : null}
+                                  {item.proof != null ? (
+                                    <Text style={[type.microcopyItalic, { fontSize: 13, color: colors.textPrimary, opacity: 0.7 }]}>
+                                      {item.proof} proof
+                                    </Text>
+                                  ) : null}
+                                </View>
+                              ) : null}
+                            </>
+                          )}
+                          {item.pairing_note ? (
+                            <Text style={[type.microcopyItalic, { fontSize: 13, color: colors.textPrimary, opacity: 0.75 }]}>
+                              Pairing: {item.pairing_note}
+                            </Text>
+                          ) : null}
+                        </View>
+
+                        {!hidden ? (
+                          <Pressable
+                            onPress={() =>
+                              router.push(
+                                `/log/cloud-tasting?whiskeyName=${encodeURIComponent(item.display_name)}&whiskeyId=${encodeURIComponent(item.whiskey_id)}&lockName=1` as any
+                              )
+                            }
+                            style={({ pressed }) => ({
+                              paddingHorizontal: 12,
+                              paddingVertical: 7,
+                              borderRadius: 999,
+                              borderWidth: 1,
+                              borderColor: colors.glassBorderStrong,
+                              backgroundColor: pressed ? colors.accentSoft : colors.accentFaint,
+                              opacity: pressed ? 0.9 : 1,
+                            })}
+                          >
+                            <Text style={[type.caption, { color: colors.accent }]}>Log →</Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </SectionCard>
+          </View>
+        ) : null}
+
+        {/* Pairing notes (no lineup) */}
+        {flags?.has_pairing && !flags.has_lineup && flags.pairing_notes ? (
+          <View style={{ marginBottom: spacing.sm }}>
+            <SectionCard title="Pairing">
+              <Text style={[type.body, { fontSize: 15, lineHeight: 21, color: colors.textPrimary, opacity: 0.85 }]}>
+                {flags.pairing_notes}
+              </Text>
+            </SectionCard>
+          </View>
+        ) : null}
 
         <View style={{ marginBottom: spacing.sm }}>
           <SectionCard
