@@ -2,7 +2,6 @@ import { router, useFocusEffect } from "expo-router";
 import * as StoreReview from "expo-store-review";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Polygon, Svg } from "react-native-svg";
 
 import { clearActiveEventId, getActiveEventId } from "../../lib/eventStorage";
 import { radii } from "../../lib/radii";
@@ -19,6 +18,10 @@ import { type RecommendationItem, useHomeStats } from "../../src/home/hooks/useH
 import { WhatToDrinkNext } from "../../src/home/components/WhatToDrinkNext";
 import { getTierCopy } from "../../src/palate/constants/palateTiers";
 import type { PalateClarityTierLabel } from "../../src/palate/palateClarity.service";
+import { RadarChart } from "../../src/profile/insights/components/RadarChart";
+import { useInsightsData } from "../../src/profile/insights/hooks/useInsightsData";
+
+type RadarAxis = { key: string; label: string; value: number };
 
 const warmCardShadow = {
   ...shadows.card,
@@ -28,13 +31,6 @@ const warmCardShadow = {
   shadowOffset: { width: 0, height: 10 },
   elevation: 10,
 };
-
-function pentagonPoints(cx: number, cy: number, r: number): string {
-  return Array.from({ length: 5 }, (_, i) => {
-    const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
-    return `${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`;
-  }).join(" ");
-}
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -50,14 +46,12 @@ function StatCell({ label, value }: { label: string; value: string }) {
 function PalateIdentityCard({
   tierLabel,
   clarityIndex,
-  topAffinities,
   tastingCount,
   avgRating,
   onPress,
 }: {
   tierLabel: PalateClarityTierLabel | null;
   clarityIndex: number | null;
-  topAffinities: string[];
   tastingCount: number | null;
   avgRating: number | null;
   onPress: () => void;
@@ -110,31 +104,6 @@ function PalateIdentityCard({
           }}
         />
       </View>
-
-      {/* Affinity chips OR empty-state prompt */}
-      {topAffinities.length > 0 ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
-          {topAffinities.slice(0, 3).map((a) => (
-            <View
-              key={a}
-              style={{
-                borderWidth: 0.5,
-                borderColor: colors.borderStrong,
-                backgroundColor: colors.accentFaint,
-                borderRadius: 2,
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-              }}
-            >
-              <Text style={[type.caption, { color: colors.accent }]}>{a}</Text>
-            </View>
-          ))}
-        </View>
-      ) : (
-        <Text style={[type.microcopyItalic, { color: colors.textTertiary }]}>
-          Add flavor notes when you log to build your taste profile.
-        </Text>
-      )}
 
       {/* Stat row: Tastings + Avg Rating only, centered */}
       <View
@@ -194,20 +163,16 @@ function InsightsTeaser({
   topAffinities,
   clarityIndex,
   isPremium,
+  radarAxes,
   onPress,
 }: {
-  tierLabel: PalateClarityTierLabel | null;
   topAffinities: string[];
   clarityIndex: number | null;
   isPremium: boolean;
+  radarAxes: RadarAxis[];
   onPress: () => void;
 }) {
-  const ci = Math.min(100, Math.max(0, clarityIndex ?? 0));
-  const cx = 60;
-  const cy = 55;
-  const outerR = 45;
-  const outerPts = pentagonPoints(cx, cy, outerR);
-  const innerPts = pentagonPoints(cx, cy, Math.max(2, outerR * (ci / 100)));
+  const hasEnoughData = radarAxes.length >= 3;
 
   return (
     <View
@@ -221,9 +186,10 @@ function InsightsTeaser({
         ...warmCardShadow,
       }}
     >
-      <Text style={[type.labelCaps, { color: colors.textSecondary }]}>YOUR PALATE SIGNATURE</Text>
+      <Text style={[type.labelCaps, { color: colors.accent }]}>YOUR PALATE SIGNATURE</Text>
 
-      {topAffinities.length > 0 && (
+      {/* Flavor chips */}
+      {topAffinities.length > 0 ? (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
           {topAffinities.slice(0, 3).map((a) => (
             <View
@@ -241,43 +207,53 @@ function InsightsTeaser({
             </View>
           ))}
         </View>
+      ) : (
+        <Text style={[type.microcopyItalic, { color: colors.textTertiary }]}>
+          Log tastings with flavor notes to reveal your signature.
+        </Text>
       )}
 
-      <View style={{ alignItems: "center" }}>
-        <Svg width={120} height={110} viewBox="0 0 120 110">
-          <Polygon
-            points={outerPts}
-            fill="none"
-            stroke={colors.borderStrong}
-            strokeWidth={1}
+      {/* Radar chart with blur overlay */}
+      <View style={{ alignSelf: "center", width: 220, height: 220, overflow: "hidden" }}>
+        {hasEnoughData ? (
+          <RadarChart axes={radarAxes} size={220} showLabels={true} />
+        ) : (
+          <View
+            style={{
+              width: 220,
+              height: 220,
+              backgroundColor: colors.surfaceSunken,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.accentFaint,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Text style={[type.microcopyItalic, { color: colors.textTertiary, textAlign: "center" }]}>
+              Your flavor map is building.
+            </Text>
+          </View>
+        )}
+        {!isPremium && (
+          <View
+            style={[
+              StyleSheet.absoluteFillObject,
+              {
+                backgroundColor: colors.background,
+                opacity: 0.72,
+              },
+            ]}
           />
-          <Polygon
-            points={innerPts}
-            fill={colors.accent}
-            fillOpacity={0.22}
-            stroke={colors.accent}
-            strokeWidth={1}
-            strokeOpacity={0.6}
-          />
-        </Svg>
-        <View
-          style={[
-            StyleSheet.absoluteFillObject,
-            {
-              backgroundColor: colors.glassSurface,
-              opacity: 0.7,
-              borderRadius: radii.lg,
-            },
-          ]}
-        />
+        )}
       </View>
 
+      {/* CTA */}
       <Pressable
         onPress={onPress}
         style={({ pressed }) => ({
           alignSelf: "stretch",
-          paddingHorizontal: spacing.md,
-          paddingVertical: 10,
+          paddingVertical: 11,
           borderRadius: 999,
           alignItems: "center",
           backgroundColor: isPremium ? colors.accent : colors.accentSoft,
@@ -715,6 +691,8 @@ export default function HomeTab() {
     statsLoading,
   } = useHomeStats();
 
+  const insightsData = useInsightsData();
+
   const [featured, setFeatured] = React.useState<{
     whiskeyId: string;
     name: string;
@@ -926,20 +904,11 @@ export default function HomeTab() {
     []
   );
 
-  const goLogQuick = useMemo(
-    () =>
-      withTick(() => {
-        logPress("home_log_quick", "/(tabs)/log");
-        router.push("/(tabs)/log");
-      }),
-    []
-  );
-
   const goSearchQuick = useMemo(
     () =>
       withTick(() => {
-        logPress("home_search_quick", "/(tabs)/discover");
-        router.push("/(tabs)/discover");
+        logPress("home_search_quick", "/(tabs)/log");
+        router.push("/(tabs)/log");
       }),
     []
   );
@@ -1052,53 +1021,47 @@ export default function HomeTab() {
           </Text>
         </View>
 
-        {/* ── Quick Actions ───────────────────────────────────────────────── */}
-        <View style={{ flexDirection: "row", gap: spacing.sm }}>
-          <Pressable
-            onPress={goLogQuick}
-            style={({ pressed }) => ({
-              flex: 1,
-              paddingVertical: 12,
-              borderRadius: 999,
-              alignItems: "center",
-              backgroundColor: pressed ? colors.accentSoft : colors.accent,
-              opacity: pressed ? 0.88 : 1,
-            })}
-          >
-            <Text style={[type.button, { color: colors.background }]}>Log</Text>
-          </Pressable>
+        {/* ── Log Your Next Pour ──────────────────────────────────────────── */}
+        <View style={{ gap: spacing.sm }}>
+          <Text style={[type.sectionHeader, { fontSize: 22, color: colors.textPrimary }]}>
+            Log Your Next Pour
+          </Text>
 
-          <Pressable
-            onPress={goSearchQuick}
-            style={({ pressed }) => ({
-              width: 52,
-              paddingVertical: 12,
-              borderRadius: 999,
-              alignItems: "center",
-              backgroundColor: colors.accentFaint,
-              borderWidth: 1,
-              borderColor: colors.borderStrong,
-              opacity: pressed ? 0.75 : 1,
-            })}
-          >
-            <Text style={[type.button, { color: colors.accent }]}>⌕</Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <Pressable
+              onPress={goSearchQuick}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 999,
+                alignItems: "center",
+                backgroundColor: colors.accentFaint,
+                borderWidth: 1,
+                borderColor: colors.borderStrong,
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <Text style={[type.button, { color: colors.accent }]}>Search</Text>
+            </Pressable>
 
-          <Pressable
-            onPress={goScanQuick}
-            style={({ pressed }) => ({
-              width: 52,
-              paddingVertical: 12,
-              borderRadius: 999,
-              alignItems: "center",
-              backgroundColor: colors.accentFaint,
-              borderWidth: 1,
-              borderColor: colors.borderStrong,
-              opacity: pressed ? 0.75 : 1,
-            })}
-          >
-            <Text style={[type.button, { color: colors.accent }]}>▦</Text>
-          </Pressable>
+            <Pressable
+              onPress={goScanQuick}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 999,
+                alignItems: "center",
+                backgroundColor: colors.accentFaint,
+                borderWidth: 1,
+                borderColor: colors.borderStrong,
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <Text style={[type.button, { color: colors.accent }]}>Scan</Text>
+            </Pressable>
+          </View>
+
+          <View style={{ height: 1, backgroundColor: colors.glassDivider, marginTop: spacing.md }} />
         </View>
 
         {/* ── Palate Identity Card ────────────────────────────────────────── */}
@@ -1110,7 +1073,6 @@ export default function HomeTab() {
             <PalateIdentityCard
               tierLabel={tierLabel}
               clarityIndex={clarityIndex}
-              topAffinities={topAffinities}
               tastingCount={tastingCount}
               avgRating={avgRating}
               onPress={goPalateCard}
@@ -1139,56 +1101,61 @@ export default function HomeTab() {
               INSIGHTS
             </Text>
             <InsightsTeaser
-              tierLabel={tierLabel}
               topAffinities={topAffinities}
               clarityIndex={clarityIndex}
               isPremium={isPremium}
+              radarAxes={insightsData.axes}
               onPress={goInsightsTeaser}
             />
           </View>
         ) : null}
 
-        {/* ── Discover ────────────────────────────────────────────────────── */}
+        {/* ── What to Drink Next ──────────────────────────────────────────── */}
         {(showRecommendations || showRecommendationFallback || !!featured) ? (
-          <View
-            style={{
-              borderRadius: radii.lg,
-              borderWidth: 1,
-              borderColor: colors.glassBorder,
-              backgroundColor: colors.glassSurface,
-              padding: spacing.cardPadding,
-              gap: spacing.md,
-              ...warmCardShadow,
-            }}
-          >
-            {showRecommendations ? (
-              <WhatToDrinkNext
-                featured={null}
-                recommendations={recRows}
-                onPress={(id) => {
-                  logPress("home_recommendation_tap", `/whiskey/${id}`);
-                  router.push(`/whiskey/${encodeURIComponent(id)}`);
-                }}
-              />
-            ) : showRecommendationFallback ? (
-              <Text style={[type.microcopyItalic, { color: colors.textTertiary }]}>
-                Recommendations sharpen as you log more tastings.
-              </Text>
-            ) : null}
+          <View style={{ gap: 6 }}>
+            <Text style={[type.sectionHeader, { fontSize: 22, color: colors.textPrimary }]}>
+              What to Drink Next
+            </Text>
+            <View
+              style={{
+                borderRadius: radii.lg,
+                borderWidth: 1,
+                borderColor: colors.glassBorder,
+                backgroundColor: colors.glassSurface,
+                padding: spacing.cardPadding,
+                gap: spacing.md,
+                ...warmCardShadow,
+              }}
+            >
+              {showRecommendations ? (
+                <WhatToDrinkNext
+                  featured={null}
+                  recommendations={recRows}
+                  onPress={(id) => {
+                    logPress("home_recommendation_tap", `/whiskey/${id}`);
+                    router.push(`/whiskey/${encodeURIComponent(id)}`);
+                  }}
+                />
+              ) : showRecommendationFallback ? (
+                <Text style={[type.microcopyItalic, { color: colors.textTertiary }]}>
+                  Recommendations sharpen as you log more tastings.
+                </Text>
+              ) : null}
 
-            {(showRecommendations || showRecommendationFallback) && !!featured ? (
-              <View style={{ height: 1, backgroundColor: colors.borderSubtle }} />
-            ) : null}
+              {(showRecommendations || showRecommendationFallback) && !!featured ? (
+                <View style={{ height: 1, backgroundColor: colors.borderSubtle }} />
+              ) : null}
 
-            {featured ? (
-              <FeaturedBottleCard
-                name={featured.name}
-                whiskeyType={featured.type}
-                proof={featured.proof}
-                featureNote={featured.featureNote}
-                onPress={goFeatured}
-              />
-            ) : null}
+              {featured ? (
+                <FeaturedBottleCard
+                  name={featured.name}
+                  whiskeyType={featured.type}
+                  proof={featured.proof}
+                  featureNote={featured.featureNote}
+                  onPress={goFeatured}
+                />
+              ) : null}
+            </View>
           </View>
         ) : null}
 
