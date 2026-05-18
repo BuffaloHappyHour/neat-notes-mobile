@@ -17,6 +17,8 @@ import {
 } from "react-native";
 
 import Purchases from "react-native-purchases";
+import * as WebBrowser from "expo-web-browser";
+import { makeRedirectUri } from "expo-auth-session";
 import { fetchMyProfile } from "../lib/cloudProfile";
 import { syncPremiumStatusFromRevenueCat } from "../lib/premiumSync";
 import { radii } from "../lib/radii";
@@ -169,6 +171,49 @@ function PasswordRow({
           color={colors.textSecondary}
         />
       </Pressable>
+    </View>
+  );
+}
+
+/* -------------------- Google Sign-In helpers -------------------- */
+function GoogleSignInButton({
+  onPress,
+  disabled,
+}: {
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: spacing.sm,
+        borderRadius: radii.md,
+        paddingVertical: spacing.lg,
+        backgroundColor: colors.textPrimary,
+        borderWidth: 1,
+        borderColor: colors.accent,
+        opacity: disabled ? 0.65 : pressed ? 0.92 : 1,
+      })}
+    >
+      <Ionicons name="logo-google" size={20} color={colors.background} />
+      <Text style={[type.button, { color: colors.background }]}>Continue with Google</Text>
+    </Pressable>
+  );
+}
+
+function OrDivider() {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+      <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
+      <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.8 }]}>
+        or
+      </Text>
+      <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
     </View>
   );
 }
@@ -563,6 +608,89 @@ export default function SignInScreen() {
     setMode("signin");
   };
 
+  /* ---- Google Sign-In ---- */
+  const signInWithGoogle = async () => {
+    if (busy) return;
+    setBusy(true);
+
+    try {
+      const scheme = getAppScheme() ?? "neatnotes";
+      const redirectUri = makeRedirectUri({ scheme, path: "auth/callback" });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: redirectUri, skipBrowserRedirect: true },
+      });
+
+      if (error || !data.url) throw error ?? new Error("No OAuth URL returned.");
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+
+      if (result.type !== "success") {
+        return;
+      }
+
+      // Implicit flow: tokens arrive in URL fragment
+      const fragment = result.url.split("#")[1] ?? "";
+      const fragmentParams: Record<string, string> = {};
+      fragment.split("&").filter(Boolean).forEach((pair) => {
+        const idx = pair.indexOf("=");
+        if (idx !== -1) {
+          fragmentParams[decodeURIComponent(pair.slice(0, idx))] =
+            decodeURIComponent(pair.slice(idx + 1));
+        }
+      });
+
+      if (fragmentParams.access_token) {
+        await supabase.auth.setSession({
+          access_token: fragmentParams.access_token,
+          refresh_token: fragmentParams.refresh_token ?? "",
+        });
+      } else {
+        // PKCE flow: extract code and exchange
+        const codeMatch = result.url.match(/[?&]code=([^&#]+)/);
+        if (codeMatch?.[1]) {
+          await supabase.auth.exchangeCodeForSession(decodeURIComponent(codeMatch[1]));
+        }
+      }
+
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.user) {
+        throw sessionError ?? new Error("Sign-in did not complete. Please try again.");
+      }
+
+      const user = session.user;
+
+      if (!user.email) {
+        await supabase.auth.signOut();
+        throw new Error(
+          "This Google account has no email address. Please use an account with a verified email."
+        );
+      }
+
+      // Create profile row for new users
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .single();
+
+      if (!existingProfile) {
+        const displayName =
+          String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? "").trim() ||
+          user.email.split("@")[0];
+        await supabase.from("profiles").upsert({ id: user.id, display_name: displayName });
+      }
+
+      await finishSignIn();
+    } catch (err: any) {
+      Alert.alert("Sign in failed", err?.message ?? "An error occurred. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <View
@@ -737,6 +865,8 @@ export default function SignInScreen() {
         /* ── Email Sign Up ── */
         ) : mode === "signup" ? (
           <Card title="Create Account" subtitle="Start your whiskey journey.">
+            <GoogleSignInButton onPress={signInWithGoogle} disabled={busy} />
+            <OrDivider />
             <ThemedInput
               placeholder="Email"
               value={email}
@@ -824,6 +954,8 @@ export default function SignInScreen() {
         /* ── Email Sign In (default) ── */
         ) : (
           <Card title="Sign In" subtitle="Sign in to keep a record of your tastings">
+            <GoogleSignInButton onPress={signInWithGoogle} disabled={busy} />
+            <OrDivider />
             <ThemedInput
               placeholder="Email"
               value={email}

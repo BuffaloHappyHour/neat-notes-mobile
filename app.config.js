@@ -101,6 +101,7 @@ module.exports = {
     },
 
     extra: {
+      googleIosClientId: "532540782942-1ri6cahndukdd8q5u7cd4ibhv9mv2aqn.apps.googleusercontent.com",
       router: {},
       eas: {
         projectId: "85720fd6-e8f6-405c-b247-40af3fea9563",
