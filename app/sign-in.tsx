@@ -340,7 +340,7 @@ export default function SignInScreen() {
     const { data, error } = await supabase.auth.verifyOtp({
       phone: pendingPhone,
       token: otp,
-      type: "sms",
+      type: otpContext === "signup" ? "phone_change" : "sms",
     });
 
     setBusy(false);
@@ -355,7 +355,15 @@ export default function SignInScreen() {
     if (otpContext === "signup") {
       const uid = data.session?.user?.id;
       if (uid) {
-        await supabase.from("profiles").update({ phone: pendingPhone }).eq("id", uid);
+        try {
+          await supabase.from("profiles").update({ phone: pendingPhone }).eq("id", uid);
+        } catch (profileErr) {
+          console.error("profiles.phone write failed after OTP:", profileErr);
+          Alert.alert(
+            "Phone linked",
+            "Your phone was verified, but we couldn't save it to your profile. You can re-link it in Account Settings."
+          );
+        }
       }
     }
 
@@ -492,7 +500,7 @@ export default function SignInScreen() {
 
     setBusy(true);
 
-    const { error } = await supabase.auth.signInWithOtp({ phone: formatted });
+    const { error } = await supabase.auth.updateUser({ phone: formatted });
 
     setBusy(false);
 

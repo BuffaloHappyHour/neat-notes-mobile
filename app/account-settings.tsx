@@ -414,7 +414,15 @@ export default function AccountSettingsScreen() {
     const { data: sessionData } = await supabase.auth.getSession();
     const uid = sessionData.session?.user?.id;
     if (uid) {
-      await supabase.from("profiles").update({ phone: pendingPhone }).eq("id", uid);
+      try {
+        await supabase.from("profiles").update({ phone: pendingPhone }).eq("id", uid);
+      } catch (profileErr) {
+        console.error("profiles.phone write failed after phone_change:", profileErr);
+        Alert.alert(
+          "Phone linked",
+          "Your phone was verified, but we couldn't save it to your profile. Try again from Account Settings."
+        );
+      }
     }
 
     setLinkedPhone(pendingPhone);
@@ -948,16 +956,21 @@ export default function AccountSettingsScreen() {
                         style: "destructive",
                         onPress: async () => {
                           setBusy(true);
-                          const { data: sd } = await supabase.auth.getSession();
-                          const uid = sd.session?.user?.id;
-                          if (uid) await supabase.from("profiles").update({ phone: null }).eq("id", uid);
-                          await supabase.auth.updateUser({ phone: "" });
-                          setLinkedPhone("");
-                          setPhoneStep("idle");
-                          setStatusLine("Phone number removed.");
-                          setTimeout(() => setStatusLine(""), 1500);
-                          await hapticSuccess();
-                          setBusy(false);
+                          try {
+                            const { data: sd } = await supabase.auth.getSession();
+                            const uid = sd.session?.user?.id;
+                            if (uid) await supabase.from("profiles").update({ phone: null }).eq("id", uid);
+                            await supabase.auth.updateUser({ phone: "" });
+                            setLinkedPhone("");
+                            setPhoneStep("idle");
+                            setStatusLine("Phone number removed.");
+                            setTimeout(() => setStatusLine(""), 1500);
+                            await hapticSuccess();
+                          } catch {
+                            Alert.alert("Error", "Failed to remove phone number. Please try again.");
+                          } finally {
+                            setBusy(false);
+                          }
                         },
                       },
                     ]
