@@ -12,15 +12,46 @@ import {
 } from "@expo-google-fonts/montserrat";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack, router } from "expo-router";
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Alert, ImageBackground, Linking, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Purchases from "react-native-purchases";
 import { bootstrapApp } from "../lib/bootstrapApp";
 import { supabase } from "../lib/supabase";
 import { colors } from "../lib/theme";
+import OnboardingModal from "../src/onboarding/OnboardingModal";
 
 export default function RootLayout() {
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    async function checkOnboarding(userId: string) {
+      const { data: profileRow } = await supabase
+        .from("profiles")
+        .select("onboarding_seen_at")
+        .eq("id", userId)
+        .maybeSingle();
+      if (!profileRow?.onboarding_seen_at) {
+        setShowOnboarding(true);
+      }
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      const user = data.session?.user;
+      if (user) void checkOnboarding(user.id);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        void checkOnboarding(session.user.id);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     async function run() {
       const apiKey =
@@ -132,6 +163,10 @@ export default function RootLayout() {
           </Stack>
         </ImageBackground>
       </ThemeProvider>
+      <OnboardingModal
+          visible={showOnboarding}
+          onDismiss={() => setShowOnboarding(false)}
+        />
     </GestureHandlerRootView>
   );
 }

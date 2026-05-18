@@ -1109,6 +1109,16 @@ Additional Notes:
           />
         </Card>
 
+        {/* ── App Guide ── */}
+        <Card title="App Guide" subtitle="A quick walkthrough of what Neat Notes can do.">
+          <ThemedButton
+            label="Show App Guide"
+            onPress={withTick(() => router.push("/onboarding-guide"))}
+            tone="secondary"
+            icon={<Ionicons name="compass-outline" size={18} color={colors.textPrimary} />}
+          />
+        </Card>
+
         {/* ── Danger Zone ── */}
         <Card title="Danger Zone" subtitle="Irreversible actions. Pour carefully.">
           <ThemedButton
