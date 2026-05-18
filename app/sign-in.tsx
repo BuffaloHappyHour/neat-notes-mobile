@@ -500,6 +500,23 @@ export default function SignInScreen() {
 
     setBusy(true);
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (signInError) {
+        setBusy(false);
+        Alert.alert(
+          "Could not verify phone",
+          "Please sign in with your email first, then add your phone number in Account Settings."
+        );
+        setMode("signin");
+        return;
+      }
+    }
+
     const { error } = await supabase.auth.updateUser({ phone: formatted });
 
     setBusy(false);
