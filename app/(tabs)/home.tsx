@@ -1,7 +1,8 @@
 import { router, useFocusEffect } from "expo-router";
 import * as StoreReview from "expo-store-review";
-import React, { useCallback, useEffect, useMemo } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Polygon, Svg } from "react-native-svg";
 
 import { clearActiveEventId, getActiveEventId } from "../../lib/eventStorage";
 import { radii } from "../../lib/radii";
@@ -14,14 +15,11 @@ import { type } from "../../lib/typography";
 import { logClientEvent } from "../../lib/clientLog";
 import { withTick } from "../../lib/hapticsPress";
 
-import { useHomeStats } from "../../src/home/hooks/useHomeStats";
-import { pluralize } from "../../src/home/utils/pluralize";
+import { type RecommendationItem, useHomeStats } from "../../src/home/hooks/useHomeStats";
+import { WhatToDrinkNext } from "../../src/home/components/WhatToDrinkNext";
+import { getTierCopy } from "../../src/palate/constants/palateTiers";
+import type { PalateClarityTierLabel } from "../../src/palate/palateClarity.service";
 
-/**
- * Local “warm shadow” override:
- * - Keeps your global shadows.card baseline
- * - Adds warmer tone + softer spread
- */
 const warmCardShadow = {
   ...shadows.card,
   shadowColor: colors.shadowWarm ?? colors.shadow,
@@ -31,84 +29,276 @@ const warmCardShadow = {
   elevation: 10,
 };
 
-function ActionBodyCard({
-  subtitle,
+function pentagonPoints(cx: number, cy: number, r: number): string {
+  return Array.from({ length: 5 }, (_, i) => {
+    const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+    return `${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`;
+  }).join(" ");
+}
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function StatCell({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ flex: 1, alignItems: "center", gap: 2 }}>
+      <Text style={[type.statNumber, { color: colors.textPrimary }]}>{value}</Text>
+      <Text style={[type.caption, { color: colors.textSecondary }]}>{label}</Text>
+    </View>
+  );
+}
+
+function PalateIdentityCard({
+  tierLabel,
+  clarityIndex,
+  topAffinities,
+  tastingCount,
+  avgRating,
   onPress,
-  rightHint,
 }: {
-  subtitle: string;
+  tierLabel: PalateClarityTierLabel | null;
+  clarityIndex: number | null;
+  topAffinities: string[];
+  tastingCount: number | null;
+  avgRating: number | null;
   onPress: () => void;
-  rightHint?: string;
 }) {
+  const clarity = clarityIndex ?? 0;
+  const fillPct = `${Math.min(100, clarity)}%` as `${number}%`;
+
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({
-        backgroundColor: pressed
-          ? "rgba(190, 150, 99, 0.12)"
-          : "rgba(255, 255, 255, 0.04)",
         borderRadius: radii.lg,
         borderWidth: 1,
-        borderColor: pressed
-          ? "rgba(190, 150, 99, 0.42)"
-          : colors.glassBorder,
-        paddingVertical: 13,
-        paddingHorizontal: spacing.lg,
+        borderColor: colors.borderStrong,
+        backgroundColor: colors.glassSurface,
+        padding: spacing.cardPadding,
+        gap: spacing.sm,
         ...warmCardShadow,
-        opacity: pressed ? 0.96 : 1,
+        opacity: pressed ? 0.97 : 1,
       })}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg }}>
-        <View style={{ flex: 1 }}>
-          <Text
-            style={[
-              type.microcopyItalic,
-              {
-                fontSize: 15.5,
-                lineHeight: 22,
-                opacity: 0.88,
-                color: colors.textPrimary,
-              },
-            ]}
-          >
-            {subtitle}
+      {/* Tier label + clarity index */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={[type.labelCaps, { color: colors.accent }]}>
+          {tierLabel ?? "Emerging"}
+        </Text>
+        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3 }}>
+          <Text style={[type.statNumber, { color: colors.textPrimary }]}>
+            {Math.round(clarity)}
           </Text>
+          <Text style={[type.caption, { color: colors.textSecondary }]}>clarity</Text>
         </View>
+      </View>
 
-        {rightHint ? (
-          <View
-            style={{
-              width: 108,
-              paddingVertical: 7,
-              borderRadius: 999,
-              alignItems: "center",
-              backgroundColor: "rgba(190, 150, 99, 0.10)",
-              borderWidth: 1,
-              borderColor: "rgba(190, 150, 99, 0.34)",
-              shadowColor: colors.shadowWarm ?? colors.shadow,
-              shadowOpacity: 0.18,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 3,
-            }}
-          >
-            <Text
-              style={[
-                type.caption,
-                {
-                  color: colors.accent,
-                  opacity: 0.96,
-                  letterSpacing: 0.25,
-                  fontWeight: "700",
-                },
-              ]}
+      {/* Clarity progress bar */}
+      <View
+        style={{
+          width: "100%",
+          height: 2,
+          backgroundColor: colors.accentFaint,
+          borderRadius: 999,
+        }}
+      >
+        <View
+          style={{
+            width: fillPct,
+            height: 2,
+            backgroundColor: colors.accent,
+            borderRadius: 999,
+          }}
+        />
+      </View>
+
+      {/* Affinity chips OR empty-state prompt */}
+      {topAffinities.length > 0 ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+          {topAffinities.slice(0, 3).map((a) => (
+            <View
+              key={a}
+              style={{
+                borderWidth: 0.5,
+                borderColor: colors.borderStrong,
+                backgroundColor: colors.accentFaint,
+                borderRadius: 2,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+              }}
             >
-              {rightHint}
-            </Text>
-          </View>
-        ) : null}
+              <Text style={[type.caption, { color: colors.accent }]}>{a}</Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={[type.microcopyItalic, { color: colors.textTertiary }]}>
+          Add flavor notes when you log to build your taste profile.
+        </Text>
+      )}
+
+      {/* Stat row: Tastings + Avg Rating only, centered */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingTop: spacing.xs,
+        }}
+      >
+        <StatCell
+          label="Tastings"
+          value={tastingCount === null ? "—" : String(tastingCount)}
+        />
+        <View style={{ width: 0.5, height: 28, backgroundColor: colors.borderSubtle }} />
+        <StatCell
+          label="Avg. Rating"
+          value={avgRating === null ? "—" : avgRating.toFixed(1)}
+        />
       </View>
     </Pressable>
+  );
+}
+
+function OnboardingNote({ tastingCount }: { tastingCount: number }) {
+  const body =
+    tastingCount === 0
+      ? "Log your first tasting. Choose flavor notes — that's what Neat Notes learns from."
+      : tastingCount <= 2
+      ? "Good start. Add flavor notes to your next tasting to sharpen your palate profile."
+      : "You're close to your first Insights. Keep logging with flavor notes.";
+
+  return (
+    <View
+      style={{
+        borderLeftWidth: 1.5,
+        borderLeftColor: colors.accent,
+        backgroundColor: colors.accentFaint,
+        paddingLeft: 10,
+        paddingRight: spacing.md,
+        paddingVertical: 12,
+        borderTopRightRadius: 3,
+        borderBottomRightRadius: 3,
+      }}
+    >
+      <Text style={[type.labelCaps, { color: colors.accent, marginBottom: 4 }]}>
+        Getting started
+      </Text>
+      <Text style={[type.microcopyItalic, { color: colors.textPrimary, opacity: 0.88 }]}>
+        {body}
+      </Text>
+    </View>
+  );
+}
+
+function InsightsTeaser({
+  topAffinities,
+  clarityIndex,
+  isPremium,
+  onPress,
+}: {
+  tierLabel: PalateClarityTierLabel | null;
+  topAffinities: string[];
+  clarityIndex: number | null;
+  isPremium: boolean;
+  onPress: () => void;
+}) {
+  const ci = Math.min(100, Math.max(0, clarityIndex ?? 0));
+  const cx = 60;
+  const cy = 55;
+  const outerR = 45;
+  const outerPts = pentagonPoints(cx, cy, outerR);
+  const innerPts = pentagonPoints(cx, cy, Math.max(2, outerR * (ci / 100)));
+
+  return (
+    <View
+      style={{
+        borderRadius: radii.lg,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        backgroundColor: colors.glassSurface,
+        padding: spacing.cardPadding,
+        gap: spacing.sm,
+        ...warmCardShadow,
+      }}
+    >
+      <Text style={[type.labelCaps, { color: colors.textSecondary }]}>YOUR PALATE SIGNATURE</Text>
+
+      {topAffinities.length > 0 && (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+          {topAffinities.slice(0, 3).map((a) => (
+            <View
+              key={a}
+              style={{
+                borderWidth: 0.5,
+                borderColor: colors.borderStrong,
+                backgroundColor: colors.accentFaint,
+                borderRadius: 2,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={[type.caption, { color: colors.accent }]}>{a}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <View style={{ alignItems: "center" }}>
+        <Svg width={120} height={110} viewBox="0 0 120 110">
+          <Polygon
+            points={outerPts}
+            fill="none"
+            stroke={colors.borderStrong}
+            strokeWidth={1}
+          />
+          <Polygon
+            points={innerPts}
+            fill={colors.accent}
+            fillOpacity={0.22}
+            stroke={colors.accent}
+            strokeWidth={1}
+            strokeOpacity={0.6}
+          />
+        </Svg>
+        <View
+          style={[
+            StyleSheet.absoluteFillObject,
+            {
+              backgroundColor: colors.glassSurface,
+              opacity: 0.7,
+              borderRadius: radii.lg,
+            },
+          ]}
+        />
+      </View>
+
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => ({
+          alignSelf: "stretch",
+          paddingHorizontal: spacing.md,
+          paddingVertical: 10,
+          borderRadius: 999,
+          alignItems: "center",
+          backgroundColor: isPremium ? colors.accent : colors.accentSoft,
+          borderWidth: isPremium ? 0 : 1,
+          borderColor: colors.borderStrong,
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <Text
+          style={[
+            type.caption,
+            {
+              color: isPremium ? colors.background : colors.accent,
+              fontWeight: "700",
+            },
+          ]}
+        >
+          {isPremium ? "View Full Insights" : "Unlock Insights →"}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -256,177 +446,6 @@ function ActiveEventCard({
         </View>
       </Pressable>
     </View>
-  );
-}
-
-function JournalSnapshotCard({
-  tastingCount,
-  avgRating,
-  onPress,
-}: {
-  tastingCount: number | null;
-  avgRating: number | null;
-  onPress: () => void;
-}) {
-  const tastingsValue = tastingCount === null ? "—" : String(tastingCount);
-  const avgValue =
-    avgRating === null || !Number.isFinite(avgRating) ? "—" : avgRating.toFixed(1);
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        borderRadius: radii.lg,
-        borderWidth: 1,
-        borderColor: pressed
-          ? "rgba(190, 150, 99, 0.42)"
-          : colors.glassBorder,
-        backgroundColor: pressed
-          ? "rgba(190, 150, 99, 0.08)"
-          : colors.glassSurface,
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.lg,
-        ...warmCardShadow,
-        opacity: pressed ? 0.97 : 1,
-      })}
-    >
-      <View style={{ gap: spacing.sm }}>
-        <Text
-          style={[
-            type.microcopyItalic,
-            {
-              fontSize: 15,
-              lineHeight: 21,
-              opacity: 0.84,
-              color: colors.textPrimary,
-            },
-          ]}
-        >
-          A quick snapshot of your journal so far.
-        </Text>
-
-        <View style={{ flexDirection: "row", gap: spacing.sm }}>
-          <View
-            style={{
-              flex: 1,
-              borderRadius: radii.lg,
-              borderWidth: 1,
-              borderColor: colors.glassBorder,
-              backgroundColor: "rgba(255,255,255,0.03)",
-              paddingVertical: spacing.sm,
-              paddingHorizontal: spacing.sm,
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: 68,
-            }}
-          >
-            <Text
-              style={[
-                type.caption,
-                {
-                  color: colors.textSecondary,
-                  fontWeight: "800",
-                  letterSpacing: 1.2,
-                  textTransform: "uppercase",
-                },
-              ]}
-            >
-              Tastings
-            </Text>
-
-            <Text
-              style={[
-                type.sectionHeader,
-                {
-                  marginTop: 4,
-                  fontSize: 24,
-                  lineHeight: 28,
-                  color: colors.textPrimary,
-                },
-              ]}
-            >
-              {tastingsValue}
-            </Text>
-          </View>
-
-          <View
-            style={{
-              flex: 1,
-              borderRadius: radii.lg,
-              borderWidth: 1,
-              borderColor: colors.glassBorder,
-              backgroundColor: "rgba(255,255,255,0.03)",
-              paddingVertical: spacing.sm,
-              paddingHorizontal: spacing.sm,
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: 68,
-            }}
-          >
-            <Text
-              style={[
-                type.caption,
-                {
-                  color: colors.textSecondary,
-                  fontWeight: "800",
-                  letterSpacing: 1.2,
-                  textTransform: "uppercase",
-                },
-              ]}
-            >
-              Avg. Rating
-            </Text>
-
-            <Text
-              style={[
-                type.sectionHeader,
-                {
-                  marginTop: 4,
-                  fontSize: 24,
-                  lineHeight: 28,
-                  color: colors.textPrimary,
-                },
-              ]}
-            >
-              {avgValue}
-            </Text>
-          </View>
-        </View>
-
-        <View style={{ alignItems: "center", marginTop: spacing.sm }}>
-          <View
-            style={{
-              width: 260,
-              paddingVertical: 9,
-              borderRadius: 999,
-              alignItems: "center",
-              backgroundColor: "rgba(190, 150, 99, 0.10)",
-              borderWidth: 1,
-              borderColor: "rgba(190, 150, 99, 0.34)",
-              shadowColor: colors.shadowWarm ?? colors.shadow,
-              shadowOpacity: 0.18,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 3,
-            }}
-          >
-            <Text
-              style={[
-                type.caption,
-                {
-                  color: colors.accent,
-                  opacity: 0.96,
-                  letterSpacing: 0.25,
-                  fontWeight: "700",
-                },
-              ]}
-            >
-              View your profile
-            </Text>
-          </View>
-        </View>
-      </View>
-    </Pressable>
   );
 }
 
@@ -680,9 +699,21 @@ function BottomCtaCard({
   );
 }
 
+// ─── Screen ──────────────────────────────────────────────────────────────────
+
 export default function HomeTab() {
-  const { isAuthed, firstName, tastingCount, avgRating, statsLoading } =
-    useHomeStats();
+  const {
+    isAuthed,
+    firstName,
+    tastingCount,
+    avgRating,
+    tierLabel,
+    clarityIndex,
+    topAffinities,
+    recommendations,
+    isPremium,
+    statsLoading,
+  } = useHomeStats();
 
   const [featured, setFeatured] = React.useState<{
     whiskeyId: string;
@@ -697,7 +728,7 @@ export default function HomeTab() {
     name: string;
   } | null>(null);
 
-  const reviewCheckRan = React.useRef(false);
+  const reviewCheckRan = useRef(false);
 
   const logPress = (action: string, href?: string) => {
     void logClientEvent("press", {
@@ -729,10 +760,7 @@ export default function HomeTab() {
       return;
     }
 
-    setActiveEvent({
-      id: data.id,
-      name: data.name,
-    });
+    setActiveEvent({ id: data.id, name: data.name });
   }, []);
 
   useEffect(() => {
@@ -830,6 +858,7 @@ export default function HomeTab() {
     };
   }, []);
 
+  // Greeting copy driven by tier label
   const dynamic = useMemo(() => {
     if (!isAuthed) {
       return {
@@ -837,81 +866,28 @@ export default function HomeTab() {
         subline: "Log your first pour — Neat Notes gets clearer as you go.",
       };
     }
-
-    if (tastingCount === null) {
+    if (statsLoading || tierLabel === null) {
       return {
-        headline: statsLoading ? "Checking your progress…" : "Welcome back.",
+        headline: "Checking your progress…",
         subline: "Every pour adds clarity.",
       };
     }
+    return getTierCopy(tierLabel);
+  }, [isAuthed, statsLoading, tierLabel]);
 
-    if (tastingCount <= 0) {
-      return {
-        headline: "Start your palate journey.",
-        subline: "Log your first pour and begin building your taste map.",
-      };
-    }
-
-    if (tastingCount <= 4) {
-      return {
-        headline: "Nice start.",
-        subline: `You’ve logged ${tastingCount} ${pluralize(
-          tastingCount,
-          "pour"
-        )}. Patterns are forming.`,
-      };
-    }
-
-    if (tastingCount <= 24) {
-      return {
-        headline: "You’re building momentum.",
-        subline: `You’ve logged ${tastingCount} ${pluralize(
-          tastingCount,
-          "pour"
-        )}. Your palate is getting clearer.`,
-      };
-    }
-
-    return {
-      headline: "You’re building a palate map.",
-      subline: `You’ve logged ${tastingCount} ${pluralize(
-        tastingCount,
-        "pour"
-      )}. You’re learning your taste.`,
-    };
-  }, [isAuthed, tastingCount, statsLoading]);
-
-  const goSignIn = useMemo(
+  const goPalateCard = useMemo(
     () =>
       withTick(() => {
-        logPress("home_sign_in", "/sign-in");
-        router.push("/sign-in");
+        logPress("home_palate_card", "/(tabs)/profile");
+        router.push("/(tabs)/profile");
       }),
     []
   );
 
-  const goLog = useMemo(
+  const goInsightsTeaser = useMemo(
     () =>
       withTick(() => {
-        logPress("home_log_cta", "/(tabs)/log");
-        router.push("/(tabs)/log");
-      }),
-    []
-  );
-
-  const goDiscover = useMemo(
-    () =>
-      withTick(() => {
-        logPress("home_discover_cta", "/(tabs)/discover");
-        router.push("/(tabs)/discover");
-      }),
-    []
-  );
-
-  const goProfile = useMemo(
-    () =>
-      withTick(() => {
-        logPress("home_profile_cta", "/(tabs)/profile");
+        logPress("home_insights_teaser", "/(tabs)/profile");
         router.push("/(tabs)/profile");
       }),
     []
@@ -932,10 +908,10 @@ export default function HomeTab() {
       withTick(() => {
         if (!activeEvent) return;
         logPress("home_active_event_view", `/event/${activeEvent.id}`);
-router.push({
-  pathname: "/event/[id]",
-  params: { id: activeEvent.id },
-});
+        router.push({
+          pathname: "/event/[id]",
+          params: { id: activeEvent.id },
+        });
       }),
     [activeEvent]
   );
@@ -950,6 +926,49 @@ router.push({
     []
   );
 
+  const goLogQuick = useMemo(
+    () =>
+      withTick(() => {
+        logPress("home_log_quick", "/(tabs)/log");
+        router.push("/(tabs)/log");
+      }),
+    []
+  );
+
+  const goSearchQuick = useMemo(
+    () =>
+      withTick(() => {
+        logPress("home_search_quick", "/(tabs)/discover");
+        router.push("/(tabs)/discover");
+      }),
+    []
+  );
+
+  const goScanQuick = useMemo(
+    () =>
+      withTick(() => {
+        logPress("home_scan_quick", "/scan");
+        router.push("/scan");
+      }),
+    []
+  );
+
+  // Map recommendations to WhatToDrinkNext row shape
+  const recRows = useMemo(
+    () =>
+      recommendations.map((r: RecommendationItem) => ({
+        whiskeyId: r.whiskey_id,
+        whiskeyName: r.display_name,
+        whiskeyType: r.whiskey_type,
+        proof: r.proof,
+      })),
+    [recommendations]
+  );
+
+  const showRecommendations = isAuthed && recRows.length > 0;
+  const showRecommendationFallback =
+    isAuthed && tastingCount !== null && tastingCount >= 5 && recRows.length === 0;
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: "transparent" }}
@@ -961,6 +980,8 @@ router.push({
       keyboardShouldPersistTaps="handled"
     >
       <View style={{ gap: spacing.lg }}>
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
         <View style={{ gap: spacing.xs }}>
           <Text
             style={[
@@ -994,6 +1015,7 @@ router.push({
           />
         </View>
 
+        {/* ── Greeting ───────────────────────────────────────────────────── */}
         <View style={{ gap: spacing.xs }}>
           {firstName ? (
             <Text
@@ -1028,16 +1050,80 @@ router.push({
           >
             {dynamic.subline}
           </Text>
-
-          <View
-            style={{
-              height: 1,
-              backgroundColor: colors.glassDivider,
-              marginTop: spacing.md,
-            }}
-          />
         </View>
 
+        {/* ── Quick Actions ───────────────────────────────────────────────── */}
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          <Pressable
+            onPress={goLogQuick}
+            style={({ pressed }) => ({
+              flex: 1,
+              paddingVertical: 12,
+              borderRadius: 999,
+              alignItems: "center",
+              backgroundColor: pressed ? colors.accentSoft : colors.accent,
+              opacity: pressed ? 0.88 : 1,
+            })}
+          >
+            <Text style={[type.button, { color: colors.background }]}>Log</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={goSearchQuick}
+            style={({ pressed }) => ({
+              width: 52,
+              paddingVertical: 12,
+              borderRadius: 999,
+              alignItems: "center",
+              backgroundColor: colors.accentFaint,
+              borderWidth: 1,
+              borderColor: colors.borderStrong,
+              opacity: pressed ? 0.75 : 1,
+            })}
+          >
+            <Text style={[type.button, { color: colors.accent }]}>⌕</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={goScanQuick}
+            style={({ pressed }) => ({
+              width: 52,
+              paddingVertical: 12,
+              borderRadius: 999,
+              alignItems: "center",
+              backgroundColor: colors.accentFaint,
+              borderWidth: 1,
+              borderColor: colors.borderStrong,
+              opacity: pressed ? 0.75 : 1,
+            })}
+          >
+            <Text style={[type.button, { color: colors.accent }]}>▦</Text>
+          </Pressable>
+        </View>
+
+        {/* ── Palate Identity Card ────────────────────────────────────────── */}
+        {isAuthed ? (
+          <View style={{ gap: 6 }}>
+            <Text style={[type.sectionHeader, { fontSize: 22, color: colors.textPrimary }]}>
+              YOUR PALATE
+            </Text>
+            <PalateIdentityCard
+              tierLabel={tierLabel}
+              clarityIndex={clarityIndex}
+              topAffinities={topAffinities}
+              tastingCount={tastingCount}
+              avgRating={avgRating}
+              onPress={goPalateCard}
+            />
+          </View>
+        ) : null}
+
+        {/* ── Onboarding note ─────────────────────────────────────────────── */}
+        {isAuthed && tastingCount !== null && tastingCount < 5 ? (
+          <OnboardingNote tastingCount={tastingCount} />
+        ) : null}
+
+        {/* ── Active Event ────────────────────────────────────────────────── */}
         {activeEvent ? (
           <ActiveEventCard
             eventName={activeEvent.name}
@@ -1046,95 +1132,66 @@ router.push({
           />
         ) : null}
 
-        {!isAuthed ? (
-          <View style={{ gap: spacing.xs }}>
-            <Text
-              style={[
-                type.sectionHeader,
-                { fontSize: 21, lineHeight: 25, color: colors.textPrimary },
-              ]}
-            >
-              Sign in
-            </Text>
-
-            <ActionBodyCard
-              subtitle="Create an account to sync tastings across devices."
-              rightHint="Continue"
-              onPress={goSignIn}
-            />
-          </View>
-        ) : null}
-
-        {isAuthed ? (
+        {/* ── Insights Teaser ─────────────────────────────────────────────── */}
+        {isAuthed && tastingCount !== null && tastingCount >= 5 ? (
           <View style={{ gap: 6 }}>
-            <Text
-              style={[
-                type.sectionHeader,
-                { fontSize: 25, lineHeight: 30, color: colors.textPrimary },
-              ]}
-            >
-              Your Journal
+            <Text style={[type.sectionHeader, { fontSize: 22, color: colors.textPrimary }]}>
+              INSIGHTS
             </Text>
-
-            <JournalSnapshotCard
-              tastingCount={tastingCount}
-              avgRating={avgRating}
-              onPress={goProfile}
+            <InsightsTeaser
+              tierLabel={tierLabel}
+              topAffinities={topAffinities}
+              clarityIndex={clarityIndex}
+              isPremium={isPremium}
+              onPress={goInsightsTeaser}
             />
           </View>
         ) : null}
 
-        {featured ? (
-          <FeaturedBottleCard
-            name={featured.name}
-            whiskeyType={featured.type}
-            proof={featured.proof}
-            featureNote={featured.featureNote}
-            onPress={goFeatured}
-          />
+        {/* ── Discover ────────────────────────────────────────────────────── */}
+        {(showRecommendations || showRecommendationFallback || !!featured) ? (
+          <View
+            style={{
+              borderRadius: radii.lg,
+              borderWidth: 1,
+              borderColor: colors.glassBorder,
+              backgroundColor: colors.glassSurface,
+              padding: spacing.cardPadding,
+              gap: spacing.md,
+              ...warmCardShadow,
+            }}
+          >
+            {showRecommendations ? (
+              <WhatToDrinkNext
+                featured={null}
+                recommendations={recRows}
+                onPress={(id) => {
+                  logPress("home_recommendation_tap", `/whiskey/${id}`);
+                  router.push(`/whiskey/${encodeURIComponent(id)}`);
+                }}
+              />
+            ) : showRecommendationFallback ? (
+              <Text style={[type.microcopyItalic, { color: colors.textTertiary }]}>
+                Recommendations sharpen as you log more tastings.
+              </Text>
+            ) : null}
+
+            {(showRecommendations || showRecommendationFallback) && !!featured ? (
+              <View style={{ height: 1, backgroundColor: colors.borderSubtle }} />
+            ) : null}
+
+            {featured ? (
+              <FeaturedBottleCard
+                name={featured.name}
+                whiskeyType={featured.type}
+                proof={featured.proof}
+                featureNote={featured.featureNote}
+                onPress={goFeatured}
+              />
+            ) : null}
+          </View>
         ) : null}
 
-        <View style={{ marginTop: spacing.sm }}>
-          <View
-            style={{
-              height: 2,
-              marginTop: 8,
-              alignSelf: "center",
-              width: "92%",
-              backgroundColor: "rgba(190, 150, 99, 0.14)",
-              borderRadius: 999,
-              opacity: 0.55,
-            }}
-          />
-          <View
-            style={{
-              height: 2,
-              marginTop: -2,
-              alignSelf: "center",
-              width: "44%",
-              backgroundColor: "rgba(190, 150, 99, 0.38)",
-              borderRadius: 999,
-              opacity: 0.65,
-            }}
-          />
-        </View>
-
-        <View style={{ gap: spacing.sm }}>
-          <View style={{ flexDirection: "row", gap: spacing.sm }}>
-            <BottomCtaCard
-              title="Log"
-              subtitle="Capture your next pour."
-              buttonLabel="Continue"
-              onPress={goLog}
-            />
-            <BottomCtaCard
-              title="Discover"
-              subtitle="Explore trending whiskies."
-              buttonLabel="Browse"
-              onPress={goDiscover}
-            />
-          </View>
-        </View>
       </View>
     </ScrollView>
   );
