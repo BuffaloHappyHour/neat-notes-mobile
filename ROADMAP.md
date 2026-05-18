@@ -1,6 +1,6 @@
 WhiskeyAppBeta — Feature Ideas & Roadmap
 
-> Last updated: May 15, 2026  
+> Last updated: May 17, 2026  
 > Maintained by: Derek  
 
 ---
@@ -61,7 +61,7 @@ Each feature includes:
 | F023 | Bars Nearby with Your Whiskey | Discover | Medium | v1.2.0 | Medium | Low | 💡 Idea | Find bars serving whiskies that match your flavor profile and favorites |
 | F024 | Top Whiskey Bars in Your Area | Discover | Medium | v1.2.0 | Medium | Low | 💡 Idea | Curated bar discovery ranked by community ratings and whiskey selection |
 | F025 | Upcoming Public Events Near You | Events | Medium | v1.2.0 | Low | Low | 💡 Idea | Event discovery surface driven by user location — find tastings, pours, and whiskey events nearby |
-| F026 | Phone Number Sign-In | Profile | High | v1.0.8 | Medium | Low | ✅ Done | Phone as secondary auth layer. Sign-up: email required, then choose email or SMS verification — phone linked to profile in same step. Sign-in: phone + OTP for users with linked number. Cannot create account with phone only. |
+| F026 | Phone Number Sign-In | Profile | High | v1.0.8 | Medium | Low | ✅ Done | Phone auth layer shipped. Sign-in: phone + OTP for users with linked number. Sign-up phone-first path redesigned May 18, 2026 — see F093. |
 | F027 | Venue Check-In Foundation | Venue | High | v1.1.1 | High | Medium | 💡 Idea | Core venue check-in infrastructure — tastings mapped to venues, venue profiles, check-in flow |
 | F028 | Venue Host Analytics Dashboard | Venue | High | v1.1.2 | Medium | Low | 💡 Idea | Real-time analytics for venue owners — popular pours, visitor counts, tasting trends. B2B revenue feature |
 | F029 | B2B Venue Owner Access & Monetization | Infrastructure | High | v1.1.2 | Medium | Medium | 💡 Idea | Gated analytics access sold to venue/bar/restaurant owners — subscription or one-time access model |
@@ -93,7 +93,7 @@ Each feature includes:
 | F055 | Fuzzy/Trigram Search for Whiskey Lookup | Infrastructure | High | v1.0.9 | Low | Low | 💡 Idea | Current search uses ILIKE %substring% — no typo tolerance. A user typing "lagovolin" gets no results and creates a duplicate custom record. Fix: enable pg_trgm extension, add GIN index on whiskeys.display_name, update search query in log.tsx to use similarity() or word_similarity() instead of ILIKE. Directly protects catalog data quality now that we have 12,701 whiskeys. |
 | F056 | Whiskey Catalog Import (UPC Data 4 Spirits) | Infrastructure | High | v1.1.0 | High | Medium | ✅ Done (May 10, 2026) | Bulk import of 11,596 whiskeys and 13,080 UPC barcodes from working-whiskey.xlsx (UPC Data 4 Spirits dataset). Catalog grew from 1,161 to 12,701 active whiskeys. All records classified by whiskey_type, category, region. 95.6% proof coverage. Import pipeline: classification script → staging table → fuzzy dedup against existing catalog → enrich matched records → promote new records → load barcodes. Scripts: whiskey_import_classifier.py, fuzzy_match.py, enrich_matched.py, promote_new.py. |
 | F057 | Search Relevance Ranking | UX | High | v1.0.9 | Low | Low | 💡 Idea | With 12,701 whiskeys in the catalog, alphabetical search ranking is broken — "Sazerac" surfaces obscure barrel selects before standard Sazerac Rye. Fix: replace .order("display_name") with an RPC scoring starts-with +10pts, shorter name ranked higher, has community tastings +5pts, alphabetical as tiebreaker. Also reduce result limit from 10 to 7. |
-| F058 | Web Platform Consolidation & Migration | Website | High | v1.0.9 | Medium | Low | 💡 Idea | Migrate auth/callback + password reset from neatnotes-web (buried in mobile repo) to new unified neatnotesapp.com platform. Decommission neatnotes-web and neatnotes-landing as separate surfaces. Update mobile app to point to new URLs. |
+| F058 | Web Platform Consolidation & Migration | Website | High | v1.0.9 | Medium | Low | 🔨 In Progress | Migrate auth/callback + password reset from neatnotes-web (buried in mobile repo) to new unified neatnotesapp.com platform. Decommission neatnotes-web and neatnotes-landing as separate surfaces. Update mobile app to point to new URLs. App code confirmed pointing to neatnotesapp.com as of May 18, 2026 audit. |
 | F059 | Admin Dashboard Redesign | Admin | High | v1.0.9 | Medium | Low | ✅ Done | Full premium dark redesign — new component library (SectionDivider, MetricBarRow, PowerGrid, TotalChip), status colors aligned to design tokens, amber accent bars on cards |
 | F060 | Admin Dashboard — New KPIs & Monetization Tab | Admin | High | v1.0.9 | Low | Low | ✅ Done | New Monetization tab (premium users, premium %, avg tastings by tier), 5-tier input adoption card, Pour source breakdown card, Unlinked tastings KRI, source_type values corrected to match actual data |
 | F061 | Admin Reject RPC — Orphaned Tasting Fix | Admin/Infra | High | v1.0.9 | Low | Low | ✅ Done | admin_reject_candidate now accepts optional p_merge_into_whiskey_id — re-links orphaned tastings on reject, logs unfixable orphans to client_logs |
@@ -117,6 +117,16 @@ Each feature includes:
 | F079 | Venue Request Admin Screen | Admin | High | v1.0.9 | Low | Low | ✅ Done | Admin screen at /admin/venue-requests. Review pending venue applications, approve with role assignment (venue_starter or venue_pro), reject with confirmation. Pull-to-refresh, empty state, auth guard. RPCs: admin_approve_venue_request, admin_reject_venue_request. |
 | F082 | QR Code Event Sharing | Events | High | v1.1.0 | Medium | Low | ✅ Done | Host generates branded QR code (amber, NN logo) from event detail screen. Attendee scans → deep links into app → auto-joins via join_event RPC → lands on event page. Save to camera roll. Universal link handler in _layout.tsx. |
 | F083 | Event Location / Venue | Events | High | v1.1.0 | Medium | Low | ✅ Done | Host searches venues table during event creation, or enters manually. Linked venue shows full details on host and attendee screens. event_attendees table added for attendance tracking. |
+| F084 | Home Screen Redesign | UX | High | v1.1.0 | High | Low | 💡 Idea | Modular hub replacing dashboard — Palate Identity Card, Insights Preview teaser, Quick Actions, Recommendations Rail, Community Pulse, Featured Whiskey |
+| F085 | Guided New User Onboarding | UX | High | v1.1.0 | Medium | Low | 💡 Idea | 3-slide outcome-focused intro flow shown on first launch — logged once in Supabase/AsyncStorage, never re-shown |
+| F086 | "What's New" Modal (v1.1.0) | UX | High | v1.1.0 | Low | Low | 💡 Idea | Full-screen dismissible modal shown once to existing users after v1.1.0 install — highlights Home redesign, Insights on Home, Google Sign-In |
+| F087 | Google Sign-In | Profile | High | v1.1.0 | Medium | Low | 🔨 In Progress | Google as primary auth option via Supabase signInWithOAuth — links to existing account if email matches, never creates ghost accounts. Code committed May 18, 2026 via expo-auth-session + PKCE/implicit flow. Pending production build. |
+| F088 | Phone Auth Analytics Events | Infrastructure | Medium | v1.1.0 | Low | Low | 💡 Idea | Fire phone_auth_started, phone_auth_completed, phone_auth_duplicate_detected analytics events for SMS auth monitoring |
+| F089 | Duplicate Auth Detection View | Admin | Medium | v1.1.0 | Low | Low | 💡 Idea | admin_duplicate_auth_candidates Supabase view — surfaces auth accounts created within 48h sharing name or device metadata |
+| F090 | Insights Teaser on Home + Milestone Cards | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | 2 palate trait teasers on Home (visible to all), premium CTA for full breakdown, milestone cards at 5 and 15 tastings computed server-side |
+| F091 | Recommendations Foundation | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | get_recommendations_for_user RPC using L2/L3 flavor + whiskey_type_id overlap — powers Home rail with "Because you liked…" suggestions |
+| F092 | Community Pulse Modules | UX | Medium | v1.1.0 | Medium | Low | 💡 Idea | Trending bottles (last 7 days, min 3 logs) and highest rated (min 5 logs) on Home — anonymous aggregates from materialized Supabase views |
+| F093 | Phone-First Signup Flow Redesign | Profile | High | v1.1.0 | Medium | Low | ✅ Done | Phone-first signup: OTP creates account with phone as primary identity, email + password linked after verification. Email-only fallback if no phone provided. signInWithOtp (shouldCreateUser: true) + linkIdentity email + updateUser password. Ghost-account bug fixed (sendSignUpOtp uses updateUser not signInWithOtp). Shipped May 18, 2026. |
 ---
 
 ## Feature Detail
@@ -558,6 +568,217 @@ Host-facing post-event analytics report generated on demand from Supabase event 
 
 ---
 
+### F084 — Home Screen Redesign
+**Area:** UX
+**Priority:** High
+**Release Target:** v1.1.0
+**Complexity:** High
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+Replaces the current dashboard-style Home with a modular intelligence hub. Positions Neat Notes as a palate identity platform rather than a tasting journal.
+
+**Scope / Requirements:**
+- Palate Identity Card — top flavor affinities, palate clarity score, tasting streak. Absorbs existing stat tiles (total logs, avg rating)
+- Insights Preview — 2 teaser traits, "See full breakdown" CTA gated by RevenueCat entitlement "premium"
+- Quick Actions — Log Tasting + Scan Bottle, always visible, never gated
+- Recommendations Rail — horizontal scroll, "Because you liked…" label, powered by F091. Placeholder state if <5 tastings
+- Community Pulse — trending bottles + highest rated this week, powered by F092
+- Featured Whiskey — single highlighted bottle card, editorial or algorithm-picked
+- All Supabase data via RPCs or views — no raw table queries from the component
+- Use only typography.ts and theme.ts for styling
+
+**Dependencies:**
+- F090 — Insights teaser content
+- F091 — Recommendations Rail data
+- F092 — Community Pulse data
+
+---
+
+### F085 — Guided New User Onboarding
+**Area:** UX
+**Priority:** High
+**Release Target:** v1.1.0
+**Complexity:** Medium
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+3-slide intro flow shown only on first launch. Outcome-focused — not a feature dump. Establishes the core identity loop early.
+
+**Scope / Requirements:**
+- Slide 1: "Log what you taste" — outcome framing
+- Slide 2: "We learn your palate" — emphasize the app gets smarter over time
+- Slide 3: "Discover who you are as a taster" — identity hook
+- Completion stored in Supabase user prefs or AsyncStorage — never re-shows
+- Must not show to users who already have tastings (existing users upgrading)
+
+**Dependencies:**
+- Must not conflict with F086 — users who see onboarding should not also see What's New
+
+---
+
+### F086 — "What's New" Modal (v1.1.0)
+**Area:** UX
+**Priority:** High
+**Release Target:** v1.1.0
+**Complexity:** Low
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+One-time full-screen modal shown to existing users after upgrading to v1.1.0. Communicates the shift to palate intelligence platform — not just UI changes.
+
+**Scope / Requirements:**
+- Full-screen, dismissible
+- Highlights: Home redesign, Insights on Home, Google Sign-In
+- Version check against app version from expo-constants stored in AsyncStorage
+- Do not show to users who just completed F085 new user onboarding
+- Shown once only — dismissed state persisted in AsyncStorage
+
+---
+
+### F087 — Google Sign-In
+**Area:** Profile
+**Priority:** High
+**Release Target:** v1.1.0
+**Complexity:** Medium
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+Reduce cold-user auth friction. Google as the primary option on the auth screen — above email, above SMS.
+
+**Scope / Requirements:**
+- Use Supabase signInWithOAuth for Google
+- If Google email matches an existing account, link to it — no duplicate creation
+- Google Sign-In must never create a standalone account without an email
+- Email/password remains required for account creation
+- Phone auth can authenticate but must not create accounts on its own
+
+**Notes:**
+- RevenueCat sync on Google Sign-In must follow existing lib/premiumSync.ts pattern
+- RevenueCat configuration belongs in _layout.tsx
+
+---
+
+### F088 — Phone Auth Analytics Events
+**Area:** Infrastructure
+**Priority:** Medium
+**Release Target:** v1.1.0
+**Complexity:** Low
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+Instrument SMS auth flow to track ghost-user creation risk and auth funnel health.
+
+**Scope / Requirements:**
+- Fire phone_auth_started when OTP is requested
+- Fire phone_auth_completed when OTP is verified successfully
+- Fire phone_auth_duplicate_detected when phone auth appears to match an existing email account
+- Use existing analytics utility — do not add a new event tracking layer
+
+---
+
+### F089 — Duplicate Auth Detection View
+**Area:** Admin
+**Priority:** Medium
+**Release Target:** v1.1.0
+**Complexity:** Low
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+Read-only Supabase view for admin use to surface potential ghost-user pairs — email + phone accounts created close together that likely belong to the same person.
+
+**Scope / Requirements:**
+- View or RPC named admin_duplicate_auth_candidates
+- Logic: auth accounts created within 48h of each other sharing display name or device metadata (if available)
+- Read-only — no writes
+- RLS: admin role only
+
+---
+
+### F090 — Insights Teaser on Home + Milestone Cards
+**Area:** Insights
+**Priority:** High
+**Release Target:** v1.1.0
+**Complexity:** Medium
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+Drives organic premium conversion by making palate intelligence visible on Home before users navigate to Insights.
+
+**Scope / Requirements:**
+- 2 palate trait teasers on Home — visible to all users, not gated
+- "Unlock full breakdown" CTA gated by RevenueCat entitlement "premium"
+- Milestone cards on Home:
+  - "Your palate is starting to form" — at 5 tastings
+  - "Clear preferences emerging" — at 15 tastings
+- Milestone logic computed in Supabase function/view — not client-side
+- Milestone cards link to Insights screen
+- Tie to push notifications if infrastructure exists (F020)
+
+**Rules:**
+- L2/L3 flavor notes are the primary signal — L1 fallback only
+- Do not mix L1 and L2/L3 in the same insight
+- whiskey_type_id preferred over broad category for any type-based signals
+
+**Dependencies:**
+- F020 — Push Notification System (for milestone notification trigger)
+- F084 — Home Redesign (cards live here)
+
+---
+
+### F091 — Recommendations Foundation
+**Area:** Insights
+**Priority:** High
+**Release Target:** v1.1.0
+**Complexity:** Medium
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+SQL-based similarity engine powering the Home recommendations rail. No ML required for v1 — pure flavor and type overlap is enough to ship something real.
+
+**Scope / Requirements:**
+- Supabase RPC: get_recommendations_for_user(user_id uuid)
+- Input signals: user's top L2/L3 flavor affinities + top whiskey_type_id
+- Logic: find users with similar profiles, return highly rated bottles this user hasn't logged
+- Returns max 10 results: bottle_id, name, distillery, avg_community_rating, match_reason (text label)
+- RPC must respect RLS — only anonymous/aggregate cross-user data
+- Placeholder state on Home rail if user has <5 tastings: "Log more tastings to unlock recommendations"
+
+**Dependencies:**
+- F084 — Home Redesign (rail lives here)
+
+---
+
+### F092 — Community Pulse Modules
+**Area:** UX
+**Priority:** Medium
+**Release Target:** v1.1.0
+**Complexity:** Medium
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+Makes the app feel alive and social without requiring user profiles or follows. Anonymous community aggregate data surfaced on Home.
+
+**Scope / Requirements:**
+- Trending this week: most-logged bottles in last 7 days, minimum 3 logs to surface
+- Highest rated: community avg rating, minimum 5 logs to surface
+- Both modules backed by Supabase views (materialized or scheduled refresh) — never computed in app
+- Anonymous aggregates only — no user data exposed
+
+**Dependencies:**
+- F084 — Home Redesign (modules live here)
+
+---
+
 ## Section Indexes
 
 ### Events
@@ -572,6 +793,8 @@ Host-facing post-event analytics report generated on demand from Supabase event 
 - F007 — Add user_id filters to profile queries (v1.1.0)
 - F026 — Phone Number Sign-In ✅ Done
 - F049 — Account Settings — Add / Change Phone Number ✅ Done
+- F087 — Google Sign-In 🔨 In Progress (v1.1.0)
+- F093 — Phone-First Signup Flow Redesign ✅ Done (v1.1.0)
 
 ### Analytics
 - F002 — Fix Host Analytics Event Snapshot metrics ✅ Done
@@ -590,6 +813,8 @@ Host-facing post-event analytics report generated on demand from Supabase event 
 - F041 — Insights Summary Tab Restructure ✅ Done
 - F042 — Hero Card with Here's Why Bullets ✅ Done
 - F045 — Whiskey Type Correlation Insights (v1.1.0)
+- F090 — Insights Teaser on Home + Milestone Cards (v1.1.0)
+- F091 — Recommendations Foundation (v1.1.0)
 
 ### Tasting
 - F001 — All Tastings Page Revamp ✅ Done
@@ -625,6 +850,10 @@ Host-facing post-event analytics report generated on demand from Supabase event 
 - F069 — Whiskey Profile Page Rework (v1.1.0)
 - F074 — Header Title Audit (v1.0.9)
 - F077 — Host an Event Profile CTA ✅ Done
+- F084 — Home Screen Redesign (v1.1.0)
+- F085 — Guided New User Onboarding (v1.1.0)
+- F086 — What's New Modal (v1.1.0)
+- F092 — Community Pulse Modules (v1.1.0)
 
 ### Admin
 - F059 — Admin Dashboard Redesign ✅ Done
@@ -635,6 +864,7 @@ Host-facing post-event analytics report generated on demand from Supabase event 
 - F068 — Candidate Review Pre-Promotion Metadata Validation (v1.1.0)
 - F078 — Role Management Admin Screen ✅ Done
 - F079 — Venue Request Admin Screen ✅ Done
+- F089 — Duplicate Auth Detection View (v1.1.0)
 
 ### Infrastructure
 - F004 — Verify personal_notes in public mirror ✅ Done
@@ -655,6 +885,7 @@ Host-facing post-event analytics report generated on demand from Supabase event 
 - F062 — Fuzzy Duplicate Detection RPC ✅ Done
 - F063 — search_whiskeys RPC ✅ Done
 - F070 — Catalog Duplicate Audit Bulk Brands (v1.1.0)
+- F088 — Phone Auth Analytics Events (v1.1.0)
 
 ### Website
 - F035 — Core Marketing Site (Website)
@@ -676,7 +907,7 @@ Host-facing post-event analytics report generated on demand from Supabase event 
 | v1.0.7 | May 1, 2026 | Events system | ✅ Done | Event system: check-in flow, event page refactor, host view, Supabase sync |
 | v1.0.8 | May 10, 2026 | Auth revamp, UX polish, barcode, analytics | ✅ Done | All Tastings revamp, auth revamp (confirm password, two-step verification, phone sign-in), account settings phone management, app store review prompt, paywall analytics funnel, single-tap actions on recent tastings, category mix → whiskey_type, bulletproof barcode flow, duplicate email fix, change phone fix, Log Again inline, insights analytics premium gate, nav bar fix (unstable_settings + font gate), whiskey catalog import groundwork |
 | v1.0.9 | TBD | Final UI push — catalog, discovery & web foundation | 💡 Planning | **Shipped:** admin dashboard redesign (F059), new admin KPIs + Monetization tab (F060), admin reject RPC fix (F061), find_duplicate_whiskey_candidates RPC (F062), search_whiskeys RPC (F063), full-screen search modal (F064), submission-time duplicate detection (F065). **In queue (priority order):** whiskey card revamp (F050), Go-UPC fallback + bottle images (F053, alongside F050), user submit edits for whiskey records (F054), web platform consolidation neatnotes-web → neatnotesapp.com (F058), fuzzy/trigram search app-side wiring (F055, confirm F063 coverage first), search relevance ranking app-side wiring (F057, confirm F063 coverage first) |
-| v1.1.0 | TBD | Intelligence, Catalog & Social | 💡 Planning | Whiskey card revamp, Hero Card, Go-UPC fallback + bottle images, shareable flavor profile card, push notifications, custom whiskey submission redesign, whiskey type correlation insights, candidate review duplicate detection panel (F066), candidate review merge target on reject (F067), candidate review pre-promotion validation (F068), whiskey profile page rework (F069), catalog duplicate audit bulk brands (F070), Export Analytics (F071) |
+| v1.1.0 | TBD | "Your palate comes into focus" — shift from journal to palate intelligence platform | 💡 Planning | Whiskey card revamp, Hero Card, Go-UPC fallback + bottle images, shareable flavor profile card, push notifications, custom whiskey submission redesign, whiskey type correlation insights, candidate review duplicate detection panel (F066), candidate review merge target on reject (F067), candidate review pre-promotion validation (F068), whiskey profile page rework (F069), catalog duplicate audit bulk brands (F070), Export Analytics (F071), Home redesign (F084), guided onboarding (F085), What's New modal (F086), Google Sign-In (F087 — code complete, pending build), phone auth analytics (F088), duplicate auth view (F089), Insights teaser + milestone cards on Home (F090), recommendations foundation (F091), Community Pulse modules (F092), phone-first signup flow (F093 ✅ Done) |
 | v1.1.1 | TBD | Venue Foundation & Analytics Revamp | 💡 Planning | Venue check-in infrastructure, tastings mapped to venues, event host analytics revamp, Bar/Venue Menu feature |
 | v1.1.2 | TBD | B2B Monetization | 💡 Planning | Venue owner analytics dashboard, B2B access & subscription model, Palate Match for venue menus |
 | v1.2.0 | TBD | Location Platform | 💡 Planning | Location foundation, nearby whiskey alerts, bar discovery fed by venue data, event discovery by location |
@@ -689,6 +920,13 @@ Host-facing post-event analytics report generated on demand from Supabase event 
 
 | Date | Update |
 |---|---|
+| May 18, 2026 | F093 added and shipped — Phone-First Signup Flow Redesign. Phone-first OTP path creates account with phone as primary identity via signInWithOtp (shouldCreateUser: true). Email + password linked after OTP verification via linkIdentity + updateUser. Email-only fallback retained. |
+| May 18, 2026 | F087 — Google Sign-In implementation committed. Supabase OAuth via expo-auth-session, PKCE + implicit flow handling, GoogleSignInButton + OrDivider components added to sign-in.tsx. iOS client ID wired in app.config.js. Pending production build. |
+| May 18, 2026 | F058 updated to 🔨 In Progress — May 18 codebase audit confirms all app code points to neatnotesapp.com. Auth/callback and password reset migration still pending. |
+| May 18, 2026 | F026 updated — description revised to reference phone-first signup redesign (F093) shipped today. |
+| May 18, 2026 | Phone auth ghost account bug fixed — sendSignUpOtp now calls updateUser({ phone }) instead of signInWithOtp, preventing creation of a second auth user. Session guard added: signInWithPassword called if no active session before updateUser. |
+| May 18, 2026 | Sign-in bug fixes shipped: verifyOtp type now dynamic (sms vs phone_change based on context), profiles.update wrapped in non-fatal try/catch in verifyOtp signup branch and verifyPhoneLinkOtp, remove-phone flow guarded with try/catch/finally so setBusy(false) always fires. |
+| May 17, 2026 | F084–F092 added — v1.1.0 epics scoped: Home redesign, guided onboarding, What's New modal, Google Sign-In, phone auth analytics, duplicate auth detection, Insights teaser + milestone cards, recommendations foundation, Community Pulse |
 | May 15, 2026 | F082, F083 added and shipped — QR event sharing with deep link join flow, event location with venue search. New tables: event_attendees. New RPCs: join_event. New components: EventQRModal. New libs: eventAttendees.ts, venueSearch.ts. |
 | May 15, 2026 | F079 added and shipped — Venue Request Admin Screen. Admin can review, approve with role assignment, and reject venue applications. Two RPCs written manually in Supabase. |
 | May 14, 2026 | F074-F078 added. Role management infrastructure complete (user_roles, app_role enum, RPCs, useRoles hook). Host an Event flow shipped: Profile CTA, My Events screen, Create Event two-step form. Admin index redesigned. Native build triggered with datetimepicker, expo-notifications, expo-location, expo-media-library installed. |
