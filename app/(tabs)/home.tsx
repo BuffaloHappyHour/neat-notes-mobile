@@ -1,7 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
 import * as StoreReview from "expo-store-review";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { clearActiveEventId, getActiveEventId } from "../../lib/eventStorage";
 import { radii } from "../../lib/radii";
@@ -15,13 +15,8 @@ import { logClientEvent } from "../../lib/clientLog";
 import { withTick } from "../../lib/hapticsPress";
 
 import { type RecommendationItem, useHomeStats } from "../../src/home/hooks/useHomeStats";
-import { WhatToDrinkNext } from "../../src/home/components/WhatToDrinkNext";
 import { getTierCopy } from "../../src/palate/constants/palateTiers";
 import type { PalateClarityTierLabel } from "../../src/palate/palateClarity.service";
-import { RadarChart } from "../../src/profile/insights/components/RadarChart";
-import { useInsightsData } from "../../src/profile/insights/hooks/useInsightsData";
-
-type RadarAxis = { key: string; label: string; value: number };
 
 const warmCardShadow = {
   ...shadows.card,
@@ -159,21 +154,123 @@ function OnboardingNote({ tastingCount }: { tastingCount: number }) {
   );
 }
 
+const TIERS: PalateClarityTierLabel[] = [
+  "Emerging",
+  "Developing",
+  "Defining",
+  "Refining",
+  "Signature Palate",
+];
+
+function TierJourney({
+  clarityIndex: _clarityIndex,
+  tierLabel,
+}: {
+  clarityIndex: number | null;
+  tierLabel: PalateClarityTierLabel | null;
+}) {
+  const currentIndex = Math.max(0, TIERS.indexOf(tierLabel ?? "Emerging"));
+
+  return (
+    <View style={{ width: "100%", paddingVertical: spacing.md }}>
+      {/* Node row */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          height: 14,
+        }}
+      >
+        {/* Connector line */}
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            height: 1,
+            backgroundColor: colors.borderStrong,
+            top: 6,
+            zIndex: 0,
+          }}
+        />
+        {/* Nodes */}
+        {TIERS.map((tier, i) => {
+          const isCurrent = i === currentIndex;
+          const isPastOrCurrent = i <= currentIndex;
+          const nodeSize = isCurrent ? 14 : 10;
+          return (
+            <View
+              key={tier}
+              style={{
+                width: nodeSize,
+                height: nodeSize,
+                borderRadius: nodeSize / 2,
+                backgroundColor: isPastOrCurrent ? colors.accent : colors.background,
+                borderWidth: 1,
+                borderColor: isPastOrCurrent ? colors.accent : colors.borderStrong,
+                zIndex: 1,
+                ...(isCurrent
+                  ? {
+                      shadowColor: colors.accent,
+                      shadowOpacity: 0.6,
+                      shadowRadius: 6,
+                      shadowOffset: { width: 0, height: 0 },
+                      elevation: 4,
+                    }
+                  : {}),
+              }}
+            />
+          );
+        })}
+      </View>
+
+      {/* Labels */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginTop: 8,
+        }}
+      >
+        {TIERS.map((tier, i) => {
+          const isCurrent = i === currentIndex;
+          const label = tier === "Signature Palate" ? "Signature\nPalate" : tier;
+          return (
+            <Text
+              key={tier}
+              style={[
+                type.caption,
+                {
+                  flex: 1,
+                  textAlign: "center",
+                  color: isCurrent ? colors.accent : colors.textMuted,
+                  fontWeight: isCurrent ? "700" : undefined,
+                },
+              ]}
+            >
+              {label}
+            </Text>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function InsightsTeaser({
   topAffinities,
   clarityIndex,
+  tierLabel,
   isPremium,
-  radarAxes,
   onPress,
 }: {
   topAffinities: string[];
   clarityIndex: number | null;
+  tierLabel: PalateClarityTierLabel | null;
   isPremium: boolean;
-  radarAxes: RadarAxis[];
   onPress: () => void;
 }) {
-  const hasEnoughData = radarAxes.length >= 3;
-
   return (
     <View
       style={{
@@ -213,40 +310,8 @@ function InsightsTeaser({
         </Text>
       )}
 
-      {/* Radar chart with blur overlay */}
-      <View style={{ alignSelf: "center", width: 220, height: 220, overflow: "hidden" }}>
-        {hasEnoughData ? (
-          <RadarChart axes={radarAxes} size={220} showLabels={true} />
-        ) : (
-          <View
-            style={{
-              width: 220,
-              height: 220,
-              backgroundColor: colors.surfaceSunken,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: colors.accentFaint,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Text style={[type.microcopyItalic, { color: colors.textTertiary, textAlign: "center" }]}>
-              Your flavor map is building.
-            </Text>
-          </View>
-        )}
-        {!isPremium && (
-          <View
-            style={[
-              StyleSheet.absoluteFillObject,
-              {
-                backgroundColor: colors.background,
-                opacity: 0.72,
-              },
-            ]}
-          />
-        )}
-      </View>
+      {/* Tier journey */}
+      <TierJourney clarityIndex={clarityIndex} tierLabel={tierLabel} />
 
       {/* CTA */}
       <Pressable
@@ -275,6 +340,70 @@ function InsightsTeaser({
         </Text>
       </Pressable>
     </View>
+  );
+}
+
+function RecommendationRow({
+  name,
+  type: whiskeyType,
+  onPress,
+  blurred,
+  onUnlock,
+}: {
+  name: string;
+  type: string | null;
+  onPress: () => void;
+  blurred?: boolean;
+  onUnlock?: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingVertical: 12,
+        borderBottomWidth: 0.5,
+        borderBottomColor: colors.borderSubtle,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          opacity: blurred ? 0.3 : 1,
+        }}
+        pointerEvents={blurred ? "none" : "auto"}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={[type.sectionHeader, { fontSize: 16, color: colors.textPrimary }]}>
+            {name}
+          </Text>
+          {whiskeyType ? (
+            <Text style={[type.caption, { color: colors.textSecondary }]}>
+              {whiskeyType}
+            </Text>
+          ) : null}
+        </View>
+        <Text style={[type.sectionHeader, { color: colors.accent }]}>›</Text>
+      </View>
+      {blurred && onUnlock ? (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Pressable onPress={onUnlock}>
+            <Text style={[type.caption, { color: colors.accent }]}>Unlock Insights →</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -691,8 +820,6 @@ export default function HomeTab() {
     statsLoading,
   } = useHomeStats();
 
-  const insightsData = useInsightsData();
-
   const [featured, setFeatured] = React.useState<{
     whiskeyId: string;
     name: string;
@@ -922,7 +1049,7 @@ export default function HomeTab() {
     []
   );
 
-  // Map recommendations to WhatToDrinkNext row shape
+  // Map recommendations to row shape
   const recRows = useMemo(
     () =>
       recommendations.map((r: RecommendationItem) => ({
@@ -934,9 +1061,7 @@ export default function HomeTab() {
     [recommendations]
   );
 
-  const showRecommendations = isAuthed && recRows.length > 0;
-  const showRecommendationFallback =
-    isAuthed && tastingCount !== null && tastingCount >= 5 && recRows.length === 0;
+  const visibleRecs = recRows.slice(0, 2);
 
   return (
     <ScrollView
@@ -1103,15 +1228,15 @@ export default function HomeTab() {
             <InsightsTeaser
               topAffinities={topAffinities}
               clarityIndex={clarityIndex}
+              tierLabel={tierLabel}
               isPremium={isPremium}
-              radarAxes={insightsData.axes}
               onPress={goInsightsTeaser}
             />
           </View>
         ) : null}
 
         {/* ── What to Drink Next ──────────────────────────────────────────── */}
-        {(showRecommendations || showRecommendationFallback || !!featured) ? (
+        {(visibleRecs.length > 0 || !!featured) ? (
           <View style={{ gap: 6 }}>
             <Text style={[type.sectionHeader, { fontSize: 22, color: colors.textPrimary }]}>
               What to Drink Next
@@ -1127,22 +1252,30 @@ export default function HomeTab() {
                 ...warmCardShadow,
               }}
             >
-              {showRecommendations ? (
-                <WhatToDrinkNext
-                  featured={null}
-                  recommendations={recRows}
-                  onPress={(id) => {
-                    logPress("home_recommendation_tap", `/whiskey/${id}`);
-                    router.push(`/whiskey/${encodeURIComponent(id)}`);
-                  }}
-                />
-              ) : showRecommendationFallback ? (
+              {visibleRecs.length > 0 ? (
+                <View>
+                  {visibleRecs.map((rec, idx) => (
+                    <RecommendationRow
+                      key={rec.whiskeyId}
+                      name={rec.whiskeyName}
+                      type={rec.whiskeyType ?? null}
+                      blurred={!isPremium && idx === 1}
+                      onPress={() => {
+                        if (!isPremium && idx === 1) return;
+                        logPress("home_recommendation_tap", `/whiskey/${rec.whiskeyId}`);
+                        router.push(`/whiskey/${encodeURIComponent(rec.whiskeyId)}`);
+                      }}
+                      onUnlock={goInsightsTeaser}
+                    />
+                  ))}
+                </View>
+              ) : (
                 <Text style={[type.microcopyItalic, { color: colors.textTertiary }]}>
                   Recommendations sharpen as you log more tastings.
                 </Text>
-              ) : null}
+              )}
 
-              {(showRecommendations || showRecommendationFallback) && !!featured ? (
+              {visibleRecs.length > 0 && !!featured ? (
                 <View style={{ height: 1, backgroundColor: colors.borderSubtle }} />
               ) : null}
 
