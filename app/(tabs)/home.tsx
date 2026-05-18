@@ -15,6 +15,7 @@ import { logClientEvent } from "../../lib/clientLog";
 import { withTick } from "../../lib/hapticsPress";
 
 import { type RecommendationItem, useHomeStats } from "../../src/home/hooks/useHomeStats";
+import { InsightsCTA } from "../../src/profile/components/InsightsCTA";
 import { getTierCopy } from "../../src/palate/constants/palateTiers";
 import type { PalateClarityTierLabel } from "../../src/palate/palateClarity.service";
 
@@ -38,21 +39,71 @@ function StatCell({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PalateIdentityCard({
+function OnboardingNote({ tastingCount }: { tastingCount: number }) {
+  const body =
+    tastingCount === 0
+      ? "Log your first tasting. Choose flavor notes — that's what Neat Notes learns from."
+      : tastingCount <= 2
+      ? "Good start. Add flavor notes to your next tasting to sharpen your palate profile."
+      : "You're close to your first Insights. Keep logging with flavor notes.";
+
+  return (
+    <View
+      style={{
+        borderLeftWidth: 1.5,
+        borderLeftColor: colors.accent,
+        backgroundColor: colors.accentFaint,
+        paddingLeft: 10,
+        paddingRight: spacing.md,
+        paddingVertical: 12,
+        borderTopRightRadius: 3,
+        borderBottomRightRadius: 3,
+      }}
+    >
+      <Text style={[type.labelCaps, { color: colors.accent, marginBottom: 4 }]}>
+        Getting started
+      </Text>
+      <Text style={[type.microcopyItalic, { color: colors.textPrimary, opacity: 0.88 }]}>
+        {body}
+      </Text>
+    </View>
+  );
+}
+
+const PALATE_3_NODES = [
+  { label: "Emerging" },
+  { label: "Defining" },
+  { label: "Signature" },
+];
+
+function get3NodeIndex(tierLabel: PalateClarityTierLabel | null): number {
+  if (!tierLabel || tierLabel === "Emerging") return 0;
+  if (tierLabel === "Developing" || tierLabel === "Defining") return 1;
+  return 2;
+}
+
+function PalateInsightsCard({
   tierLabel,
   clarityIndex,
   tastingCount,
   avgRating,
+  topAffinities,
+  isPremium,
   onPress,
+  onInsightsCTA,
 }: {
   tierLabel: PalateClarityTierLabel | null;
   clarityIndex: number | null;
   tastingCount: number | null;
   avgRating: number | null;
+  topAffinities: string[];
+  isPremium: boolean;
   onPress: () => void;
+  onInsightsCTA: () => void;
 }) {
   const clarity = clarityIndex ?? 0;
   const fillPct = `${Math.min(100, clarity)}%` as `${number}%`;
+  const currentNode = get3NodeIndex(tierLabel);
 
   return (
     <Pressable
@@ -100,7 +151,7 @@ function PalateIdentityCard({
         />
       </View>
 
-      {/* Stat row: Tastings + Avg Rating only, centered */}
+      {/* Stat row: Tastings + Avg Rating */}
       <View
         style={{
           flexDirection: "row",
@@ -119,171 +170,6 @@ function PalateIdentityCard({
           value={avgRating === null ? "—" : avgRating.toFixed(1)}
         />
       </View>
-    </Pressable>
-  );
-}
-
-function OnboardingNote({ tastingCount }: { tastingCount: number }) {
-  const body =
-    tastingCount === 0
-      ? "Log your first tasting. Choose flavor notes — that's what Neat Notes learns from."
-      : tastingCount <= 2
-      ? "Good start. Add flavor notes to your next tasting to sharpen your palate profile."
-      : "You're close to your first Insights. Keep logging with flavor notes.";
-
-  return (
-    <View
-      style={{
-        borderLeftWidth: 1.5,
-        borderLeftColor: colors.accent,
-        backgroundColor: colors.accentFaint,
-        paddingLeft: 10,
-        paddingRight: spacing.md,
-        paddingVertical: 12,
-        borderTopRightRadius: 3,
-        borderBottomRightRadius: 3,
-      }}
-    >
-      <Text style={[type.labelCaps, { color: colors.accent, marginBottom: 4 }]}>
-        Getting started
-      </Text>
-      <Text style={[type.microcopyItalic, { color: colors.textPrimary, opacity: 0.88 }]}>
-        {body}
-      </Text>
-    </View>
-  );
-}
-
-const TIERS: PalateClarityTierLabel[] = [
-  "Emerging",
-  "Developing",
-  "Defining",
-  "Refining",
-  "Signature Palate",
-];
-
-function TierJourney({
-  clarityIndex: _clarityIndex,
-  tierLabel,
-}: {
-  clarityIndex: number | null;
-  tierLabel: PalateClarityTierLabel | null;
-}) {
-  const currentIndex = Math.max(0, TIERS.indexOf(tierLabel ?? "Emerging"));
-
-  return (
-    <View style={{ width: "100%", paddingVertical: spacing.md }}>
-      {/* Node row */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          height: 14,
-        }}
-      >
-        {/* Connector line */}
-        <View
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            height: 1,
-            backgroundColor: colors.borderStrong,
-            top: 6,
-            zIndex: 0,
-          }}
-        />
-        {/* Nodes */}
-        {TIERS.map((tier, i) => {
-          const isCurrent = i === currentIndex;
-          const isPastOrCurrent = i <= currentIndex;
-          const nodeSize = isCurrent ? 14 : 10;
-          return (
-            <View
-              key={tier}
-              style={{
-                width: nodeSize,
-                height: nodeSize,
-                borderRadius: nodeSize / 2,
-                backgroundColor: isPastOrCurrent ? colors.accent : colors.background,
-                borderWidth: 1,
-                borderColor: isPastOrCurrent ? colors.accent : colors.borderStrong,
-                zIndex: 1,
-                ...(isCurrent
-                  ? {
-                      shadowColor: colors.accent,
-                      shadowOpacity: 0.6,
-                      shadowRadius: 6,
-                      shadowOffset: { width: 0, height: 0 },
-                      elevation: 4,
-                    }
-                  : {}),
-              }}
-            />
-          );
-        })}
-      </View>
-
-      {/* Labels */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          marginTop: 8,
-        }}
-      >
-        {TIERS.map((tier, i) => {
-          const isCurrent = i === currentIndex;
-          const label = tier === "Signature Palate" ? "Signature\nPalate" : tier;
-          return (
-            <Text
-              key={tier}
-              style={[
-                type.caption,
-                {
-                  flex: 1,
-                  textAlign: "center",
-                  color: isCurrent ? colors.accent : colors.textMuted,
-                  fontWeight: isCurrent ? "700" : undefined,
-                },
-              ]}
-            >
-              {label}
-            </Text>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-function InsightsTeaser({
-  topAffinities,
-  clarityIndex,
-  tierLabel,
-  isPremium,
-  onPress,
-}: {
-  topAffinities: string[];
-  clarityIndex: number | null;
-  tierLabel: PalateClarityTierLabel | null;
-  isPremium: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <View
-      style={{
-        borderRadius: radii.lg,
-        borderWidth: 1,
-        borderColor: colors.glassBorder,
-        backgroundColor: colors.glassSurface,
-        padding: spacing.cardPadding,
-        gap: spacing.sm,
-        ...warmCardShadow,
-      }}
-    >
-      <Text style={[type.labelCaps, { color: colors.accent }]}>YOUR PALATE SIGNATURE</Text>
 
       {/* Flavor chips */}
       {topAffinities.length > 0 ? (
@@ -310,83 +196,145 @@ function InsightsTeaser({
         </Text>
       )}
 
-      {/* Tier journey */}
-      <TierJourney clarityIndex={clarityIndex} tierLabel={tierLabel} />
-
-      {/* CTA */}
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => ({
-          alignSelf: "stretch",
-          paddingVertical: 11,
-          borderRadius: 999,
-          alignItems: "center",
-          backgroundColor: isPremium ? colors.accent : colors.accentSoft,
-          borderWidth: isPremium ? 0 : 1,
-          borderColor: colors.borderStrong,
-          opacity: pressed ? 0.8 : 1,
-        })}
-      >
-        <Text
-          style={[
-            type.caption,
-            {
-              color: isPremium ? colors.background : colors.accent,
-              fontWeight: "700",
-            },
-          ]}
+      {/* 3-node tier progression */}
+      <View style={{ width: "100%", paddingVertical: spacing.sm }}>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            height: 14,
+          }}
         >
-          {isPremium ? "View Full Insights" : "Unlock Insights →"}
-        </Text>
+          {/* Connector line */}
+          <View
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              height: 1,
+              backgroundColor: colors.borderStrong,
+              top: 6,
+              zIndex: 0,
+            }}
+          />
+          {/* Nodes */}
+          {PALATE_3_NODES.map((node, i) => {
+            const isCurrent = i === currentNode;
+            const isPastOrCurrent = i <= currentNode;
+            const nodeSize = isCurrent ? 14 : 10;
+            return (
+              <View
+                key={node.label}
+                style={{
+                  width: nodeSize,
+                  height: nodeSize,
+                  borderRadius: nodeSize / 2,
+                  backgroundColor: isPastOrCurrent ? colors.accent : colors.background,
+                  borderWidth: 1,
+                  borderColor: isPastOrCurrent ? colors.accent : colors.borderStrong,
+                  zIndex: 1,
+                  ...(isCurrent
+                    ? {
+                        shadowColor: colors.accent,
+                        shadowOpacity: 0.6,
+                        shadowRadius: 6,
+                        shadowOffset: { width: 0, height: 0 },
+                        elevation: 4,
+                      }
+                    : {}),
+                }}
+              />
+            );
+          })}
+        </View>
+
+        {/* Node labels */}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            marginTop: 8,
+          }}
+        >
+          {PALATE_3_NODES.map((node, i) => (
+            <Text
+              key={node.label}
+              style={[
+                type.caption,
+                {
+                  flex: 1,
+                  textAlign: "center",
+                  color: i === currentNode ? colors.accent : colors.textMuted,
+                  fontWeight: i === currentNode ? "700" : undefined,
+                },
+              ]}
+            >
+              {node.label}
+            </Text>
+          ))}
+        </View>
+      </View>
+
+      {/* Compact InsightsCTA — inner Pressable stops propagation to card */}
+      <Pressable onPress={(e) => { e.stopPropagation?.(); }}>
+        <InsightsCTA isPremium={isPremium} compact={true} onPress={onInsightsCTA} />
       </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
-function RecommendationRow({
+function DrinkNextCard({
   name,
-  type: whiskeyType,
+  whiskeyType,
+  reason,
   onPress,
   blurred,
   onUnlock,
 }: {
   name: string;
-  type: string | null;
+  whiskeyType: string | null;
+  reason: string | null;
   onPress: () => void;
   blurred?: boolean;
   onUnlock?: () => void;
 }) {
   return (
     <Pressable
-      onPress={onPress}
-      style={{
-        paddingVertical: 12,
-        borderBottomWidth: 0.5,
-        borderBottomColor: colors.borderSubtle,
-      }}
+      onPress={blurred ? onUnlock : onPress}
+      style={({ pressed }) => ({
+        width: 160,
+        marginRight: spacing.sm,
+        borderRadius: radii.lg,
+        borderWidth: 1,
+        borderColor: colors.borderStrong,
+        backgroundColor: colors.glassSurface,
+        padding: spacing.md,
+        opacity: pressed ? 0.9 : 1,
+      })}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          opacity: blurred ? 0.3 : 1,
-        }}
-        pointerEvents={blurred ? "none" : "auto"}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={[type.sectionHeader, { fontSize: 16, color: colors.textPrimary }]}>
-            {name}
+      <View style={{ opacity: blurred ? 0.3 : 1 }}>
+        <Text
+          style={[type.sectionHeader, { fontSize: 15, color: colors.textPrimary }]}
+          numberOfLines={2}
+        >
+          {name}
+        </Text>
+        {whiskeyType ? (
+          <Text style={[type.caption, { color: colors.textSecondary, marginTop: 4 }]}>
+            {whiskeyType}
           </Text>
-          {whiskeyType ? (
-            <Text style={[type.caption, { color: colors.textSecondary }]}>
-              {whiskeyType}
-            </Text>
-          ) : null}
-        </View>
-        <Text style={[type.sectionHeader, { color: colors.accent }]}>›</Text>
+        ) : null}
+        {reason ? (
+          <Text
+            style={[type.microcopyItalic, { color: colors.textTertiary, marginTop: spacing.xs }]}
+            numberOfLines={2}
+          >
+            {reason}
+          </Text>
+        ) : null}
       </View>
-      {blurred && onUnlock ? (
+      {blurred ? (
         <View
           style={{
             position: "absolute",
@@ -398,9 +346,7 @@ function RecommendationRow({
             alignItems: "center",
           }}
         >
-          <Pressable onPress={onUnlock}>
-            <Text style={[type.caption, { color: colors.accent }]}>Unlock Insights →</Text>
-          </Pressable>
+          <Text style={[type.caption, { color: colors.accent }]}>Unlock →</Text>
         </View>
       ) : null}
     </Pressable>
@@ -1158,6 +1104,7 @@ export default function HomeTab() {
               style={({ pressed }) => ({
                 flex: 1,
                 paddingVertical: 12,
+                paddingHorizontal: spacing.md,
                 borderRadius: 999,
                 alignItems: "center",
                 backgroundColor: colors.accentFaint,
@@ -1174,6 +1121,7 @@ export default function HomeTab() {
               style={({ pressed }) => ({
                 flex: 1,
                 paddingVertical: 12,
+                paddingHorizontal: spacing.md,
                 borderRadius: 999,
                 alignItems: "center",
                 backgroundColor: colors.accentFaint,
@@ -1189,25 +1137,33 @@ export default function HomeTab() {
           <View style={{ height: 1, backgroundColor: colors.glassDivider, marginTop: spacing.md }} />
         </View>
 
-        {/* ── Palate Identity Card ────────────────────────────────────────── */}
+        {/* ── YOUR PALATE (merged PalateInsightsCard) ─────────────────────── */}
         {isAuthed ? (
           <View style={{ gap: 6 }}>
             <Text style={[type.sectionHeader, { fontSize: 22, color: colors.textPrimary }]}>
               YOUR PALATE
             </Text>
-            <PalateIdentityCard
+            <PalateInsightsCard
               tierLabel={tierLabel}
               clarityIndex={clarityIndex}
               tastingCount={tastingCount}
               avgRating={avgRating}
+              topAffinities={topAffinities}
+              isPremium={isPremium}
               onPress={goPalateCard}
+              onInsightsCTA={goInsightsTeaser}
             />
           </View>
         ) : null}
 
-        {/* ── Onboarding note ─────────────────────────────────────────────── */}
+        {/* ── Onboarding Note ─────────────────────────────────────────────── */}
         {isAuthed && tastingCount !== null && tastingCount < 5 ? (
           <OnboardingNote tastingCount={tastingCount} />
+        ) : null}
+
+        {/* ── InsightsCTA (full, for new users) ───────────────────────────── */}
+        {isAuthed && tastingCount !== null && tastingCount < 5 ? (
+          <InsightsCTA isPremium={false} compact={false} onPress={goInsightsTeaser} />
         ) : null}
 
         {/* ── Active Event ────────────────────────────────────────────────── */}
@@ -1219,76 +1175,58 @@ export default function HomeTab() {
           />
         ) : null}
 
-        {/* ── Insights Teaser ─────────────────────────────────────────────── */}
-        {isAuthed && tastingCount !== null && tastingCount >= 5 ? (
-          <View style={{ gap: 6 }}>
-            <Text style={[type.sectionHeader, { fontSize: 22, color: colors.textPrimary }]}>
-              INSIGHTS
-            </Text>
-            <InsightsTeaser
-              topAffinities={topAffinities}
-              clarityIndex={clarityIndex}
-              tierLabel={tierLabel}
-              isPremium={isPremium}
-              onPress={goInsightsTeaser}
-            />
-          </View>
-        ) : null}
-
         {/* ── What to Drink Next ──────────────────────────────────────────── */}
         {(visibleRecs.length > 0 || !!featured) ? (
           <View style={{ gap: 6 }}>
             <Text style={[type.sectionHeader, { fontSize: 22, color: colors.textPrimary }]}>
               What to Drink Next
             </Text>
-            <View
-              style={{
-                borderRadius: radii.lg,
-                borderWidth: 1,
-                borderColor: colors.glassBorder,
-                backgroundColor: colors.glassSurface,
-                padding: spacing.cardPadding,
-                gap: spacing.md,
-                ...warmCardShadow,
-              }}
-            >
-              {visibleRecs.length > 0 ? (
-                <View>
-                  {visibleRecs.map((rec, idx) => (
-                    <RecommendationRow
-                      key={rec.whiskeyId}
-                      name={rec.whiskeyName}
-                      type={rec.whiskeyType ?? null}
-                      blurred={!isPremium && idx === 1}
-                      onPress={() => {
-                        if (!isPremium && idx === 1) return;
-                        logPress("home_recommendation_tap", `/whiskey/${rec.whiskeyId}`);
-                        router.push(`/whiskey/${encodeURIComponent(rec.whiskeyId)}`);
-                      }}
-                      onUnlock={goInsightsTeaser}
-                    />
-                  ))}
-                </View>
-              ) : (
-                <Text style={[type.microcopyItalic, { color: colors.textTertiary }]}>
-                  Recommendations sharpen as you log more tastings.
-                </Text>
-              )}
 
-              {visibleRecs.length > 0 && !!featured ? (
-                <View style={{ height: 1, backgroundColor: colors.borderSubtle }} />
-              ) : null}
+            {visibleRecs.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: spacing.lg }}
+                style={{ marginHorizontal: -spacing.lg }}
+              >
+                {visibleRecs.map((rec, idx) => (
+                  <DrinkNextCard
+                    key={rec.whiskeyId}
+                    name={rec.whiskeyName}
+                    whiskeyType={rec.whiskeyType ?? null}
+                    reason={
+                      topAffinities[0]
+                        ? `Matches your ${topAffinities[0]} affinity`
+                        : null
+                    }
+                    blurred={!isPremium && idx >= 1}
+                    onPress={() => {
+                      logPress("home_recommendation_tap", `/whiskey/${rec.whiskeyId}`);
+                      router.push(`/whiskey/${encodeURIComponent(rec.whiskeyId)}`);
+                    }}
+                    onUnlock={goInsightsTeaser}
+                  />
+                ))}
+              </ScrollView>
+            ) : (
+              <Text style={[type.microcopyItalic, { color: colors.textTertiary }]}>
+                Recommendations sharpen as you log more tastings.
+              </Text>
+            )}
 
-              {featured ? (
-                <FeaturedBottleCard
-                  name={featured.name}
-                  whiskeyType={featured.type}
-                  proof={featured.proof}
-                  featureNote={featured.featureNote}
-                  onPress={goFeatured}
-                />
-              ) : null}
-            </View>
+            {visibleRecs.length > 0 && !!featured ? (
+              <View style={{ height: 1, backgroundColor: colors.borderSubtle, marginTop: spacing.sm }} />
+            ) : null}
+
+            {featured ? (
+              <FeaturedBottleCard
+                name={featured.name}
+                whiskeyType={featured.type}
+                proof={featured.proof}
+                featureNote={featured.featureNote}
+                onPress={goFeatured}
+              />
+            ) : null}
           </View>
         ) : null}
 
