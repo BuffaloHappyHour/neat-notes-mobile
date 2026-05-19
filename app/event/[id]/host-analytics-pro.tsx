@@ -65,9 +65,9 @@ type Reactions = {
 type AnalyticsData = {
   event_name: string;
   snapshot: Snapshot;
-  bottles: Bottle[];
-  rating_bands: RatingBand[];
-  flavors: Flavor[];
+  bottles: Bottle[] | null;
+  rating_bands: RatingBand[] | null;
+  flavors: Flavor[] | null;
   sensory: Sensory;
   reactions: Reactions;
 };
@@ -205,7 +205,9 @@ export default function EventAnalyticsProScreen() {
       if (rpcErr) {
         setError(rpcErr.message);
       } else {
-        setAnalytics(data as AnalyticsData);
+        const parsed = typeof data === "string" ? JSON.parse(data) : data;
+        if (__DEV__) console.log("get_event_analytics raw:", JSON.stringify(data));
+        setAnalytics(parsed as AnalyticsData);
       }
       setLoading(false);
     }
@@ -290,9 +292,9 @@ export default function EventAnalyticsProScreen() {
 
   const { snapshot, bottles, rating_bands, flavors, sensory, reactions } = analytics;
 
-  const sortedBottles = [...bottles].sort((a, b) => b.avg_rating - a.avg_rating);
-  const maxBandCount = Math.max(...rating_bands.map((b) => b.count), 1);
-  const topFlavors = flavors
+  const sortedBottles = [...(bottles ?? [])].sort((a, b) => b.avg_rating - a.avg_rating);
+  const maxBandCount = Math.max(...(rating_bands ?? []).map((b) => b.count), 1);
+  const topFlavors = (flavors ?? [])
     .filter((f) => f.level === 2 || f.level === 3)
     .sort((a, b) => b.selections - a.selections)
     .slice(0, 12);
@@ -489,11 +491,11 @@ export default function EventAnalyticsProScreen() {
         </View>
 
         {/* ── 4. RATING DISTRIBUTION ─────────────────────────────────────── */}
-        {rating_bands.length > 0 ? (
+        {(rating_bands ?? []).length > 0 ? (
           <View style={{ gap: spacing.sm }}>
             <SectionLabel text="HOW THE ROOM RATED" />
 
-            {rating_bands.map((band) => (
+            {(rating_bands ?? []).map((band) => (
               <View
                 key={band.band}
                 style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}
