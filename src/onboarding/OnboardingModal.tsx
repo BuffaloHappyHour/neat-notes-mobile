@@ -183,20 +183,22 @@ export default function OnboardingModal({
 
           {/* ── Navigation ──────────────────────────────────────────── */}
           {!isLast ? (
-            <Pressable
-              onPress={withTick(() => setCurrentIndex(currentIndex + 1))}
-              style={({ pressed }) => ({
-                paddingVertical: 14,
-                borderRadius: 999,
-                backgroundColor: colors.accent,
-                alignItems: "center",
-                opacity: pressed ? 0.85 : 1,
-              })}
-            >
-              <Text style={[type.button, { color: colors.background }]}>Next →</Text>
-            </Pressable>
+            <View style={{ paddingBottom: insets.bottom }}>
+              <Pressable
+                onPress={withTick(() => setCurrentIndex(currentIndex + 1))}
+                style={({ pressed }) => ({
+                  paddingVertical: 14,
+                  borderRadius: 999,
+                  backgroundColor: colors.accent,
+                  alignItems: "center",
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Text style={[type.button, { color: colors.background }]}>Next →</Text>
+              </Pressable>
+            </View>
           ) : (
-            <View style={{ gap: spacing.sm }}>
+            <View style={{ gap: spacing.sm, paddingBottom: insets.bottom }}>
               <Pressable
                 onPress={withTick(async () => {
                   await markSeen();
