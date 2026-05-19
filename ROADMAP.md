@@ -117,14 +117,14 @@ Each feature includes:
 | F079 | Venue Request Admin Screen | Admin | High | v1.0.9 | Low | Low | ✅ Done | Admin screen at /admin/venue-requests. Review pending venue applications, approve with role assignment (venue_starter or venue_pro), reject with confirmation. Pull-to-refresh, empty state, auth guard. RPCs: admin_approve_venue_request, admin_reject_venue_request. |
 | F082 | QR Code Event Sharing | Events | High | v1.1.0 | Medium | Low | ✅ Done | Host generates branded QR code (amber, NN logo) from event detail screen. Attendee scans → deep links into app → auto-joins via join_event RPC → lands on event page. Save to camera roll. Universal link handler in _layout.tsx. |
 | F083 | Event Location / Venue | Events | High | v1.1.0 | Medium | Low | ✅ Done | Host searches venues table during event creation, or enters manually. Linked venue shows full details on host and attendee screens. event_attendees table added for attendance tracking. |
-| F084 | Home Screen Redesign | UX | High | v1.1.0 | High | Low | 💡 Idea | Modular hub replacing dashboard — Palate Identity Card, Insights Preview teaser, Quick Actions, Recommendations Rail, Community Pulse, Featured Whiskey |
-| F085 | Guided New User Onboarding | UX | High | v1.1.0 | Medium | Low | 💡 Idea | 3-slide outcome-focused intro flow shown on first launch — logged once in Supabase/AsyncStorage, never re-shown |
+| F084 | Home Screen Redesign | UX | High | v1.1.0 | High | Low | ✅ Done | Modular hub replacing dashboard — Palate Identity Card, Insights Preview teaser, Quick Actions, Recommendations Rail, Community Pulse, Featured Whiskey |
+| F085 | Guided New User Onboarding | UX | High | v1.1.0 | Medium | Low | ✅ Done | 3-slide outcome-focused intro flow shown on first launch — logged once in Supabase/AsyncStorage, never re-shown |
 | F086 | "What's New" Modal (v1.1.0) | UX | High | v1.1.0 | Low | Low | 💡 Idea | Full-screen dismissible modal shown once to existing users after v1.1.0 install — highlights Home redesign, Insights on Home, Google Sign-In |
 | F087 | Google Sign-In | Profile | High | v1.1.0 | Medium | Low | 🔨 In Progress | Google as primary auth option via Supabase signInWithOAuth — links to existing account if email matches, never creates ghost accounts. Code committed May 18, 2026 via expo-auth-session + PKCE/implicit flow. Pending production build. |
 | F088 | Phone Auth Analytics Events | Infrastructure | Medium | v1.1.0 | Low | Low | 💡 Idea | Fire phone_auth_started, phone_auth_completed, phone_auth_duplicate_detected analytics events for SMS auth monitoring |
 | F089 | Duplicate Auth Detection View | Admin | Medium | v1.1.0 | Low | Low | 💡 Idea | admin_duplicate_auth_candidates Supabase view — surfaces auth accounts created within 48h sharing name or device metadata |
-| F090 | Insights Teaser on Home + Milestone Cards | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | 2 palate trait teasers on Home (visible to all), premium CTA for full breakdown, milestone cards at 5 and 15 tastings computed server-side |
-| F091 | Recommendations Foundation | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | get_recommendations_for_user RPC using L2/L3 flavor + whiskey_type_id overlap — powers Home rail with "Because you liked…" suggestions |
+| F090 | Insights Teaser on Home + Milestone Cards | Insights | High | v1.1.0 | Medium | Low | ✅ Done | 2 palate trait teasers on Home (visible to all), premium CTA for full breakdown, milestone cards at 5 and 15 tastings computed server-side |
+| F091 | Recommendations Foundation | Insights | High | v1.1.0 | Medium | Low | ✅ Done | get_recommendations_for_user RPC using L2/L3 flavor + whiskey_type_id overlap — powers Home rail with "Because you liked…" suggestions |
 | F092 | Community Pulse Modules | UX | Medium | v1.1.0 | Medium | Low | 💡 Idea | Trending bottles (last 7 days, min 3 logs) and highest rated (min 5 logs) on Home — anonymous aggregates from materialized Supabase views |
 | F093 | Phone-First Signup Flow Redesign | Profile | High | v1.1.0 | Medium | Low | ✅ Done | Phone-first signup: OTP creates account with phone as primary identity, email + password linked after verification. Email-only fallback if no phone provided. signInWithOtp (shouldCreateUser: true) + linkIdentity email + updateUser password. Ghost-account bug fixed (sendSignUpOtp uses updateUser not signInWithOtp). Shipped May 18, 2026. |
 ---
@@ -574,10 +574,12 @@ Host-facing post-event analytics report generated on demand from Supabase event 
 **Release Target:** v1.1.0
 **Complexity:** High
 **Risk:** Low
-**Status:** 💡 Idea
+**Status:** ✅ Done
 
 **Description:**
 Replaces the current dashboard-style Home with a modular intelligence hub. Positions Neat Notes as a palate identity platform rather than a tasting journal.
+
+Shipped May 19, 2026. Palate Identity Card with clarity score, tier progression, top affinities. Insights CTA consolidated into palate card — premium shows View Insights, free shows Unlock Premium Insights with blurred preview. Two-slot recommendations rail — slot 0 type-based always visible, slot 1 flavor-based blurred and locked for free users. Featured Bottle card. Getting Started banner removed. Duplicate InsightsCTA removed.
 
 **Scope / Requirements:**
 - Palate Identity Card — top flavor affinities, palate clarity score, tasting streak. Absorbs existing stat tiles (total logs, avg rating)
@@ -602,10 +604,12 @@ Replaces the current dashboard-style Home with a modular intelligence hub. Posit
 **Release Target:** v1.1.0
 **Complexity:** Medium
 **Risk:** Low
-**Status:** 💡 Idea
+**Status:** ✅ Done
 
 **Description:**
 3-slide intro flow shown only on first launch. Outcome-focused — not a feature dump. Establishes the core identity loop early.
+
+Shipped May 19, 2026.
 
 **Scope / Requirements:**
 - Slide 1: "Log what you taste" — outcome framing
@@ -707,10 +711,12 @@ Read-only Supabase view for admin use to surface potential ghost-user pairs — 
 **Release Target:** v1.1.0
 **Complexity:** Medium
 **Risk:** Low
-**Status:** 💡 Idea
+**Status:** ✅ Done
 
 **Description:**
 Drives organic premium conversion by making palate intelligence visible on Home before users navigate to Insights.
+
+Shipped May 19, 2026. Unlock CTA consolidated into palate card. Copy: Your first insights are already forming. Paywall navigation wired from both unlock entry points — palate card CTA and blurred recommendation card.
 
 **Scope / Requirements:**
 - 2 palate trait teasers on Home — visible to all users, not gated
@@ -739,10 +745,12 @@ Drives organic premium conversion by making palate intelligence visible on Home 
 **Release Target:** v1.1.0
 **Complexity:** Medium
 **Risk:** Low
-**Status:** 💡 Idea
+**Status:** ✅ Done
 
 **Description:**
 SQL-based similarity engine powering the Home recommendations rail. No ML required for v1 — pure flavor and type overlap is enough to ship something real.
+
+Shipped May 19, 2026. buildRecommendations in useHomeStats.ts. Slot 0: user most-logged whiskey_type, falls back to whiskey_community_stats for new users. Slot 1: first flavor-affinity RPC result deduplicated against slot 0. recommendationBasis field drives reason strings in UI.
 
 **Scope / Requirements:**
 - Supabase RPC: get_recommendations_for_user(user_id uuid)
@@ -920,6 +928,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 
 | Date | Update |
 |---|---|
+| May 19, 2026 | F084, F085, F090, F091 shipped — Home Screen Redesign, guided onboarding, Insights teaser CTA, and Recommendations Foundation complete. |
 | May 18, 2026 | F093 added and shipped — Phone-First Signup Flow Redesign. Phone-first OTP path creates account with phone as primary identity via signInWithOtp (shouldCreateUser: true). Email + password linked after OTP verification via linkIdentity + updateUser. Email-only fallback retained. |
 | May 18, 2026 | F087 — Google Sign-In implementation committed. Supabase OAuth via expo-auth-session, PKCE + implicit flow handling, GoogleSignInButton + OrDivider components added to sign-in.tsx. iOS client ID wired in app.config.js. Pending production build. |
 | May 18, 2026 | F058 updated to 🔨 In Progress — May 18 codebase audit confirms all app code points to neatnotesapp.com. Auth/callback and password reset migration still pending. |
