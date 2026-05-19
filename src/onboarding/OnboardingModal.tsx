@@ -122,12 +122,12 @@ export default function OnboardingModal({
           {/* ── Intro text ──────────────────────────────────────────── */}
           <Text
             style={[
-              type.microcopyItalic,
+              type.sectionHeader,
               {
-                fontSize: 15,
-                lineHeight: 22,
-                color: colors.textSecondary,
-                opacity: 0.88,
+                fontSize: 20,
+                lineHeight: 26,
+                color: colors.textPrimary,
+                opacity: 1,
                 textAlign: "center",
                 paddingHorizontal: spacing.md,
                 marginBottom: spacing.md,
@@ -166,11 +166,11 @@ export default function OnboardingModal({
               style={[
                 type.microcopyItalic,
                 {
-                  fontSize: 16,
-                  lineHeight: 24,
+                  fontSize: 14,
+                  lineHeight: 20,
                   color: colors.textSecondary,
                   marginTop: spacing.sm,
-                  opacity: 0.88,
+                  opacity: 0.75,
                 },
               ]}
             >
