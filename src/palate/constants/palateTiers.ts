@@ -22,7 +22,7 @@ export const PALATE_TIER_COPY: Record<
   },
   Defining: {
     headline: "Your palate is taking shape.",
-    subline: "You have a point of view. Keep refining it.",
+    subline: "You have a point of view.",
   },
   Refining: {
     headline: "A refined palate.",

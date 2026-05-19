@@ -149,18 +149,7 @@ export function InsightsCTA({
               Deeper taste profile, behavior trends, and palate intelligence.
             </Text>
 
-            <Text
-              style={[
-                type.microcopyItalic,
-                {
-                  color: colors.accent,
-                  opacity: 0.92,
-                  marginTop: 8,
-                },
-              ]}
-            >
-              Best after 3 pours.
-            </Text>
+
           </View>
 
           <View
@@ -206,7 +195,7 @@ export function InsightsCTA({
               },
             ]}
           >
-            Insights become more meaningful with a few logged pours.
+            Your first insights are already forming.
           </Text>
         </View>
       </Pressable>

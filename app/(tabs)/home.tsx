@@ -12,6 +12,8 @@ import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
 import { logClientEvent } from "../../lib/clientLog";
+import { Ionicons } from "@expo/vector-icons";
+
 import { withTick } from "../../lib/hapticsPress";
 
 import { type RecommendationItem, useHomeStats } from "../../src/home/hooks/useHomeStats";
@@ -39,36 +41,6 @@ function StatCell({ label, value }: { label: string; value: string }) {
   );
 }
 
-function OnboardingNote({ tastingCount }: { tastingCount: number }) {
-  const body =
-    tastingCount === 0
-      ? "Log your first tasting. Choose flavor notes — that's what Neat Notes learns from."
-      : tastingCount <= 2
-      ? "Good start. Add flavor notes to your next tasting to sharpen your palate profile."
-      : "You're close to your first Insights. Keep logging with flavor notes.";
-
-  return (
-    <View
-      style={{
-        borderLeftWidth: 1.5,
-        borderLeftColor: colors.accent,
-        backgroundColor: colors.accentFaint,
-        paddingLeft: 10,
-        paddingRight: spacing.md,
-        paddingVertical: 12,
-        borderTopRightRadius: 3,
-        borderBottomRightRadius: 3,
-      }}
-    >
-      <Text style={[type.labelCaps, { color: colors.accent, marginBottom: 4 }]}>
-        Getting started
-      </Text>
-      <Text style={[type.microcopyItalic, { color: colors.textPrimary, opacity: 0.88 }]}>
-        {body}
-      </Text>
-    </View>
-  );
-}
 
 const PALATE_3_NODES = [
   { label: "Emerging" },
@@ -276,7 +248,7 @@ function PalateInsightsCard({
         </View>
       </View>
 
-      {/* Compact InsightsCTA — inner Pressable stops propagation to card */}
+      {/* Compact InsightsCTA — always shown; component handles premium vs free display */}
       <Pressable onPress={(e) => { e.stopPropagation?.(); }}>
         <InsightsCTA isPremium={isPremium} compact={true} onPress={onInsightsCTA} />
       </Pressable>
@@ -346,7 +318,8 @@ function DrinkNextCard({
             alignItems: "center",
           }}
         >
-          <Text style={[type.caption, { color: colors.accent }]}>Unlock →</Text>
+          <Ionicons name="lock-closed" size={16} color={colors.accent} />
+          <Text style={[type.caption, { color: colors.accent }]}>Unlock with Premium</Text>
         </View>
       ) : null}
     </Pressable>
@@ -524,20 +497,6 @@ function FeaturedBottleCard({
         Featured Bottle
       </Text>
 
-      <Text
-        style={[
-          type.microcopyItalic,
-          {
-            fontSize: 15,
-            lineHeight: 21,
-            opacity: 0.84,
-            color: colors.textPrimary,
-          },
-        ]}
-      >
-        A bottle worth your attention right now.
-      </Text>
-
       <View
         style={{
           borderRadius: radii.lg,
@@ -614,44 +573,30 @@ function FeaturedBottleCard({
           </Pressable>
         </View>
 
-        <View
-          style={{
-            height: 1,
-            backgroundColor: "rgba(190, 150, 99, 0.18)",
-            marginTop: spacing.xs,
-          }}
-        />
-
-        <View style={{ gap: 6 }}>
-          <Text
-            style={[
-              type.caption,
-              {
-                color: colors.accent,
-                fontWeight: "700",
-                letterSpacing: 0.5,
-                textTransform: "uppercase",
-              },
-            ]}
-          >
-            Featured Notes
-          </Text>
-
-          <Text
-            style={[
-              type.microcopyItalic,
-              {
-                fontSize: 16,
-                lineHeight: 23,
-                color: colors.textPrimary,
-                opacity: 0.88,
-              },
-            ]}
-          >
-            {featureNote ??
-              "A bottle worth revisiting right now — balanced, inviting, and easy to recommend."}
-          </Text>
-        </View>
+        {featureNote ? (
+          <>
+            <View
+              style={{
+                height: 1,
+                backgroundColor: "rgba(190, 150, 99, 0.18)",
+                marginTop: spacing.xs,
+              }}
+            />
+            <Text
+              style={[
+                type.microcopyItalic,
+                {
+                  fontSize: 16,
+                  lineHeight: 23,
+                  color: colors.textPrimary,
+                  opacity: 0.88,
+                },
+              ]}
+            >
+              {featureNote}
+            </Text>
+          </>
+        ) : null}
       </View>
     </View>
   );
@@ -938,10 +883,15 @@ export default function HomeTab() {
   const goInsightsTeaser = useMemo(
     () =>
       withTick(() => {
-        logPress("home_insights_teaser", "/(tabs)/profile");
-        router.push("/(tabs)/profile");
+        if (isPremium) {
+          logPress("home_insights_teaser", "/(tabs)/profile");
+          router.push("/(tabs)/profile");
+        } else {
+          logPress("home_insights_paywall", "/insights");
+          router.push("/insights" as any);
+        }
       }),
-    []
+    [isPremium]
   );
 
   const goFeatured = useMemo(
@@ -1003,6 +953,7 @@ export default function HomeTab() {
         whiskeyName: r.display_name,
         whiskeyType: r.whiskey_type,
         proof: r.proof,
+        recommendationBasis: r.recommendationBasis,
       })),
     [recommendations]
   );
@@ -1098,7 +1049,7 @@ export default function HomeTab() {
             Log Your Next Pour
           </Text>
 
-          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          <View style={{ flexDirection: "row", gap: spacing.sm, width: "100%" }}>
             <Pressable
               onPress={goSearchQuick}
               style={({ pressed }) => ({
@@ -1156,17 +1107,7 @@ export default function HomeTab() {
           </View>
         ) : null}
 
-        {/* ── Onboarding Note ─────────────────────────────────────────────── */}
-        {isAuthed && tastingCount !== null && tastingCount < 5 ? (
-          <OnboardingNote tastingCount={tastingCount} />
-        ) : null}
-
-        {/* ── InsightsCTA (full, for new users) ───────────────────────────── */}
-        {isAuthed && tastingCount !== null && tastingCount < 5 ? (
-          <InsightsCTA isPremium={false} compact={false} onPress={goInsightsTeaser} />
-        ) : null}
-
-        {/* ── Active Event ────────────────────────────────────────────────── */}
+{/* ── Active Event ────────────────────────────────────────────────── */}
         {activeEvent ? (
           <ActiveEventCard
             eventName={activeEvent.name}
@@ -1176,58 +1117,72 @@ export default function HomeTab() {
         ) : null}
 
         {/* ── What to Drink Next ──────────────────────────────────────────── */}
-        {(visibleRecs.length > 0 || !!featured) ? (
+        {isAuthed ? (
           <View style={{ gap: 6 }}>
             <Text style={[type.sectionHeader, { fontSize: 22, color: colors.textPrimary }]}>
               What to Drink Next
             </Text>
 
-            {visibleRecs.length > 0 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: spacing.lg }}
-                style={{ marginHorizontal: -spacing.lg }}
-              >
-                {visibleRecs.map((rec, idx) => (
-                  <DrinkNextCard
-                    key={rec.whiskeyId}
-                    name={rec.whiskeyName}
-                    whiskeyType={rec.whiskeyType ?? null}
-                    reason={
-                      topAffinities[0]
-                        ? `Matches your ${topAffinities[0]} affinity`
-                        : null
-                    }
-                    blurred={!isPremium && idx >= 1}
-                    onPress={() => {
-                      logPress("home_recommendation_tap", `/whiskey/${rec.whiskeyId}`);
-                      router.push(`/whiskey/${encodeURIComponent(rec.whiskeyId)}`);
-                    }}
-                    onUnlock={goInsightsTeaser}
-                  />
-                ))}
-              </ScrollView>
-            ) : (
-              <Text style={[type.microcopyItalic, { color: colors.textTertiary }]}>
-                Recommendations sharpen as you log more tastings.
-              </Text>
-            )}
-
-            {visibleRecs.length > 0 && !!featured ? (
-              <View style={{ height: 1, backgroundColor: colors.borderSubtle, marginTop: spacing.sm }} />
-            ) : null}
-
-            {featured ? (
-              <FeaturedBottleCard
-                name={featured.name}
-                whiskeyType={featured.type}
-                proof={featured.proof}
-                featureNote={featured.featureNote}
-                onPress={goFeatured}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: spacing.lg }}
+              style={{ marginHorizontal: -spacing.lg }}
+            >
+              {/* Slot 0: type-based */}
+              <DrinkNextCard
+                key={visibleRecs[0]?.whiskeyId ?? "slot-0"}
+                name={visibleRecs[0]?.whiskeyName ?? "Explore a New Bottle"}
+                whiskeyType={visibleRecs[0]?.whiskeyType ?? null}
+                reason={
+                  visibleRecs[0]?.recommendationBasis === "whiskey_type" && visibleRecs[0]?.whiskeyType
+                    ? `Popular in ${visibleRecs[0].whiskeyType}`
+                    : topAffinities[0]
+                    ? `Matches your ${topAffinities[0]} affinity`
+                    : null
+                }
+                blurred={false}
+                onPress={() => {
+                  if (visibleRecs[0]) {
+                    logPress("home_recommendation_tap", `/whiskey/${visibleRecs[0].whiskeyId}`);
+                    router.push(`/whiskey/${encodeURIComponent(visibleRecs[0].whiskeyId)}`);
+                  }
+                }}
+                onUnlock={goInsightsTeaser}
               />
-            ) : null}
+
+              {/* Slot 1: flavor-based */}
+              <DrinkNextCard
+                key={visibleRecs[1]?.whiskeyId ?? "slot-1"}
+                name={visibleRecs[1]?.whiskeyName ?? "Flavor Match"}
+                whiskeyType={visibleRecs[1]?.whiskeyType ?? null}
+                reason={
+                  visibleRecs[1]?.recommendationBasis === "flavor" && topAffinities[0]
+                    ? `Matches your ${topAffinities[0]} affinity`
+                    : "Unlock flavor-based picks"
+                }
+                blurred={!isPremium}
+                onPress={() => {
+                  if (visibleRecs[1]) {
+                    logPress("home_recommendation_tap", `/whiskey/${visibleRecs[1].whiskeyId}`);
+                    router.push(`/whiskey/${encodeURIComponent(visibleRecs[1].whiskeyId)}`);
+                  }
+                }}
+                onUnlock={goInsightsTeaser}
+              />
+            </ScrollView>
           </View>
+        ) : null}
+
+        {/* ── Featured Bottle ──────────────────────────────────────────────── */}
+        {featured ? (
+          <FeaturedBottleCard
+            name={featured.name}
+            whiskeyType={featured.type}
+            proof={featured.proof}
+            featureNote={featured.featureNote}
+            onPress={goFeatured}
+          />
         ) : null}
 
       </View>
