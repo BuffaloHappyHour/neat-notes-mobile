@@ -1,8 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   Text,
@@ -14,6 +17,7 @@ import { spacing } from "../../../lib/spacing";
 import { supabase } from "../../../lib/supabase";
 import { colors } from "../../../lib/theme";
 import { type } from "../../../lib/typography";
+import { useRoles } from "../../../hooks/useRoles";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -192,6 +196,8 @@ export default function EventAnalyticsProScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const { roles } = useRoles();
 
   useEffect(() => {
     if (!eventId) return;
@@ -622,6 +628,62 @@ export default function EventAnalyticsProScreen() {
               </View>
             ) : null}
           </View>
+        ) : null}
+
+        {/* ── EXPORT REPORT ──────────────────────────────────────────────── */}
+        {analytics && (roles.includes("host_pro") || roles.includes("admin")) ? (
+          <Pressable
+            onPress={async () => {
+              setExporting(true);
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const response = await fetch(
+                  "https://vfqbioksbylatydjqdhg.supabase.co/functions/v1/generate-event-report",
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${session?.access_token}`,
+                    },
+                    body: JSON.stringify({ event_id: eventId }),
+                  }
+                );
+                if (!response.ok) {
+                  const errData = await response.json().catch(() => ({}));
+                  throw new Error(errData.error ?? `HTTP ${response.status}`);
+                }
+                const html = await response.text();
+                const fileUri = `${FileSystem.cacheDirectory}neat-notes-event-report.html`;
+                await FileSystem.writeAsStringAsync(fileUri, html, {
+                  encoding: FileSystem.EncodingType.UTF8,
+                });
+                await Sharing.shareAsync(fileUri, {
+                  mimeType: "text/html",
+                  dialogTitle: "Export Event Report",
+                });
+              } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                Alert.alert("Export Failed", msg);
+              } finally {
+                setExporting(false);
+              }
+            }}
+            style={({ pressed }) => ({
+              marginTop: spacing.lg,
+              paddingVertical: 14,
+              borderRadius: 999,
+              alignItems: "center",
+              backgroundColor: colors.accentFaint,
+              borderWidth: 1,
+              borderColor: colors.borderStrong,
+              opacity: pressed || exporting ? 0.7 : 1,
+            })}
+            disabled={exporting}
+          >
+            <Text style={[type.button, { color: colors.accent }]}>
+              {exporting ? "Generating report..." : "Export Report →"}
+            </Text>
+          </Pressable>
         ) : null}
 
       </ScrollView>
