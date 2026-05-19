@@ -119,6 +119,24 @@ export default function OnboardingModal({
             )}
           </View>
 
+          {/* ── Intro text ──────────────────────────────────────────── */}
+          <Text
+            style={[
+              type.microcopyItalic,
+              {
+                fontSize: 15,
+                lineHeight: 22,
+                color: colors.textSecondary,
+                opacity: 0.88,
+                textAlign: "center",
+                paddingHorizontal: spacing.md,
+                marginBottom: spacing.md,
+              },
+            ]}
+          >
+            {slide.introText}
+          </Text>
+
           {/* ── Visual area ─────────────────────────────────────────── */}
           <View
             style={{

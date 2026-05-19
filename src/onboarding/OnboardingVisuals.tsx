@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Image, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
 import { RadarChart } from "../profile/insights/components/RadarChart";
@@ -8,34 +8,28 @@ import { type } from "../../lib/typography";
 import { spacing } from "../../lib/spacing";
 
 const DEMO_RADAR_AXES = [
-  { key: "sweet",      label: "Sweet",       value: 0.82 },
-  { key: "woody",      label: "Woody",       value: 0.74 },
-  { key: "spicy",      label: "Spicy",       value: 0.45 },
-  { key: "fruity",     label: "Fruity",      value: 0.38 },
-  { key: "smoke-peat", label: "Smoke / Peat", value: 0.29 },
-  { key: "nutty",      label: "Nutty",       value: 0.61 },
-  { key: "grainy",     label: "Grainy",      value: 0.55 },
-  { key: "floral",     label: "Floral",      value: 0.22 },
-  { key: "earthy",     label: "Earthy",      value: 0.33 },
-  { key: "herbal",     label: "Herbal",      value: 0.18 },
-  { key: "off-notes",  label: "Off-Notes",   value: 0.08 },
+  { key: "sweet",      label: "Sweet",        value: 0.82 },
+  { key: "woody",      label: "Woody",        value: 0.74 },
+  { key: "spicy",      label: "Spicy",        value: 0.55 },
+  { key: "fruity",     label: "Fruity",       value: 0.30 },
+  { key: "smoke-peat", label: "Smoke / Peat", value: 0.22 },
+  { key: "grainy",     label: "Grainy",       value: 0.45 },
+  { key: "nutty",      label: "Nutty",        value: 0.61 },
+  { key: "floral",     label: "Floral",       value: 0.18 },
+  { key: "earthy",     label: "Earthy",       value: 0.28 },
+  { key: "herbal",     label: "Herbal",       value: 0.15 },
+  { key: "off-notes",  label: "Off-Notes",    value: 0.08 },
 ];
 
 const CLARITY_NODES = ["Emerging", "Defining", "Signature"];
 
 export function GlassVisual() {
   return (
-    <View style={{ alignSelf: "center" }}>
-      <Svg width={120} height={160} viewBox="0 0 120 160">
-        <Path
-          d="M 25,15 L 95,15 L 85,125 L 35,125 Z"
-          stroke={colors.accent}
-          strokeWidth={1.5}
-          fill="none"
-          strokeLinejoin="round"
-        />
-      </Svg>
-    </View>
+    <Image
+      source={require("../../assets/images/Glencairn.png")}
+      style={{ width: 140, height: 140, alignSelf: "center" }}
+      resizeMode="contain"
+    />
   );
 }
 
@@ -129,8 +123,8 @@ export function ClarityVisual() {
 
 export function RadarVisual() {
   return (
-    <View style={{ alignItems: "center" }}>
-      <RadarChart axes={DEMO_RADAR_AXES} size={200} showLabels={true} />
+    <View style={{ alignItems: "center", justifyContent: "center" }}>
+      <RadarChart axes={DEMO_RADAR_AXES} size={280} showLabels={true} />
     </View>
   );
 }
@@ -140,13 +134,15 @@ export function IconsVisual() {
     <View
       style={{
         flexDirection: "row",
-        justifyContent: "space-around",
+        justifyContent: "center",
+        alignItems: "flex-start",
+        gap: 40,
         width: "100%",
-        paddingHorizontal: spacing.lg,
+        paddingHorizontal: spacing.xl,
       }}
     >
       {/* Bottle */}
-      <View style={{ alignItems: "center", gap: spacing.sm }}>
+      <View style={{ alignItems: "center", gap: spacing.sm, width: 80 }}>
         <Svg width={40} height={60} viewBox="0 0 40 60">
           <Path
             d="M 16,0 L 24,0 L 24,16 L 32,24 L 32,58 L 8,58 L 8,24 L 16,16 Z"
@@ -162,7 +158,7 @@ export function IconsVisual() {
       </View>
 
       {/* Calendar */}
-      <View style={{ alignItems: "center", gap: spacing.sm }}>
+      <View style={{ alignItems: "center", gap: spacing.sm, width: 80 }}>
         <Svg width={44} height={44} viewBox="0 0 44 44">
           <Path
             d={[
@@ -187,7 +183,7 @@ export function IconsVisual() {
       </View>
 
       {/* Pin */}
-      <View style={{ alignItems: "center", gap: spacing.sm }}>
+      <View style={{ alignItems: "center", gap: spacing.sm, width: 80 }}>
         <Svg width={36} height={50} viewBox="0 0 36 50">
           <Path
             d="M 18,48 C 10,36 4,28 4,18 C 4,8 11,2 18,2 C 25,2 32,8 32,18 C 32,28 26,36 18,48 Z"
