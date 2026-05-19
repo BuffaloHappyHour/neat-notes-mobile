@@ -1,5 +1,5 @@
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
 import { radii } from "../../../lib/radii";
@@ -8,6 +8,8 @@ import { spacing } from "../../../lib/spacing";
 import { colors } from "../../../lib/theme";
 import { type } from "../../../lib/typography";
 import { useEventPageData } from "../../../src/events/hooks/useEventPageData";
+import { useRoles } from "../../../hooks/useRoles";
+import { supabase } from "../../../lib/supabase";
 
 const warmCardShadow = {
   ...shadows.card,
@@ -134,6 +136,20 @@ export default function EventHostPage() {
     canViewHostAnalytics,
     summary,
   } = useEventPageData(eventId);
+
+  const { roles } = useRoles();
+
+  const [checkinCode, setCheckinCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!eventId) return;
+    supabase
+      .from("events")
+      .select("checkin_code")
+      .eq("id", eventId)
+      .maybeSingle()
+      .then(({ data }) => setCheckinCode(data?.checkin_code ?? null));
+  }, [eventId]);
 
   if (loading) {
     return (
@@ -373,6 +389,32 @@ export default function EventHostPage() {
           />
         </View>
 
+        {checkinCode != null ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.sm,
+              borderWidth: 1,
+              borderColor: colors.borderStrong,
+              backgroundColor: colors.accentFaint,
+              borderRadius: radii.lg,
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.sm,
+            }}
+          >
+            <Text style={[type.labelCaps, { color: colors.accent }]}>Event Code</Text>
+            <Text
+              style={[
+                type.sectionHeader,
+                { fontSize: 18, color: colors.textPrimary },
+              ]}
+            >
+              {checkinCode}
+            </Text>
+          </View>
+        ) : null}
+
         <SectionCard
           title="Event Snapshot"
           subtitle="High-level visibility into event activity."
@@ -522,6 +564,25 @@ export default function EventHostPage() {
             </Text>
           )}
         </SectionCard>
+
+        {(roles.includes("host_starter") || roles.includes("host_pro") || roles.includes("admin")) ? (
+          <Pressable
+            onPress={() => router.push({ pathname: "/event/[id]/host-analytics-pro", params: { id: eventId } } as any)}
+            style={({ pressed }) => ({
+              marginTop: spacing.lg,
+              width: "100%",
+              paddingVertical: 14,
+              borderRadius: 999,
+              alignItems: "center",
+              backgroundColor: colors.accentFaint,
+              borderWidth: 1,
+              borderColor: colors.borderStrong,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Text style={[type.button, { color: colors.accent }]}>Event Intelligence →</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </>
   );
