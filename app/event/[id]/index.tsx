@@ -599,40 +599,44 @@ export default function EventPage() {
         }}
       >
         {/* 1. HEADER */}
-        <View style={{ position: "relative", alignItems: "center", marginBottom: spacing.xs }}>
-          {canViewHostAnalytics ? (
-            <Pressable
-              onPress={() => router.push(`/event/${eventId}/host` as any)}
-              style={({ pressed }) => ({
-                position: "absolute",
-                top: 0,
-                right: 0,
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: colors.glassBorderStrong,
-                backgroundColor: pressed ? colors.accentSoft : colors.accentFaint,
-                opacity: pressed ? 0.9 : 1,
-              })}
-            >
-              <Text style={[type.caption, { color: colors.accent, fontSize: 11 }]}>Host →</Text>
-            </Pressable>
-          ) : null}
+        <View style={{ marginBottom: spacing.xs }}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <View style={{ flex: 1 }} />
 
-          <Text
-            style={[
-              type.screenTitle,
-              {
-                fontSize: 31,
-                lineHeight: 36,
-                color: colors.textPrimary,
-                textAlign: "center",
-              },
-            ]}
-          >
-            {event.name}
-          </Text>
+            <Text
+              style={[
+                type.screenTitle,
+                {
+                  flex: 2,
+                  fontSize: 31,
+                  lineHeight: 36,
+                  color: colors.textPrimary,
+                  textAlign: "center",
+                },
+              ]}
+            >
+              {event.name}
+            </Text>
+
+            <View style={{ flex: 1, alignItems: "flex-end" }}>
+              {canViewHostAnalytics ? (
+                <Pressable
+                  onPress={() => router.push(`/event/${eventId}/host` as any)}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: colors.glassBorderStrong,
+                    backgroundColor: pressed ? colors.accentSoft : colors.accentFaint,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text style={[type.caption, { color: colors.accent, fontSize: 11 }]}>Host →</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
 
           {flags?.venues?.display_name || flags?.venue_name_free ? (
             <Text
@@ -963,7 +967,7 @@ export default function EventPage() {
         ) : null}
 
         {/* 6. BOTTLE STATS */}
-        {lineup.length > 0 && bottleStats.length > 0 ? (
+        {lineup.length > 0 ? (
           <View style={{ gap: spacing.xs }}>
             <Text
               style={[
@@ -976,7 +980,6 @@ export default function EventPage() {
             {lineup.map((item, index) => {
               const hidden = flags?.is_blind && !flags?.revealed_at;
               const stat = bottleStats.find((s) => s.whiskey_id === item.whiskey_id);
-              if (!stat) return null;
               return (
                 <View
                   key={`stat-${item.id}`}
@@ -1037,8 +1040,9 @@ export default function EventPage() {
                         },
                       ]}
                     >
-                      {stat.count} {stat.count === 1 ? "tasting" : "tastings"}
-                      {stat.avg_rating != null ? ` · Avg ${stat.avg_rating.toFixed(1)}` : ""}
+                      {stat ? stat.count : 0}{" "}
+                      {(stat?.count ?? 0) === 1 ? "tasting" : "tastings"}
+                      {stat?.avg_rating != null ? ` · Avg ${stat.avg_rating.toFixed(1)}` : " · —"}
                     </Text>
                   </View>
                 </View>
