@@ -130,7 +130,7 @@ export function RadarVisual() {
 
 export function PicksVisual() {
   return (
-    <View style={{ gap: 10, width: "100%" }}>
+    <View style={{ gap: 8, width: "100%", marginBottom: 0 }}>
 
       {/* Safe Pick card */}
       <View style={{
@@ -138,7 +138,7 @@ export function PicksVisual() {
         borderWidth: 1,
         borderColor: colors.accent + "40",
         borderRadius: 10,
-        padding: 14,
+        padding: 10,
         gap: 6,
       }}>
         <View style={{
@@ -158,9 +158,6 @@ export function PicksVisual() {
         <Text style={[type.caption, { color: colors.accent }]}>
           Speyside Single Malt
         </Text>
-        <Text style={[type.body, { color: colors.textMuted }]}>
-          Matches your sweet, vanilla-forward palate.
-        </Text>
       </View>
 
       {/* Stretch Pick card */}
@@ -169,7 +166,7 @@ export function PicksVisual() {
         borderWidth: 1,
         borderColor: colors.accentPressed + "40",
         borderRadius: 10,
-        padding: 14,
+        padding: 10,
         gap: 6,
       }}>
         <View style={{
@@ -188,9 +185,6 @@ export function PicksVisual() {
         </Text>
         <Text style={[type.caption, { color: colors.accentPressed }]}>
           Islay Single Malt
-        </Text>
-        <Text style={[type.body, { color: colors.textMuted }]}>
-          You've never logged a peated Islay — a gap worth exploring.
         </Text>
       </View>
 

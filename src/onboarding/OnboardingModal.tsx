@@ -144,6 +144,7 @@ export default function OnboardingModal({
               alignItems: "center",
               justifyContent: "center",
               minHeight: 220,
+              maxHeight: 220,
             }}
           >
             {renderVisual(slide.visual)}
