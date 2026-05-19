@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
@@ -42,6 +43,15 @@ function formatRelativeTime(iso: string) {
   const diffDay = Math.floor(diffHr / 24);
   if (diffDay === 1) return "1 day ago";
   return `${diffDay} days ago`;
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function SectionCard({
@@ -358,6 +368,12 @@ function MostRatedWhiskeyRowCard({ row }: { row: MostRatedWhiskeyRow }) {
   );
 }
 
+type BottleStat = {
+  whiskey_id: string;
+  count: number;
+  avg_rating: number | null;
+};
+
 type EventFlags = {
   is_blind: boolean;
   has_lineup: boolean;
@@ -368,6 +384,8 @@ type EventFlags = {
   venue_name_free: string | null;
   venue_city: string | null;
   venue_state: string | null;
+  event_type: string | null;
+  description: string | null;
   venues: {
     display_name: string;
     venue_type: string | null;
@@ -399,12 +417,16 @@ export default function EventPage() {
 
   const [flags, setFlags] = useState<EventFlags | null>(null);
   const [lineup, setLineup] = useState<LineupItem[]>([]);
+  const [bottleStats, setBottleStats] = useState<BottleStat[]>([]);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
 
   useEffect(() => {
     if (!eventId) return;
     supabase
       .from("events")
-      .select("is_blind, has_lineup, has_pairing, pairing_notes, revealed_at, venue_id, venue_name_free, venue_city, venue_state, venues(display_name, venue_type, address, city, state, logo_url, website, phone)")
+      .select(
+        "is_blind, has_lineup, has_pairing, pairing_notes, revealed_at, venue_id, venue_name_free, venue_city, venue_state, event_type, description, venues(display_name, venue_type, address, city, state, logo_url, website, phone)"
+      )
       .eq("id", eventId)
       .maybeSingle()
       .then(({ data }) => {
@@ -416,6 +438,38 @@ export default function EventPage() {
     if (!flags?.has_lineup) return;
     getEventLineup(eventId).then(setLineup).catch(() => {});
   }, [flags?.has_lineup, eventId]);
+
+  useEffect(() => {
+    if (lineup.length === 0) return;
+    const ids = lineup.map((i) => i.whiskey_id).filter(Boolean) as string[];
+    if (ids.length === 0) return;
+    supabase
+      .from("tastings" as any)
+      .select("whiskey_id, rating")
+      .eq("event_id", eventId)
+      .in("whiskey_id", ids)
+      .then(({ data }: { data: { whiskey_id: string | null; rating: number | null }[] | null }) => {
+        if (!data) return;
+        const map = new Map<string, { count: number; ratingSum: number; ratingCount: number }>();
+        data.forEach((r) => {
+          if (!r.whiskey_id) return;
+          const existing = map.get(r.whiskey_id) ?? { count: 0, ratingSum: 0, ratingCount: 0 };
+          existing.count += 1;
+          if (r.rating != null) {
+            existing.ratingSum += r.rating;
+            existing.ratingCount += 1;
+          }
+          map.set(r.whiskey_id, existing);
+        });
+        setBottleStats(
+          Array.from(map.entries()).map(([whiskey_id, s]) => ({
+            whiskey_id,
+            count: s.count,
+            avg_rating: s.ratingCount > 0 ? s.ratingSum / s.ratingCount : null,
+          }))
+        );
+      });
+  }, [lineup, eventId]);
 
   if (loading) {
     return (
@@ -541,9 +595,31 @@ export default function EventPage() {
           paddingHorizontal: spacing.lg,
           paddingTop: spacing.xl * 2.1,
           paddingBottom: spacing.xl * 2,
+          gap: spacing.sm,
         }}
       >
-        <View style={{ marginBottom: spacing.sm }}>
+        {/* 1. HEADER */}
+        <View style={{ position: "relative", alignItems: "center", marginBottom: spacing.xs }}>
+          {canViewHostAnalytics ? (
+            <Pressable
+              onPress={() => router.push(`/event/${eventId}/host` as any)}
+              style={({ pressed }) => ({
+                position: "absolute",
+                top: 0,
+                right: 0,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: colors.glassBorderStrong,
+                backgroundColor: pressed ? colors.accentSoft : colors.accentFaint,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <Text style={[type.caption, { color: colors.accent, fontSize: 11 }]}>Host →</Text>
+            </Pressable>
+          ) : null}
+
           <Text
             style={[
               type.screenTitle,
@@ -558,101 +634,157 @@ export default function EventPage() {
             {event.name}
           </Text>
 
-          <Text
-            style={[
-              type.microcopyItalic,
-              {
-                marginTop: 6,
-                fontSize: 16,
-                lineHeight: 21,
-                color: colors.textPrimary,
-                opacity: 0.82,
-                textAlign: "center",
-              },
-            ]}
-          >
-            See what people are tasting right now.
-          </Text>
-
-          <View
-            style={{
-              height: 1,
-              backgroundColor: colors.glassDivider,
-              marginTop: spacing.sm,
-              opacity: 0.5,
-            }}
-          />
+          {flags?.venues?.display_name || flags?.venue_name_free ? (
+            <Text
+              style={[
+                type.microcopyItalic,
+                {
+                  marginTop: 4,
+                  fontSize: 14,
+                  lineHeight: 19,
+                  color: colors.textPrimary,
+                  opacity: 0.72,
+                  textAlign: "center",
+                },
+              ]}
+            >
+              {flags.venues?.display_name ?? flags.venue_name_free}
+              {flags.venues?.city || flags.venue_city
+                ? ` · ${flags.venues?.city ?? flags.venue_city}`
+                : ""}
+            </Text>
+          ) : null}
         </View>
 
-        {canViewHostAnalytics ? (
-          <View style={{ marginBottom: spacing.sm }}>
-            <Pressable
-              onPress={() => router.push(`/event/${eventId}/host` as any)}
-              style={({ pressed }) => ({
-                borderRadius: radii.lg,
-                borderWidth: 1,
-                borderColor: colors.glassBorderStrong,
-                backgroundColor: pressed ? colors.accentSoft : colors.accentFaint,
-                paddingVertical: spacing.md,
-                paddingHorizontal: spacing.lg,
-                ...warmCardShadow,
-                opacity: pressed ? 0.96 : 1,
-              })}
-            >
-              <Text
-                style={[
-                  type.caption,
-                  {
-                    color: colors.accent,
-                    letterSpacing: 0.5,
-                    textTransform: "uppercase",
-                  },
-                ]}
-              >
-                Host Access
-              </Text>
+        <View
+          style={{
+            height: 1,
+            backgroundColor: colors.glassDivider,
+            opacity: 0.5,
+          }}
+        />
 
-              <Text
-                style={[
-                  type.body,
-                  {
-                    marginTop: 4,
-                    fontSize: 16,
-                    lineHeight: 21,
-                    color: colors.textPrimary,
-                  },
-                ]}
-              >
-                Open Host View for event analytics →
-              </Text>
-            </Pressable>
+        {/* 2. CLASS DETAILS */}
+        <Pressable
+          onPress={() => setDetailsExpanded((v) => !v)}
+          style={{
+            borderRadius: radii.lg,
+            borderWidth: 1,
+            borderColor: colors.glassBorder,
+            backgroundColor: colors.glassSurface,
+            paddingVertical: spacing.md,
+            paddingHorizontal: spacing.md,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Text style={[type.labelCaps, { color: colors.accent, letterSpacing: 1.1 }]}>
+              Class Details
+            </Text>
+            <Ionicons
+              name={detailsExpanded ? "chevron-up" : "chevron-down"}
+              size={14}
+              color={colors.accent}
+            />
           </View>
-        ) : null}
 
+          {detailsExpanded ? (
+            <View style={{ marginTop: spacing.sm, gap: spacing.xs }}>
+              {event.starts_at || event.ends_at ? (
+                <Text
+                  style={[
+                    type.microcopyItalic,
+                    {
+                      fontSize: 13.5,
+                      lineHeight: 19,
+                      color: colors.textPrimary,
+                      opacity: 0.82,
+                    },
+                  ]}
+                >
+                  {fmtDate(event.starts_at)}
+                  {event.ends_at ? ` – ${fmtDate(event.ends_at)}` : ""}
+                </Text>
+              ) : null}
+
+              {flags?.event_type ? (
+                <View
+                  style={{
+                    backgroundColor: colors.accentSoft,
+                    borderRadius: 4,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    alignSelf: "flex-start",
+                  }}
+                >
+                  <Text style={[type.labelCaps, { fontSize: 9, color: colors.accent }]}>
+                    {flags.event_type}
+                  </Text>
+                </View>
+              ) : null}
+
+              {flags?.is_blind ? (
+                <Text
+                  style={[
+                    type.microcopyItalic,
+                    { fontSize: 13, color: colors.textPrimary, opacity: 0.78 },
+                  ]}
+                >
+                  Blind tasting
+                </Text>
+              ) : null}
+
+              {flags?.description ? (
+                <Text
+                  style={[
+                    type.body,
+                    {
+                      fontSize: 14.5,
+                      lineHeight: 21,
+                      color: colors.textPrimary,
+                      opacity: 0.85,
+                      marginTop: 4,
+                    },
+                  ]}
+                >
+                  {flags.description}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+        </Pressable>
+
+        {/* 3. HAPPENING NOW */}
         {recent.length > 0 ? (
           <View
             style={{
-              marginBottom: spacing.sm,
               borderRadius: radii.lg,
               borderWidth: 1,
               borderColor: colors.glassBorderStrong,
               backgroundColor: colors.accentFaint,
+              overflow: "hidden",
               paddingVertical: spacing.lg,
               paddingHorizontal: spacing.lg,
+              paddingLeft: spacing.lg + 3,
               ...warmCardShadow,
             }}
           >
-            <Text
-              style={[
-                type.labelCaps,
-                {
-                  color: colors.accent,
-                },
-              ]}
-            >
-              Happening Now
-            </Text>
-
+            <View
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 3,
+                backgroundColor: colors.accent,
+              }}
+            />
+            <Text style={[type.labelCaps, { color: colors.accent }]}>Happening Now</Text>
             <Text
               style={[
                 type.sectionHeader,
@@ -666,7 +798,6 @@ export default function EventPage() {
             >
               {recent[0].whiskey_name?.trim() || "A whiskey"} just got poured
             </Text>
-
             <Text
               style={[
                 type.caption,
@@ -682,334 +813,239 @@ export default function EventPage() {
           </View>
         ) : null}
 
-        <View style={{ marginBottom: spacing.sm }}>
-          <SectionCard
-            title="Event Snapshot"
-            subtitle="A quick look at the action so far."
-          >
-            <View style={{ flexDirection: "row", gap: spacing.sm }}>
-              <MetricPill label="Recent Pours" value={String(summary.tastingCount)} />
-              <MetricPill
-                label="Unique Whiskies"
-                value={String(summary.uniqueNames)}
-              />
-            </View>
-          </SectionCard>
-        </View>
-
-        {/* Venue */}
-        {(flags?.venues || flags?.venue_name_free) ? (
-          <View style={{ marginBottom: spacing.sm }}>
-            <SectionCard title="Venue">
-              {flags.venues ? (
-                <View style={{ gap: spacing.sm }}>
-                  {flags.venues.logo_url ? (
-                    <Image
-                      source={{ uri: flags.venues.logo_url }}
-                      style={{ width: 56, height: 56, borderRadius: radii.lg, backgroundColor: colors.glassRaised }}
-                      resizeMode="contain"
-                    />
-                  ) : null}
-                  <View style={{ gap: 4 }}>
-                    <Text style={[type.body, { fontSize: 16.5, lineHeight: 21, color: colors.textPrimary }]}>
-                      {flags.venues.display_name}
-                    </Text>
-                    {flags.venues.venue_type ? (
-                      <View style={{ backgroundColor: colors.accentSoft, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start" }}>
-                        <Text style={[type.labelCaps, { fontSize: 9, color: colors.accent }]}>
-                          {flags.venues.venue_type}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  {flags.venues.address ? (
-                    <Text style={[type.microcopyItalic, { fontSize: 13.5, color: colors.textPrimary, opacity: 0.78 }]}>
-                      {flags.venues.address}
-                    </Text>
-                  ) : null}
-                  {(flags.venues.city || flags.venues.state) ? (
-                    <Text style={[type.microcopyItalic, { fontSize: 13.5, color: colors.textPrimary, opacity: 0.78 }]}>
-                      {[flags.venues.city, flags.venues.state].filter(Boolean).join(", ")}
-                    </Text>
-                  ) : null}
-                  {flags.venues.website ? (
-                    <Pressable
-                      onPress={() => Linking.openURL(flags.venues!.website!)}
-                      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                    >
-                      <Text style={[type.caption, { color: colors.accent }]}>{flags.venues.website}</Text>
-                    </Pressable>
-                  ) : null}
-                  {flags.venues.phone ? (
-                    <Pressable
-                      onPress={() => Linking.openURL(`tel:${flags.venues!.phone}`)}
-                      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                    >
-                      <Text style={[type.caption, { color: colors.accent }]}>{flags.venues.phone}</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              ) : (
-                <View style={{ gap: 4 }}>
-                  <Text style={[type.body, { fontSize: 16.5, lineHeight: 21, color: colors.textPrimary }]}>
-                    {flags.venue_name_free}
-                  </Text>
-                  {(flags.venue_city || flags.venue_state) ? (
-                    <Text style={[type.microcopyItalic, { fontSize: 13.5, color: colors.textPrimary, opacity: 0.78 }]}>
-                      {[flags.venue_city, flags.venue_state].filter(Boolean).join(", ")}
-                    </Text>
-                  ) : null}
-                </View>
-              )}
-            </SectionCard>
-          </View>
-        ) : null}
-
-        {/* Lineup section */}
-        {flags?.has_lineup && lineup.length > 0 ? (
-          <View style={{ marginBottom: spacing.sm }}>
-            <SectionCard
-              title="Tonight's Lineup"
-              subtitle={
-                flags.is_blind && !flags.revealed_at
-                  ? "Whiskey identities hidden until the host reveals."
-                  : undefined
-              }
-            >
-              <View style={{ gap: spacing.sm }}>
-                {lineup.map((item, index) => {
-                  const hidden = flags.is_blind && !flags.revealed_at;
-                  return (
-                    <View
-                      key={item.id}
-                      style={{
-                        borderRadius: radii.lg,
-                        borderWidth: 1,
-                        borderColor: colors.glassBorder,
-                        backgroundColor: colors.glassRaised,
-                        paddingVertical: spacing.md,
-                        paddingHorizontal: spacing.md,
-                        gap: 6,
-                      }}
-                    >
-                      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: spacing.sm }}>
-                        <View style={{ flex: 1, gap: 3 }}>
-                          <Text
-                            style={[type.caption, { color: colors.accent, letterSpacing: 0.5, textTransform: "uppercase" }]}
-                          >
-                            Pour {index + 1}
-                          </Text>
-                          {hidden ? (
-                            <Text style={[type.body, { fontSize: 16.5, lineHeight: 21, color: colors.textPrimary, opacity: 0.5 }]}>
-                              ● ● ●
-                            </Text>
-                          ) : (
-                            <>
-                              <Text style={[type.body, { fontSize: 16.5, lineHeight: 21, color: colors.textPrimary }]}>
-                                {item.display_name}
-                              </Text>
-                              {item.whiskey_type || item.proof != null ? (
-                                <View style={{ flexDirection: "row", gap: spacing.xs, alignItems: "center" }}>
-                                  {item.whiskey_type ? (
-                                    <View style={{ backgroundColor: colors.accentSoft, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-                                      <Text style={[type.labelCaps, { fontSize: 9, color: colors.accent }]}>{item.whiskey_type}</Text>
-                                    </View>
-                                  ) : null}
-                                  {item.proof != null ? (
-                                    <Text style={[type.microcopyItalic, { fontSize: 13, color: colors.textPrimary, opacity: 0.7 }]}>
-                                      {item.proof} proof
-                                    </Text>
-                                  ) : null}
-                                </View>
-                              ) : null}
-                            </>
-                          )}
-                          {item.pairing_note ? (
-                            <Text style={[type.microcopyItalic, { fontSize: 13, color: colors.textPrimary, opacity: 0.75 }]}>
-                              Pairing: {item.pairing_note}
-                            </Text>
-                          ) : null}
-                        </View>
-
-                        {!hidden ? (
-                          <Pressable
-                            onPress={() =>
-                              router.push(
-                                `/log/cloud-tasting?whiskeyName=${encodeURIComponent(item.display_name)}&whiskeyId=${encodeURIComponent(item.whiskey_id)}&lockName=1` as any
-                              )
-                            }
-                            style={({ pressed }) => ({
-                              paddingHorizontal: 12,
-                              paddingVertical: 7,
-                              borderRadius: 999,
-                              borderWidth: 1,
-                              borderColor: colors.glassBorderStrong,
-                              backgroundColor: pressed ? colors.accentSoft : colors.accentFaint,
-                              opacity: pressed ? 0.9 : 1,
-                            })}
-                          >
-                            <Text style={[type.caption, { color: colors.accent }]}>Log →</Text>
-                          </Pressable>
-                        ) : null}
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            </SectionCard>
-          </View>
-        ) : null}
-
-        {/* Pairing notes (no lineup) */}
-        {flags?.has_pairing && !flags.has_lineup && flags.pairing_notes ? (
-          <View style={{ marginBottom: spacing.sm }}>
-            <SectionCard title="Pairing">
-              <Text style={[type.body, { fontSize: 15, lineHeight: 21, color: colors.textPrimary, opacity: 0.85 }]}>
-                {flags.pairing_notes}
-              </Text>
-            </SectionCard>
-          </View>
-        ) : null}
-
-        <View style={{ marginBottom: spacing.sm }}>
-          <SectionCard
-            title="Live at This Event"
-            subtitle="See what people have tried most recently."
-          >
-            {recent.length > 0 ? (
-              <View>
-                {recent.map((row, index) => (
-                  <View
-                    key={row.id}
-                    style={{
-                      marginBottom: index === recent.length - 1 ? 0 : spacing.sm,
-                    }}
-                  >
-                    <RecentRow row={row} isNewest={index === 0} />
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <Text
-                style={[
-                  type.microcopyItalic,
-                  {
-                    fontSize: 14.5,
-                    lineHeight: 20,
-                    color: colors.textPrimary,
-                    opacity: 0.78,
-                  },
-                ]}
-              >
-                Be the first to log a tasting at this event.
-              </Text>
-            )}
-          </SectionCard>
-        </View>
-
-        {topWhiskies.length > 0 || mostRatedWhiskies.length > 0 ? (
-          <View style={{ marginBottom: spacing.sm }}>
-            <SectionCard
-              title="What People Are Trying"
-              subtitle="See what is earning the strongest reactions so far."
-            >
-              {topWhiskies.length > 0 ? (
-                <View style={{ marginBottom: mostRatedWhiskies.length > 0 ? spacing.md : 0 }}>
-                  <Text
-                    style={[
-                      type.caption,
-                      {
-                        marginBottom: spacing.sm,
-                        color: colors.accent,
-                        letterSpacing: 0.5,
-                        textTransform: "uppercase",
-                      },
-                    ]}
-                  >
-                    Highest Rated
-                  </Text>
-
-                  {topWhiskies.slice(0, 3).map((row, index) => (
-                    <View
-                      key={`highest-${row.whiskey_name}-${index}`}
-                      style={{
-                        marginBottom:
-                          index === Math.min(topWhiskies.length, 3) - 1 ? 0 : spacing.sm,
-                      }}
-                    >
-                      <TopWhiskeyRowCard row={row} />
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-
-              {mostRatedWhiskies.length > 0 ? (
-                <View>
-                  <Text
-                    style={[
-                      type.caption,
-                      {
-                        marginBottom: spacing.sm,
-                        color: colors.accent,
-                        letterSpacing: 0.5,
-                        textTransform: "uppercase",
-                      },
-                    ]}
-                  >
-                    Most Rated
-                  </Text>
-
-                  {mostRatedWhiskies.map((row, index) => (
-                    <View
-                      key={`most-rated-${row.whiskey_name}-${index}`}
-                      style={{
-                        marginBottom:
-                          index === mostRatedWhiskies.length - 1 ? 0 : spacing.sm,
-                      }}
-                    >
-                      <MostRatedWhiskeyRowCard row={row} />
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-            </SectionCard>
-          </View>
-        ) : null}
-
-        <SectionCard
-          title="Top Rated at This Event"
-          subtitle="Highest-rated pours from event tastings so far."
+        {/* 4. EVENT SNAPSHOT */}
+        <View
+          style={{
+            borderRadius: radii.lg,
+            borderWidth: 1,
+            borderColor: colors.glassBorder,
+            backgroundColor: colors.glassSurface,
+            paddingVertical: spacing.lg,
+            paddingHorizontal: spacing.lg,
+            ...warmCardShadow,
+          }}
         >
-          {topWhiskies.length > 0 ? (
-            <View>
-              {topWhiskies.map((row, index) => (
-                <View
-                  key={`${row.whiskey_name}-${index}`}
-                  style={{
-                    marginBottom:
-                      index === topWhiskies.length - 1 ? 0 : spacing.sm,
-                  }}
-                >
-                  <TopWhiskeyRowCard row={row} />
-                </View>
-              ))}
-            </View>
-          ) : (
+          <Text
+            style={[
+              type.sectionHeader,
+              {
+                fontSize: 18,
+                lineHeight: 23,
+                color: colors.textPrimary,
+                marginBottom: spacing.sm,
+              },
+            ]}
+          >
+            Event Snapshot
+          </Text>
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <MetricPill label="Participants" value={String(summary.uniqueUsers)} />
+            <MetricPill label="Total Tastings" value={String(summary.tastingCount)} />
+          </View>
+          <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }}>
+            <MetricPill label="Unique Whiskies" value={String(summary.uniqueNames)} />
+            <MetricPill
+              label="Avg Rating"
+              value={summary.averageRating != null ? summary.averageRating.toFixed(1) : "—"}
+            />
+          </View>
+        </View>
+
+        {/* 5. TONIGHT'S LINEUP */}
+        {flags?.has_lineup && lineup.length > 0 ? (
+          <View style={{ gap: spacing.xs }}>
             <Text
               style={[
-                type.microcopyItalic,
-                {
-                  fontSize: 14.5,
-                  lineHeight: 20,
-                  color: colors.textPrimary,
-                  opacity: 0.78,
-                },
+                type.labelCaps,
+                { color: colors.accent, letterSpacing: 1.1, marginBottom: 4 },
               ]}
             >
-              Not enough event ratings yet to rank whiskies.
+              Tonight's Lineup
             </Text>
-          )}
-        </SectionCard>
+            {lineup.map((item, index) => {
+              const hidden = flags.is_blind && !flags.revealed_at;
+              return (
+                <View
+                  key={item.id}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: spacing.sm,
+                    paddingHorizontal: spacing.md,
+                    borderRadius: radii.lg,
+                    borderWidth: 1,
+                    borderColor: colors.glassBorder,
+                    backgroundColor: colors.glassRaised,
+                    gap: spacing.sm,
+                  }}
+                >
+                  <Text
+                    style={[
+                      type.caption,
+                      { color: colors.accent, minWidth: 22, textAlign: "center" },
+                    ]}
+                  >
+                    {index + 1}
+                  </Text>
+                  <View style={{ flex: 1 }}>
+                    {hidden ? (
+                      <Text
+                        style={[
+                          type.body,
+                          {
+                            fontSize: 16,
+                            lineHeight: 21,
+                            color: colors.textPrimary,
+                            opacity: 0.45,
+                          },
+                        ]}
+                      >
+                        ● ● ●
+                      </Text>
+                    ) : (
+                      <Text
+                        style={[
+                          type.body,
+                          { fontSize: 16, lineHeight: 21, color: colors.textPrimary },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.display_name}
+                      </Text>
+                    )}
+                    {!hidden && (item.whiskey_type || item.proof != null) ? (
+                      <Text
+                        style={[
+                          type.microcopyItalic,
+                          {
+                            fontSize: 12.5,
+                            color: colors.textPrimary,
+                            opacity: 0.65,
+                            marginTop: 2,
+                          },
+                        ]}
+                      >
+                        {[
+                          item.whiskey_type,
+                          item.proof != null ? `${item.proof} proof` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {!hidden ? (
+                    <Pressable
+                      onPress={() =>
+                        router.push(
+                          `/log/cloud-tasting?whiskeyName=${encodeURIComponent(
+                            item.display_name
+                          )}&whiskeyId=${encodeURIComponent(item.whiskey_id)}&lockName=1` as any
+                        )
+                      }
+                      style={({ pressed }) => ({
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: colors.glassBorderStrong,
+                        backgroundColor: pressed ? colors.accentSoft : colors.accentFaint,
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text style={[type.caption, { color: colors.accent }]}>Log →</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* 6. BOTTLE STATS */}
+        {lineup.length > 0 && bottleStats.length > 0 ? (
+          <View style={{ gap: spacing.xs }}>
+            <Text
+              style={[
+                type.labelCaps,
+                { color: colors.accent, letterSpacing: 1.1, marginBottom: 4 },
+              ]}
+            >
+              Bottle Stats
+            </Text>
+            {lineup.map((item, index) => {
+              const hidden = flags?.is_blind && !flags?.revealed_at;
+              const stat = bottleStats.find((s) => s.whiskey_id === item.whiskey_id);
+              if (!stat) return null;
+              return (
+                <View
+                  key={`stat-${item.id}`}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: spacing.sm,
+                    paddingHorizontal: spacing.md,
+                    borderRadius: radii.lg,
+                    borderWidth: 1,
+                    borderColor: colors.glassBorder,
+                    backgroundColor: colors.glassRaised,
+                    gap: spacing.sm,
+                  }}
+                >
+                  <Text
+                    style={[
+                      type.caption,
+                      { color: colors.accent, minWidth: 22, textAlign: "center" },
+                    ]}
+                  >
+                    {index + 1}
+                  </Text>
+                  <View style={{ flex: 1 }}>
+                    {hidden ? (
+                      <Text
+                        style={[
+                          type.body,
+                          {
+                            fontSize: 15.5,
+                            lineHeight: 20,
+                            color: colors.textPrimary,
+                            opacity: 0.45,
+                          },
+                        ]}
+                      >
+                        ● ● ●
+                      </Text>
+                    ) : (
+                      <Text
+                        style={[
+                          type.body,
+                          { fontSize: 15.5, lineHeight: 20, color: colors.textPrimary },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.display_name}
+                      </Text>
+                    )}
+                    <Text
+                      style={[
+                        type.microcopyItalic,
+                        {
+                          fontSize: 12.5,
+                          color: colors.textPrimary,
+                          opacity: 0.68,
+                          marginTop: 2,
+                        },
+                      ]}
+                    >
+                      {stat.count} {stat.count === 1 ? "tasting" : "tastings"}
+                      {stat.avg_rating != null ? ` · Avg ${stat.avg_rating.toFixed(1)}` : ""}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
       </ScrollView>
     </>
   );
