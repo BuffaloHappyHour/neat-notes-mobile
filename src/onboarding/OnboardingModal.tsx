@@ -1,5 +1,6 @@
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 
 import { radii } from "../../lib/radii";
@@ -29,6 +30,7 @@ export default function OnboardingModal({
   visible: boolean;
   onDismiss: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
@@ -75,7 +77,7 @@ export default function OnboardingModal({
             borderWidth: 1,
             borderColor: colors.borderStrong,
             paddingTop: spacing.xl,
-            paddingBottom: spacing.xl * 2,
+            paddingBottom: spacing.xl * 2 + insets.bottom + spacing.lg,
             paddingHorizontal: spacing.lg,
             minHeight: "82%",
             gap: spacing.lg,
