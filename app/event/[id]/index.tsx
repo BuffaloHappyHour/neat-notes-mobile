@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useEventPageData } from "../../../src/events/hooks/useEventPageData";
 import { getEventLineup, type LineupItem } from "../../../lib/eventLineup";
 import { supabase } from "../../../lib/supabase";
+import { setActiveEventId } from "../../../lib/eventStorage";
 
 import { radii } from "../../../lib/radii";
 import { shadows } from "../../../lib/shadows";
@@ -386,6 +387,7 @@ type EventFlags = {
   venue_state: string | null;
   event_type: string | null;
   description: string | null;
+  status: string | null;
   venues: {
     display_name: string;
     venue_type: string | null;
@@ -420,12 +422,18 @@ export default function EventPage() {
   const [bottleStats, setBottleStats] = useState<BottleStat[]>([]);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
 
+  const [checkedIn, setCheckedIn] = useState(false);
+  const [checkInModalVisible, setCheckInModalVisible] = useState(false);
+  const [checkInCode, setCheckInCode] = useState("");
+  const [checkInError, setCheckInError] = useState<string | null>(null);
+  const [checkInLoading, setCheckInLoading] = useState(false);
+
   useEffect(() => {
     if (!eventId) return;
     supabase
       .from("events")
       .select(
-        "is_blind, has_lineup, has_pairing, pairing_notes, revealed_at, venue_id, venue_name_free, venue_city, venue_state, event_type, description, venues(display_name, venue_type, address, city, state, logo_url, website, phone)"
+        "is_blind, has_lineup, has_pairing, pairing_notes, revealed_at, venue_id, venue_name_free, venue_city, venue_state, event_type, description, status, venues(display_name, venue_type, address, city, state, logo_url, website, phone)"
       )
       .eq("id", eventId)
       .maybeSingle()
@@ -470,6 +478,21 @@ export default function EventPage() {
         );
       });
   }, [lineup, eventId]);
+
+  useEffect(() => {
+    if (!eventId) return;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      supabase
+        .from("event_attendees")
+        .select("id")
+        .eq("event_id", eventId)
+        .eq("user_id", user.id)
+        .maybeSingle()
+        .then(({ data }) => { if (data) setCheckedIn(true); });
+    })();
+  }, [eventId]);
 
   if (loading) {
     return (
@@ -855,6 +878,53 @@ export default function EventPage() {
           </View>
         </View>
 
+        {/* CHECK-IN */}
+        {checkedIn ? (
+          <View
+            style={{
+              alignItems: "center",
+              paddingVertical: 10,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.glassBorderStrong,
+              backgroundColor: colors.accentFaint,
+            }}
+          >
+            <Text style={[type.caption, { color: colors.accent }]}>✓ Checked In</Text>
+          </View>
+        ) : flags?.status === "ended" ? (
+          <View
+            style={{
+              alignItems: "center",
+              paddingVertical: 10,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.glassBorder,
+              backgroundColor: "transparent",
+              opacity: 0.45,
+            }}
+          >
+            <Text style={[type.caption, { color: colors.textMuted }]}>Event Ended</Text>
+          </View>
+        ) : (
+          <Pressable
+            onPress={() => setCheckInModalVisible(true)}
+            style={({ pressed }) => ({
+              alignItems: "center",
+              paddingVertical: 14,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.borderStrong,
+              backgroundColor: colors.accentFaint,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Text style={[type.button, { color: colors.accent }]}>
+              Check In to This Event →
+            </Text>
+          </Pressable>
+        )}
+
         {/* 5. TONIGHT'S LINEUP */}
         {flags?.has_lineup && lineup.length > 0 ? (
           <View style={{ gap: spacing.xs }}>
@@ -1051,6 +1121,134 @@ export default function EventPage() {
           </View>
         ) : null}
       </ScrollView>
+
+      {/* CHECK-IN MODAL */}
+      <Modal
+        visible={checkInModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setCheckInModalVisible(false);
+          setCheckInCode("");
+          setCheckInError(null);
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.7)",
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: spacing.lg,
+          }}
+        >
+          <View
+            style={{
+              width: "100%",
+              backgroundColor: colors.glassSurface,
+              borderRadius: radii.lg,
+              padding: spacing.lg,
+              gap: spacing.md,
+            }}
+          >
+            <Text
+              style={[
+                type.sectionHeader,
+                { fontSize: 20, lineHeight: 26, color: colors.textPrimary },
+              ]}
+            >
+              Enter Check-In Code
+            </Text>
+
+            <TextInput
+              value={checkInCode}
+              onChangeText={setCheckInCode}
+              autoCapitalize="characters"
+              placeholder="e.g. BOURBON"
+              placeholderTextColor={colors.textMuted}
+              style={[
+                type.body,
+                {
+                  color: colors.textPrimary,
+                  backgroundColor: colors.glassRaised,
+                  borderWidth: 1,
+                  borderColor: colors.glassBorderStrong,
+                  borderRadius: radii.lg,
+                  paddingHorizontal: spacing.md,
+                  paddingVertical: spacing.sm,
+                },
+              ]}
+            />
+
+            {checkInError ? (
+              <Text style={[type.caption, { color: colors.danger }]}>
+                {checkInError}
+              </Text>
+            ) : null}
+
+            <View style={{ flexDirection: "row", gap: spacing.sm }}>
+              <Pressable
+                onPress={() => {
+                  setCheckInModalVisible(false);
+                  setCheckInCode("");
+                  setCheckInError(null);
+                }}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: colors.glassBorderStrong,
+                  alignItems: "center",
+                  opacity: pressed ? 0.8 : 1,
+                })}
+              >
+                <Text style={[type.button, { color: colors.textSecondary }]}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                disabled={checkInLoading}
+                onPress={async () => {
+                  setCheckInLoading(true);
+                  const { data, error: rpcError } = await supabase.rpc(
+                    "checkin_to_event",
+                    {
+                      p_event_id: eventId,
+                      p_checkin_code: checkInCode.trim(),
+                    }
+                  );
+                  if (rpcError) {
+                    setCheckInError(rpcError.message);
+                  } else if (data === false) {
+                    setCheckInError("Incorrect code. Try again.");
+                  } else {
+                    setCheckedIn(true);
+                    setCheckInModalVisible(false);
+                    await setActiveEventId(eventId);
+                    setCheckInCode("");
+                    setCheckInError(null);
+                  }
+                  setCheckInLoading(false);
+                }}
+                style={({ pressed }) => ({
+                  flex: 2,
+                  paddingVertical: 12,
+                  borderRadius: 999,
+                  backgroundColor: colors.accent,
+                  alignItems: "center",
+                  opacity: checkInLoading ? 0.6 : pressed ? 0.85 : 1,
+                })}
+              >
+                {checkInLoading ? (
+                  <ActivityIndicator size="small" color={colors.background} />
+                ) : (
+                  <Text style={[type.button, { color: colors.background }]}>Check In</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
