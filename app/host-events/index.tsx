@@ -23,6 +23,7 @@ type HostEventRow = {
   max_attendees: number | null;
   is_blind: boolean;
   is_active: boolean;
+  status: string | null;
 };
 
 function fmtDate(iso: string | null): string {
@@ -210,13 +211,14 @@ export default function HostEventsScreen() {
       }
 
       const { data, error: qErr } = await supabase
-        .from("events")
-        .select("id, name, starts_at, max_attendees, is_blind, is_active")
-        .eq("host_user_id", user.id)
-        .order("starts_at", { ascending: false });
+        .from("event_hosts")
+        .select("events(id, name, starts_at, max_attendees, is_blind, is_active, status)")
+        .eq("user_id", user.id)
+        .order("events(starts_at)", { ascending: false });
 
       if (qErr) throw qErr;
-      setEvents((data ?? []) as HostEventRow[]);
+      const rows = (data ?? []) as unknown as Array<{ events: HostEventRow | null }>;
+      setEvents(rows.map((r) => r.events).filter((e): e is HostEventRow => e !== null));
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
