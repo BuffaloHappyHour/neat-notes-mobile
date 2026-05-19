@@ -288,6 +288,7 @@ export default function CreateEventScreen() {
 
   // Step 1
   const [name, setName] = useState("");
+  const [checkinCode, setCheckinCode] = useState("");
   const [eventType, setEventType] = useState<string | null>(null);
   const [startsAt, setStartsAt] = useState<Date | null>(null);
   const [endsAt, setEndsAt] = useState<Date | null>(null);
@@ -448,6 +449,7 @@ export default function CreateEventScreen() {
         .insert({
           name: name.trim(),
           slug: name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          checkin_code: checkinCode.trim().toUpperCase(),
           description: description.trim() || null,
           event_type: eventType,
           starts_at: startsAt.toISOString(),
@@ -536,6 +538,34 @@ export default function CreateEventScreen() {
                 },
               ]}
             />
+          </View>
+
+          {/* Check-In Code */}
+          <View style={{ gap: spacing.xs }}>
+            <FieldLabel label="Check-In Code" />
+            <TextInput
+              value={checkinCode}
+              onChangeText={setCheckinCode}
+              autoCapitalize="characters"
+              placeholder="e.g. BOURBON24"
+              placeholderTextColor={colors.textMuted}
+              returnKeyType="next"
+              style={[
+                type.body,
+                {
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surfaceSunken,
+                  borderWidth: 1,
+                  borderColor: colors.borderStrong,
+                  borderRadius: radii.md,
+                  paddingHorizontal: spacing.md,
+                  paddingVertical: spacing.sm,
+                },
+              ]}
+            />
+            <Text style={[type.caption, { color: colors.textSecondary }]}>
+              Announce this at your event. Attendees enter it to tag their tastings to this event.
+            </Text>
           </View>
 
           {/* Venue */}
@@ -784,8 +814,19 @@ export default function CreateEventScreen() {
           </View>
         </SectionCard>
 
+        {error ? (
+          <Text style={[type.caption, { color: colors.danger }]}>{error}</Text>
+        ) : null}
+
         <Pressable
-          onPress={() => setStep(2)}
+          onPress={() => {
+            if (checkinCode.trim().length === 0) {
+              setError("A check-in code is required.");
+              return;
+            }
+            setError("");
+            setStep(2);
+          }}
           disabled={!step1Valid || endsBeforeStart}
           style={({ pressed }) => ({
             paddingVertical: spacing.md,
