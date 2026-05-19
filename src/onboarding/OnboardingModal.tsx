@@ -76,167 +76,176 @@ export default function OnboardingModal({
             borderTopRightRadius: 28,
             borderWidth: 1,
             borderColor: colors.borderStrong,
-            paddingTop: spacing.xl,
-            paddingBottom: spacing.xl * 2 + insets.bottom + spacing.lg,
-            paddingHorizontal: spacing.lg,
+            paddingBottom: insets.bottom,
             minHeight: "82%",
-            gap: spacing.lg,
             ...shadows.card,
           }}
         >
-          {/* ── Header row: dots + skip ─────────────────────────────── */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
+          <ScrollView
+            contentContainerStyle={{
+              flexGrow: 1,
+              paddingTop: spacing.xl,
+              paddingHorizontal: spacing.lg,
+              paddingBottom: spacing.lg,
+              gap: spacing.lg,
             }}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
           >
-            <View style={{ flexDirection: "row", gap: 6 }}>
-              {SLIDES.map((_, i) => (
-                <View
-                  key={i}
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: i <= currentIndex ? colors.accent : "transparent",
-                    borderWidth: 1,
-                    borderColor: colors.borderStrong,
-                  }}
-                />
-              ))}
+            {/* ── Header row: dots + skip ─────────────────────────────── */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                {SLIDES.map((_, i) => (
+                  <View
+                    key={i}
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: i <= currentIndex ? colors.accent : "transparent",
+                      borderWidth: 1,
+                      borderColor: colors.borderStrong,
+                    }}
+                  />
+                ))}
+              </View>
+
+              {!isLast ? (
+                <Pressable
+                  onPress={withTick(async () => {
+                    await markSeen();
+                  })}
+                >
+                  <Text style={[type.caption, { color: colors.textMuted }]}>Skip</Text>
+                </Pressable>
+              ) : (
+                <View />
+              )}
             </View>
 
-            {!isLast ? (
-              <Pressable
-                onPress={withTick(async () => {
-                  await markSeen();
-                })}
-              >
-                <Text style={[type.caption, { color: colors.textMuted }]}>Skip</Text>
-              </Pressable>
-            ) : (
-              <View />
-            )}
-          </View>
-
-          {/* ── Intro text ──────────────────────────────────────────── */}
-          <Text
-            style={[
-              type.sectionHeader,
-              {
-                fontSize: 20,
-                lineHeight: 26,
-                color: colors.textPrimary,
-                opacity: 1,
-                textAlign: "center",
-                paddingHorizontal: spacing.md,
-                marginBottom: spacing.md,
-              },
-            ]}
-          >
-            {slide.introText}
-          </Text>
-
-          {/* ── Visual area ─────────────────────────────────────────── */}
-          <View
-            style={{
-              flex: 1,
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: 220,
-              maxHeight: 220,
-            }}
-          >
-            {renderVisual(slide.visual)}
-          </View>
-
-          {/* ── Text area ───────────────────────────────────────────── */}
-          <View>
-            <Text style={[type.labelCaps, { color: colors.accent, marginBottom: 6 }]}>
-              {slide.eyebrow}
-            </Text>
+            {/* ── Intro text ──────────────────────────────────────────── */}
             <Text
               style={[
-                type.screenTitle,
-                { fontSize: 28, lineHeight: 34, color: colors.textPrimary },
-              ]}
-            >
-              {slide.headline}
-            </Text>
-            <Text
-              style={[
-                type.microcopyItalic,
+                type.sectionHeader,
                 {
-                  fontSize: 14,
-                  lineHeight: 20,
-                  color: colors.textSecondary,
-                  marginTop: spacing.sm,
-                  opacity: 0.75,
+                  fontSize: 20,
+                  lineHeight: 26,
+                  color: colors.textPrimary,
+                  opacity: 1,
+                  textAlign: "center",
+                  paddingHorizontal: spacing.md,
+                  marginBottom: spacing.md,
                 },
               ]}
             >
-              {slide.body}
+              {slide.introText}
             </Text>
-          </View>
 
-          {/* ── Navigation ──────────────────────────────────────────── */}
-          {!isLast ? (
-            <View style={{ paddingBottom: insets.bottom }}>
-              <Pressable
-                onPress={withTick(() => setCurrentIndex(currentIndex + 1))}
-                style={({ pressed }) => ({
-                  paddingVertical: 14,
-                  borderRadius: 999,
-                  backgroundColor: colors.accent,
-                  alignItems: "center",
-                  opacity: pressed ? 0.85 : 1,
-                })}
-              >
-                <Text style={[type.button, { color: colors.background }]}>Next →</Text>
-              </Pressable>
+            {/* ── Visual area ─────────────────────────────────────────── */}
+            <View
+              style={{
+                flex: 1,
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: 220,
+                maxHeight: 220,
+              }}
+            >
+              {renderVisual(slide.visual)}
             </View>
-          ) : (
-            <View style={{ gap: spacing.sm, paddingBottom: insets.bottom }}>
-              <Pressable
-                onPress={withTick(async () => {
-                  await markSeen();
-                  router.push("/(tabs)/log");
-                })}
-                style={({ pressed }) => ({
-                  paddingVertical: 14,
-                  borderRadius: 999,
-                  backgroundColor: colors.accent,
-                  alignItems: "center",
-                  opacity: pressed ? 0.85 : 1,
-                })}
-              >
-                <Text style={[type.button, { color: colors.background }]}>
-                  {slide.cta ?? "Log your first pour"}
-                </Text>
-              </Pressable>
 
-              <Pressable
-                onPress={withTick(async () => {
-                  await markSeen();
-                  router.push("/(tabs)/home");
-                })}
-                style={({ pressed }) => ({
-                  paddingVertical: 12,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: colors.borderStrong,
-                  alignItems: "center",
-                  opacity: pressed ? 0.85 : 1,
-                })}
+            {/* ── Text area ───────────────────────────────────────────── */}
+            <View>
+              <Text style={[type.labelCaps, { color: colors.accent, marginBottom: 6 }]}>
+                {slide.eyebrow}
+              </Text>
+              <Text
+                style={[
+                  type.screenTitle,
+                  { fontSize: 28, lineHeight: 34, color: colors.textPrimary },
+                ]}
               >
-                <Text style={[type.button, { color: colors.textPrimary }]}>
-                  {slide.ctaSecondary ?? "Take me home"}
-                </Text>
-              </Pressable>
+                {slide.headline}
+              </Text>
+              <Text
+                style={[
+                  type.microcopyItalic,
+                  {
+                    fontSize: 14,
+                    lineHeight: 20,
+                    color: colors.textSecondary,
+                    marginTop: spacing.sm,
+                    opacity: 0.75,
+                  },
+                ]}
+              >
+                {slide.body}
+              </Text>
             </View>
-          )}
+
+            {/* ── Navigation ──────────────────────────────────────────── */}
+            {!isLast ? (
+              <View>
+                <Pressable
+                  onPress={withTick(() => setCurrentIndex(currentIndex + 1))}
+                  style={({ pressed }) => ({
+                    paddingVertical: 14,
+                    borderRadius: 999,
+                    backgroundColor: colors.accent,
+                    alignItems: "center",
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <Text style={[type.button, { color: colors.background }]}>Next →</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={{ gap: spacing.sm }}>
+                <Pressable
+                  onPress={withTick(async () => {
+                    await markSeen();
+                    router.push("/(tabs)/log");
+                  })}
+                  style={({ pressed }) => ({
+                    paddingVertical: 14,
+                    borderRadius: 999,
+                    backgroundColor: colors.accent,
+                    alignItems: "center",
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <Text style={[type.button, { color: colors.background }]}>
+                    {slide.cta ?? "Log your first pour"}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={withTick(async () => {
+                    await markSeen();
+                    router.push("/(tabs)/home");
+                  })}
+                  style={({ pressed }) => ({
+                    paddingVertical: 12,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: colors.borderStrong,
+                    alignItems: "center",
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <Text style={[type.button, { color: colors.textPrimary }]}>
+                    {slide.ctaSecondary ?? "Take me home"}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </ScrollView>
         </View>
       </View>
     </Modal>
