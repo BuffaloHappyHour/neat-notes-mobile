@@ -82,10 +82,17 @@ export default function RootLayout() {
     async function handleEventJoinUrl(url: string) {
       try {
         const parsed = new URL(url);
-        if (
-          parsed.hostname !== "neatnotesapp.com" ||
-          parsed.pathname !== "/event/join"
-        ) return;
+
+        const isUniversalLink =
+          parsed.hostname === "neatnotesapp.com" &&
+          parsed.pathname === "/event/join";
+        const isCustomScheme =
+          parsed.protocol === "neatnotes:" &&
+          parsed.hostname === "event" &&
+          parsed.pathname === "/join";
+
+        if (!isUniversalLink && !isCustomScheme) return;
+
         const code = parsed.searchParams.get("code");
         if (!code) return;
         const { data, error } = await supabase.rpc("join_event", { p_join_code: code });
