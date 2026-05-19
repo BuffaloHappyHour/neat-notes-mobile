@@ -4,7 +4,7 @@ export type OnboardingSlide = {
   headline: string;
   body: string;
   introText: string;
-  visual: "glass" | "clarity" | "radar" | "icons";
+  visual: "glass" | "clarity" | "radar" | "picks";
   cta?: string;
   ctaSecondary?: string;
 };
@@ -36,11 +36,11 @@ export const SLIDES: OnboardingSlide[] = [
   },
   {
     id: "next",
-    eyebrow: "YOUR PALATE, PUT TO WORK",
-    headline: "We help you find what's next.",
-    body: "Personalized recommendations, whiskey events, and venue discovery — all shaped by your taste.",
-    introText: "Explore what you like or reach for something new. Neat Notes makes your next whiskey a better experience.",
-    visual: "icons",
+    eyebrow: "YOUR NEXT POUR",
+    headline: "Safe picks and stretch picks, tailored to you.",
+    body: "Every recommendation is shaped by your actual taste — not popularity.",
+    introText: "Your next pour, already waiting. Neat Notes recommends whiskies based on what you love and what you haven't explored yet.",
+    visual: "picks",
     cta: "Log your first pour",
     ctaSecondary: "Take me home",
   },

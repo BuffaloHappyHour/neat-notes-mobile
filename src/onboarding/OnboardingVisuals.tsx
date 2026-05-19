@@ -1,6 +1,5 @@
 import React from "react";
 import { Image, Text, View } from "react-native";
-import Svg, { Path } from "react-native-svg";
 
 import { RadarChart } from "../profile/insights/components/RadarChart";
 import { colors } from "../../lib/theme";
@@ -129,74 +128,72 @@ export function RadarVisual() {
   );
 }
 
-export function IconsVisual() {
+export function PicksVisual() {
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        justifyContent: "center",
-        alignItems: "flex-start",
-        gap: 40,
-        width: "100%",
-        paddingHorizontal: spacing.xl,
-      }}
-    >
-      {/* Bottle */}
-      <View style={{ alignItems: "center", gap: spacing.sm, width: 80 }}>
-        <Svg width={40} height={60} viewBox="0 0 40 60">
-          <Path
-            d="M 16,0 L 24,0 L 24,16 L 32,24 L 32,58 L 8,58 L 8,24 L 16,16 Z"
-            stroke={colors.accent}
-            strokeWidth={1.5}
-            fill="none"
-            strokeLinejoin="round"
-          />
-        </Svg>
-        <Text style={[type.caption, { color: colors.textSecondary, textAlign: "center" }]}>
-          Recommendations
+    <View style={{ gap: 10, width: "100%" }}>
+
+      {/* Safe Pick card */}
+      <View style={{
+        backgroundColor: "rgba(255,255,255,0.04)",
+        borderWidth: 1,
+        borderColor: colors.accent + "40",
+        borderRadius: 10,
+        padding: 14,
+        gap: 6,
+      }}>
+        <View style={{
+          backgroundColor: colors.accent + "22",
+          borderRadius: 4,
+          paddingHorizontal: 6,
+          paddingVertical: 2,
+          alignSelf: "flex-start",
+        }}>
+          <Text style={[type.labelCaps, { color: colors.accent, fontSize: 10 }]}>
+            SAFE PICK
+          </Text>
+        </View>
+        <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>
+          GlenAllachie 12
+        </Text>
+        <Text style={[type.caption, { color: colors.accent }]}>
+          Speyside Single Malt
+        </Text>
+        <Text style={[type.body, { color: colors.textMuted }]}>
+          Matches your sweet, vanilla-forward palate.
         </Text>
       </View>
 
-      {/* Calendar */}
-      <View style={{ alignItems: "center", gap: spacing.sm, width: 80 }}>
-        <Svg width={44} height={44} viewBox="0 0 44 44">
-          <Path
-            d={[
-              "M 2,8 L 42,8 L 42,42 L 2,42 Z",
-              "M 2,18 L 42,18",
-              "M 15,18 L 15,42",
-              "M 29,18 L 29,42",
-              "M 2,28 L 42,28",
-              "M 2,38 L 42,38",
-              "M 13,4 L 13,12",
-              "M 31,4 L 31,12",
-            ].join(" ")}
-            stroke={colors.accent}
-            strokeWidth={1.5}
-            fill="none"
-            strokeLinecap="round"
-          />
-        </Svg>
-        <Text style={[type.caption, { color: colors.textSecondary, textAlign: "center" }]}>
-          Events
+      {/* Stretch Pick card */}
+      <View style={{
+        backgroundColor: "rgba(255,255,255,0.04)",
+        borderWidth: 1,
+        borderColor: colors.accentPressed + "40",
+        borderRadius: 10,
+        padding: 14,
+        gap: 6,
+      }}>
+        <View style={{
+          backgroundColor: colors.accentPressed + "22",
+          borderRadius: 4,
+          paddingHorizontal: 6,
+          paddingVertical: 2,
+          alignSelf: "flex-start",
+        }}>
+          <Text style={[type.labelCaps, { color: colors.accentPressed, fontSize: 10 }]}>
+            STRETCH PICK
+          </Text>
+        </View>
+        <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>
+          Ardbeg Uigeadail
+        </Text>
+        <Text style={[type.caption, { color: colors.accentPressed }]}>
+          Islay Single Malt
+        </Text>
+        <Text style={[type.body, { color: colors.textMuted }]}>
+          You've never logged a peated Islay — a gap worth exploring.
         </Text>
       </View>
 
-      {/* Pin */}
-      <View style={{ alignItems: "center", gap: spacing.sm, width: 80 }}>
-        <Svg width={36} height={50} viewBox="0 0 36 50">
-          <Path
-            d="M 18,48 C 10,36 4,28 4,18 C 4,8 11,2 18,2 C 25,2 32,8 32,18 C 32,28 26,36 18,48 Z"
-            stroke={colors.accent}
-            strokeWidth={1.5}
-            fill="none"
-            strokeLinejoin="round"
-          />
-        </Svg>
-        <Text style={[type.caption, { color: colors.textSecondary, textAlign: "center" }]}>
-          Venues
-        </Text>
-      </View>
     </View>
   );
 }

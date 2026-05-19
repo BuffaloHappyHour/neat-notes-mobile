@@ -11,7 +11,7 @@ import { SLIDES } from "../src/onboarding/slides";
 import {
   ClarityVisual,
   GlassVisual,
-  IconsVisual,
+  PicksVisual,
   RadarVisual,
 } from "../src/onboarding/OnboardingVisuals";
 
@@ -20,7 +20,7 @@ function renderVisual(visual: typeof SLIDES[number]["visual"]) {
     case "glass":   return <GlassVisual />;
     case "clarity": return <ClarityVisual />;
     case "radar":   return <RadarVisual />;
-    case "icons":   return <IconsVisual />;
+    case "picks":   return <PicksVisual />;
   }
 }
 

@@ -11,14 +11,14 @@ import { type } from "../../lib/typography";
 import { withTick } from "../../lib/hapticsPress";
 
 import { SLIDES } from "./slides";
-import { ClarityVisual, GlassVisual, IconsVisual, RadarVisual } from "./OnboardingVisuals";
+import { ClarityVisual, GlassVisual, PicksVisual, RadarVisual } from "./OnboardingVisuals";
 
 function renderVisual(visual: typeof SLIDES[number]["visual"]) {
   switch (visual) {
     case "glass":   return <GlassVisual />;
     case "clarity": return <ClarityVisual />;
     case "radar":   return <RadarVisual />;
-    case "icons":   return <IconsVisual />;
+    case "picks":   return <PicksVisual />;
   }
 }
 
