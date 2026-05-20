@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import * as FileSystem from "expo-file-system/legacy";
+import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import React, { useEffect, useState } from "react";
 import {
@@ -653,14 +653,8 @@ export default function EventAnalyticsProScreen() {
                   throw new Error(errData.error ?? `HTTP ${response.status}`);
                 }
                 const html = await response.text();
-                const fileUri = `${FileSystem.cacheDirectory}neat-notes-event-report.html`;
-                await FileSystem.writeAsStringAsync(fileUri, html, {
-                  encoding: FileSystem.EncodingType.UTF8,
-                });
-                await Sharing.shareAsync(fileUri, {
-                  mimeType: "text/html",
-                  dialogTitle: "Export Event Report",
-                });
+                const { uri } = await Print.printToFileAsync({ html });
+                await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: ".pdf" });
               } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e);
                 Alert.alert("Export Failed", msg);

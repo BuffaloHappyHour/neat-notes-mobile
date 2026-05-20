@@ -1055,7 +1055,7 @@ export default function HomeTab() {
               style={({ pressed }) => ({
                 flex: 1,
                 paddingVertical: 12,
-                paddingHorizontal: spacing.md,
+                paddingHorizontal: spacing.sm,
                 borderRadius: 999,
                 alignItems: "center",
                 backgroundColor: colors.accentFaint,
@@ -1072,7 +1072,7 @@ export default function HomeTab() {
               style={({ pressed }) => ({
                 flex: 1,
                 paddingVertical: 12,
-                paddingHorizontal: spacing.md,
+                paddingHorizontal: spacing.sm,
                 borderRadius: 999,
                 alignItems: "center",
                 backgroundColor: colors.accentFaint,
