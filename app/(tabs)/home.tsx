@@ -11,15 +11,15 @@ import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
-import { logClientEvent } from "../../lib/clientLog";
 import { Ionicons } from "@expo/vector-icons";
+import { logClientEvent } from "../../lib/clientLog";
 
 import { withTick } from "../../lib/hapticsPress";
 
 import { type RecommendationItem, useHomeStats } from "../../src/home/hooks/useHomeStats";
-import { InsightsCTA } from "../../src/profile/components/InsightsCTA";
 import { getTierCopy } from "../../src/palate/constants/palateTiers";
 import type { PalateClarityTierLabel } from "../../src/palate/palateClarity.service";
+import { InsightsCTA } from "../../src/profile/components/InsightsCTA";
 
 const warmCardShadow = {
   ...shadows.card,
@@ -1050,40 +1050,42 @@ export default function HomeTab() {
           </Text>
 
           <View style={{ flexDirection: "row", gap: spacing.sm, width: "100%" }}>
-            <Pressable
-              onPress={goSearchQuick}
-              style={({ pressed }) => ({
-                flex: 1,
-                paddingVertical: 12,
-                paddingHorizontal: spacing.sm,
-                borderRadius: 999,
-                alignItems: "center",
-                backgroundColor: colors.accentFaint,
-                borderWidth: 1,
-                borderColor: colors.borderStrong,
-                opacity: pressed ? 0.75 : 1,
-              })}
-            >
-              <Text style={[type.button, { color: colors.accent }]}>Search</Text>
-            </Pressable>
+  <Pressable
+    onPress={goSearchQuick}
+    style={({ pressed }) => ({
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 999,
+      alignItems: "center",
+      backgroundColor: colors.accentFaint,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      opacity: pressed ? 0.75 : 1,
+    })}
+  >
+    <Text style={[type.button, { color: colors.accent }]} numberOfLines={1} adjustsFontSizeToFit>
+      Search
+    </Text>
+  </Pressable>
 
-            <Pressable
-              onPress={goScanQuick}
-              style={({ pressed }) => ({
-                flex: 1,
-                paddingVertical: 12,
-                paddingHorizontal: spacing.sm,
-                borderRadius: 999,
-                alignItems: "center",
-                backgroundColor: colors.accentFaint,
-                borderWidth: 1,
-                borderColor: colors.borderStrong,
-                opacity: pressed ? 0.75 : 1,
-              })}
-            >
-              <Text style={[type.button, { color: colors.accent }]}>Scan</Text>
-            </Pressable>
-          </View>
+  <Pressable
+    onPress={goScanQuick}
+    style={({ pressed }) => ({
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 999,
+      alignItems: "center",
+      backgroundColor: colors.accentFaint,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      opacity: pressed ? 0.75 : 1,
+    })}
+  >
+    <Text style={[type.button, { color: colors.accent }]} numberOfLines={1} adjustsFontSizeToFit>
+      Scan
+    </Text>
+  </Pressable>
+</View>
 
           <View style={{ height: 1, backgroundColor: colors.glassDivider, marginTop: spacing.md }} />
         </View>

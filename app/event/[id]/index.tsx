@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useEventPageData } from "../../../src/events/hooks/useEventPageData";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { getEventLineup, type LineupItem } from "../../../lib/eventLineup";
-import { supabase } from "../../../lib/supabase";
 import { setActiveEventId } from "../../../lib/eventStorage";
+import { supabase } from "../../../lib/supabase";
+import { useEventPageData } from "../../../src/events/hooks/useEventPageData";
 
 import { radii } from "../../../lib/radii";
 import { shadows } from "../../../lib/shadows";
@@ -455,18 +455,24 @@ export default function EventPage() {
     if (ids.length === 0) return;
 
     async function fetchBottleStats() {
+      const { data: eventData } = await supabase
+        .from("events")
+        .select("starts_at, ends_at")
+        .eq("id", eventId)
+        .maybeSingle();
+
       const [resA, resB] = await Promise.all([
         supabase
-          .from("tastings")
+          .from("public_tastings")
           .select("id, whiskey_id, rating")
           .eq("event_id", eventId)
           .in("whiskey_id", ids),
-        flags?.starts_at && flags?.ends_at
+        eventData?.starts_at && eventData?.ends_at
           ? supabase
-              .from("tastings")
+              .from("public_tastings")
               .select("id, whiskey_id, rating")
-              .gte("created_at", flags.starts_at)
-              .lte("created_at", flags.ends_at)
+              .gte("created_at", eventData.starts_at)
+              .lte("created_at", eventData.ends_at)
               .in("whiskey_id", ids)
           : Promise.resolve({ data: [] as { id: string; whiskey_id: string | null; rating: number | null }[] }),
       ]);
@@ -503,7 +509,7 @@ export default function EventPage() {
     void fetchBottleStats();
     const interval = setInterval(() => { void fetchBottleStats(); }, 30000);
     return () => clearInterval(interval);
-  }, [lineup, eventId, flags?.starts_at, flags?.ends_at]);
+  }, [lineup, eventId]);
 
   useEffect(() => {
     if (!eventId) return;
