@@ -388,6 +388,8 @@ type EventFlags = {
   event_type: string | null;
   description: string | null;
   status: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
   venues: {
     display_name: string;
     venue_type: string | null;
@@ -433,7 +435,7 @@ export default function EventPage() {
     supabase
       .from("events")
       .select(
-        "is_blind, has_lineup, has_pairing, pairing_notes, revealed_at, venue_id, venue_name_free, venue_city, venue_state, event_type, description, status, venues(display_name, venue_type, address, city, state, logo_url, website, phone)"
+        "is_blind, has_lineup, has_pairing, pairing_notes, revealed_at, venue_id, venue_name_free, venue_city, venue_state, event_type, description, status, starts_at, ends_at, venues(display_name, venue_type, address, city, state, logo_url, website, phone)"
       )
       .eq("id", eventId)
       .maybeSingle()
@@ -451,33 +453,57 @@ export default function EventPage() {
     if (lineup.length === 0) return;
     const ids = lineup.map((i) => i.whiskey_id).filter(Boolean) as string[];
     if (ids.length === 0) return;
-    supabase
-      .from("tastings" as any)
-      .select("whiskey_id, rating")
-      .eq("event_id", eventId)
-      .in("whiskey_id", ids)
-      .then(({ data }: { data: { whiskey_id: string | null; rating: number | null }[] | null }) => {
-        if (!data) return;
-        const map = new Map<string, { count: number; ratingSum: number; ratingCount: number }>();
-        data.forEach((r) => {
-          if (!r.whiskey_id) return;
-          const existing = map.get(r.whiskey_id) ?? { count: 0, ratingSum: 0, ratingCount: 0 };
-          existing.count += 1;
-          if (r.rating != null) {
-            existing.ratingSum += r.rating;
-            existing.ratingCount += 1;
-          }
-          map.set(r.whiskey_id, existing);
-        });
-        setBottleStats(
-          Array.from(map.entries()).map(([whiskey_id, s]) => ({
-            whiskey_id,
-            count: s.count,
-            avg_rating: s.ratingCount > 0 ? s.ratingSum / s.ratingCount : null,
-          }))
-        );
+
+    async function fetchBottleStats() {
+      const [resA, resB] = await Promise.all([
+        supabase
+          .from("tastings")
+          .select("id, whiskey_id, rating")
+          .eq("event_id", eventId)
+          .in("whiskey_id", ids),
+        flags?.starts_at && flags?.ends_at
+          ? supabase
+              .from("tastings")
+              .select("id, whiskey_id, rating")
+              .gte("created_at", flags.starts_at)
+              .lte("created_at", flags.ends_at)
+              .in("whiskey_id", ids)
+          : Promise.resolve({ data: [] as { id: string; whiskey_id: string | null; rating: number | null }[] }),
+      ]);
+
+      const combined = [...(resA.data ?? []), ...(resB.data ?? [])];
+      const seen = new Set<string>();
+      const deduped = combined.filter((r) => {
+        if (seen.has(r.id)) return false;
+        seen.add(r.id);
+        return true;
       });
-  }, [lineup, eventId]);
+
+      const map = new Map<string, { count: number; ratingSum: number; ratingCount: number }>();
+      deduped.forEach((r) => {
+        if (!r.whiskey_id) return;
+        const existing = map.get(r.whiskey_id) ?? { count: 0, ratingSum: 0, ratingCount: 0 };
+        existing.count += 1;
+        if (r.rating != null) {
+          existing.ratingSum += r.rating;
+          existing.ratingCount += 1;
+        }
+        map.set(r.whiskey_id, existing);
+      });
+
+      setBottleStats(
+        Array.from(map.entries()).map(([whiskey_id, s]) => ({
+          whiskey_id,
+          count: s.count,
+          avg_rating: s.ratingCount > 0 ? s.ratingSum / s.ratingCount : null,
+        }))
+      );
+    }
+
+    void fetchBottleStats();
+    const interval = setInterval(() => { void fetchBottleStats(); }, 30000);
+    return () => clearInterval(interval);
+  }, [lineup, eventId, flags?.starts_at, flags?.ends_at]);
 
   useEffect(() => {
     if (!eventId) return;
