@@ -18,12 +18,9 @@ export async function adminLookupUserByEmail(
 }
 
 export async function adminGetUserRoles(userId: string): Promise<AppRole[]> {
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId);
-  if (error) return [];
-  return (data ?? []).map((row) => row.role as AppRole);
+  const { data, error } = await supabase.rpc("admin_get_user_roles", { p_user_id: userId });
+  if (error) throw error;
+  return (data ?? []).map((row: any) => row.role as AppRole);
 }
 
 export async function adminGrantRole(userId: string, role: AppRole): Promise<void> {
