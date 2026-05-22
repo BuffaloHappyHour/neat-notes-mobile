@@ -197,7 +197,7 @@ export default function EventAnalyticsProScreen() {
   const [error, setError] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [exporting, setExporting] = useState(false);
-  const { roles } = useRoles();
+  const { isHostPro, isAdmin } = useRoles();
 
   useEffect(() => {
     if (!eventId) return;
@@ -631,7 +631,7 @@ export default function EventAnalyticsProScreen() {
         ) : null}
 
         {/* ── EXPORT REPORT ──────────────────────────────────────────────── */}
-        {analytics && (roles.includes("host_pro") || roles.includes("admin")) ? (
+        {analytics && (isHostPro || isAdmin) ? (
           <Pressable
             onPress={async () => {
               setExporting(true);

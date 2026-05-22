@@ -7,3 +7,5 @@ export type AppRole =
   | "retail_partner"
   | "brand_pilot"
   | "enterprise";
+
+export type VenueRole = Extract<AppRole, "venue_starter" | "venue_pro">;

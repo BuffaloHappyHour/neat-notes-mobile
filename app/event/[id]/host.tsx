@@ -137,7 +137,7 @@ export default function EventHostPage() {
     summary,
   } = useEventPageData(eventId);
 
-  const { roles } = useRoles();
+  const { isHost, isAdmin } = useRoles();
 
   const [checkinCode, setCheckinCode] = useState<string | null>(null);
 
@@ -565,7 +565,7 @@ export default function EventHostPage() {
           )}
         </SectionCard>
 
-        {(roles.includes("host_starter") || roles.includes("host_pro") || roles.includes("admin")) ? (
+        {(isHost || isAdmin) ? (
           <Pressable
             onPress={() => router.push({ pathname: "/event/[id]/host-analytics-pro", params: { id: eventId } } as any)}
             style={({ pressed }) => ({

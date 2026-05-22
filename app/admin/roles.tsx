@@ -24,17 +24,7 @@ import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 import type { AppRole } from "../../types/roles";
-
-const ALL_ROLES: AppRole[] = [
-  "admin",
-  "host_starter",
-  "host_pro",
-  "venue_starter",
-  "venue_pro",
-  "retail_partner",
-  "brand_pilot",
-  "enterprise",
-];
+import { ALL_ROLES } from "../../constants/roles";
 
 type FoundUser = {
   user_id: string;

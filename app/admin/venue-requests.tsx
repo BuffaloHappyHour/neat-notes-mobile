@@ -17,6 +17,8 @@ import {
   adminRejectVenueRequest,
   type VenueRequest,
 } from "../../lib/adminVenueRequests";
+import { ROLE_VENUE_PRO, ROLE_VENUE_STARTER } from "../../constants/roles";
+import type { VenueRole } from "../../types/roles";
 import { radii } from "../../lib/radii";
 import { shadows } from "../../lib/shadows";
 import { spacing } from "../../lib/spacing";
@@ -30,7 +32,7 @@ function RequestCard({
   busy,
 }: {
   request: VenueRequest;
-  onApprove: (role: "venue_starter" | "venue_pro") => void;
+  onApprove: (role: VenueRole) => void;
   onReject: () => void;
   busy: boolean;
 }) {
@@ -42,8 +44,8 @@ function RequestCard({
 
   function promptApprove() {
     Alert.alert("Approve as…", undefined, [
-      { text: "Venue Starter", onPress: () => onApprove("venue_starter") },
-      { text: "Venue Pro", onPress: () => onApprove("venue_pro") },
+      { text: "Venue Starter", onPress: () => onApprove(ROLE_VENUE_STARTER) },
+      { text: "Venue Pro", onPress: () => onApprove(ROLE_VENUE_PRO) },
       { text: "Cancel", style: "cancel" },
     ]);
   }
@@ -180,7 +182,7 @@ export default function AdminVenueRequestsScreen() {
     if (authOk) load();
   }, [authOk, load]);
 
-  async function handleApprove(id: string, role: "venue_starter" | "venue_pro") {
+  async function handleApprove(id: string, role: VenueRole) {
     if (busyId) return;
     setBusyId(id);
     try {

@@ -323,18 +323,10 @@ export default function CreateEventScreen() {
   const [iosPickerValue, setIosPickerValue] = useState(new Date());
 
   // Tier cap
-  const { roles } = useRoles();
-  const tierCap = roles.includes("host_pro")
-    ? 50
-    : roles.includes("host_starter")
-    ? 25
-    : 10;
-  const tierLabel = roles.includes("host_pro")
-    ? "Host Pro"
-    : roles.includes("host_starter")
-    ? "Host Starter"
-    : "Free";
-  const showUpgradeCaption = !roles.includes("host_pro");
+  const { isHostPro, isHostStarter } = useRoles();
+  const tierCap = isHostPro ? 50 : isHostStarter ? 25 : 10;
+  const tierLabel = isHostPro ? "Host Pro" : isHostStarter ? "Host Starter" : "Free";
+  const showUpgradeCaption = !isHostPro;
 
   useEffect(() => {
     if (selectedVenue || venueManual || venueQuery.trim().length < 2) {
@@ -846,11 +838,7 @@ export default function CreateEventScreen() {
   // ── Step 2 ────────────────────────────────────────────────────────────────
 
   function Step2() {
-    const tierBadgeColor = roles.includes("host_pro")
-      ? colors.success
-      : roles.includes("host_starter")
-      ? colors.accent
-      : colors.textMuted;
+    const tierBadgeColor = isHostPro ? colors.success : isHostStarter ? colors.accent : colors.textMuted;
 
     return (
       <>
