@@ -35,6 +35,10 @@ module.exports = {
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
+      permissions: [
+        "android.permission.CAMERA",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+      ],
     },
 
     web: {
@@ -62,15 +66,21 @@ module.exports = {
         {
           locationWhenInUsePermission:
             "Neat Notes uses your location to find nearby whiskey events and venues",
-          locationAlwaysPermission:
-            "Neat Notes uses your location to alert you when favorite whiskies are nearby",
         },
       ],
       [
         "expo-media-library",
         {
-          photosPermission: "Allow Neat Notes to access your photos",
-          savePhotosPermission: "Allow Neat Notes to save photos",
+          photosPermission: "Allow Neat Notes to save your event QR code to your photo library",
+          savePhotosPermission: "Allow Neat Notes to save your event QR code to your photo library",
+          isAccessMediaLocationEnabled: false,
+        },
+      ],
+      [
+        "expo-image-picker",
+        {
+          photosPermission: "Allow Neat Notes to access your photos to attach to tastings",
+          cameraPermission: "Allow Neat Notes to take photos to attach to tastings",
         },
       ],
       [
