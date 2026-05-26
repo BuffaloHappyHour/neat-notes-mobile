@@ -1119,6 +1119,16 @@ Additional Notes:
           />
         </Card>
 
+        {/* ── Notifications ── */}
+        <Card title="Notifications" subtitle="Manage what Neat Notes can send you.">
+          <ThemedButton
+            label="Notification Settings"
+            onPress={withTick(() => router.push("/notification-settings" as any))}
+            tone="secondary"
+            icon={<Ionicons name="notifications-outline" size={18} color={colors.textPrimary} />}
+          />
+        </Card>
+
         {/* ── Danger Zone ── */}
         <Card title="Danger Zone" subtitle="Irreversible actions. Pour carefully.">
           <ThemedButton
