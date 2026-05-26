@@ -21,7 +21,7 @@ export function EventQRModal({ visible, joinCode, onClose }: Props) {
   const qrValue = `neatnotes://event/join?code=${joinCode}`;
 
   async function handleSave() {
-    const { status } = await MediaLibrary.requestPermissionsAsync(false);
+    const { status } = await MediaLibrary.requestPermissionsAsync(true);
     if (status !== "granted") {
       Alert.alert("Permission Denied", "Camera roll access is required to save the QR code.");
       return;

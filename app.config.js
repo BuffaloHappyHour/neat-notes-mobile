@@ -76,6 +76,7 @@ module.exports = {
           photosPermission: "Allow Neat Notes to save your event QR code to your photo library",
           savePhotosPermission: "Allow Neat Notes to save your event QR code to your photo library",
           isAccessMediaLocationEnabled: false,
+          granularPermissions: [],
         },
       ],
       [
