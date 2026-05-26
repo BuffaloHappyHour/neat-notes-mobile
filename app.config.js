@@ -79,13 +79,6 @@ module.exports = {
         },
       ],
       [
-        "expo-image-picker",
-        {
-          photosPermission: "Allow Neat Notes to access your photos to attach to tastings",
-          cameraPermission: "Allow Neat Notes to take photos to attach to tastings",
-        },
-      ],
-      [
         "expo-splash-screen",
         {
           image: "./assets/images/splash-icon.png",
