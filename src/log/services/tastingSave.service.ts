@@ -412,6 +412,8 @@ const activeEventId = await getActiveEventId();
 
     await hapticSuccess();
 
+    void checkAndRequestPushPermission(user.id);
+
     return {
       tastingId: newId,
       whiskeyId: safeWhiskeyId,
@@ -426,5 +428,21 @@ const activeEventId = await getActiveEventId();
     const err: any = new Error(msg);
     err.isOffline = isOffline;
     throw err;
+  }
+}
+
+async function checkAndRequestPushPermission(userId: string) {
+  try {
+    const { count } = await supabase
+      .from("tastings")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId);
+
+    if (count === 3) {
+      const { registerForPushNotifications } = await import("../../../lib/notifications");
+      await registerForPushNotifications();
+    }
+  } catch {
+    // never throw, never block
   }
 }
