@@ -127,6 +127,7 @@ Each feature includes:
 | F091 | Recommendations Foundation | Insights | High | v1.1.0 | Medium | Low | ✅ Done | get_recommendations_for_user RPC using L2/L3 flavor + whiskey_type_id overlap — powers Home rail with "Because you liked…" suggestions |
 | F092 | Community Pulse Modules | UX | Medium | v1.1.0 | Medium | Low | 💡 Idea | Trending bottles (last 7 days, min 3 logs) and highest rated (min 5 logs) on Home — anonymous aggregates from materialized Supabase views |
 | F093 | Phone-First Signup Flow Redesign | Profile | High | v1.1.0 | Medium | Low | ✅ Done | Phone-first signup: OTP creates account with phone as primary identity, email + password linked after verification. Email-only fallback if no phone provided. signInWithOtp (shouldCreateUser: true) + linkIdentity email + updateUser password. Ghost-account bug fixed (sendSignUpOtp uses updateUser not signInWithOtp). Shipped May 18, 2026. |
+| F094 | Sign in with Apple | Profile | High | v1.1.2 | Low | Low | 💡 Idea | Required by Apple Guideline 4.8 — must be offered as equivalent login option alongside any third-party auth. Blocks App Store approval if missing. |
 ---
 
 ## Feature Detail
@@ -803,6 +804,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 - F049 — Account Settings — Add / Change Phone Number ✅ Done
 - F087 — Google Sign-In 🔨 In Progress (v1.1.0)
 - F093 — Phone-First Signup Flow Redesign ✅ Done (v1.1.0)
+- F094 — Sign in with Apple (v1.1.2)
 
 ### Analytics
 - F002 — Fix Host Analytics Event Snapshot metrics ✅ Done
