@@ -8,10 +8,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
     id        uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id   uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     segment   text        NOT NULL,
-    sent_at   timestamptz NOT NULL DEFAULT now()
+    sent_at   timestamptz NOT NULL DEFAULT now(),
+    sent_date date        NOT NULL DEFAULT CURRENT_DATE
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_sent_behavioral_daily
-    ON public.sent_behavioral_notifications (user_id, segment, (sent_at::date));
+    ON public.sent_behavioral_notifications (user_id, segment, sent_date);
   ALTER TABLE public.sent_behavioral_notifications ENABLE ROW LEVEL SECURITY;
 */
 
@@ -131,7 +132,8 @@ serve(async (req: Request) => {
     async function recordSends(userIds: string[], segment: string): Promise<void> {
       if (userIds.length === 0) return;
       const sentAt = new Date().toISOString();
-      const rows = userIds.map((user_id) => ({ user_id, segment, sent_at: sentAt }));
+      const sentDate = sentAt.split("T")[0];
+      const rows = userIds.map((user_id) => ({ user_id, segment, sent_at: sentAt, sent_date: sentDate }));
       try {
         await fetch(`${supabaseUrl}/rest/v1/sent_behavioral_notifications`, {
           method: "POST",
