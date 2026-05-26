@@ -128,6 +128,9 @@ Each feature includes:
 | F092 | Community Pulse Modules | UX | Medium | v1.1.0 | Medium | Low | 💡 Idea | Trending bottles (last 7 days, min 3 logs) and highest rated (min 5 logs) on Home — anonymous aggregates from materialized Supabase views |
 | F093 | Phone-First Signup Flow Redesign | Profile | High | v1.1.0 | Medium | Low | ✅ Done | Phone-first signup: OTP creates account with phone as primary identity, email + password linked after verification. Email-only fallback if no phone provided. signInWithOtp (shouldCreateUser: true) + linkIdentity email + updateUser password. Ghost-account bug fixed (sendSignUpOtp uses updateUser not signInWithOtp). Shipped May 18, 2026. |
 | F094 | Sign in with Apple | Profile | High | v1.1.2 | Low | Low | ✅ Done | Required by Apple Guideline 4.8 — must be offered as equivalent login option alongside any third-party auth. Blocks App Store approval if missing. |
+| F095 | Notification Tap Navigation | Infrastructure | High | v1.1.2 | Low | Low | 🔍 Scoped | Route notification taps to correct in-app screens based on notification type. Milestone/premium nudge → Insights screen. Scheduled/inactive → Log tab. Requires data payload on each push message and Notifications.addNotificationResponseReceivedListener in _layout.tsx. |
+| F096 | Weekly Palate Clarity Update System | Insights | High | v1.1.2 | Medium | Low | 🔍 Scoped | Whoop-style weekly palate update backend and UI. New view: user_metrics_90d_current (90-day rolling window, Depth 30% + Diversity 20% + Preference Patterns 30% + Confidence 20%). New table: user_metric_weekly_snapshots. New view: user_metric_weekly_trends_current (deltas, biggest driver, weekly_movement_status). pg_cron job: every Sunday 13:00 UTC. App UI card reading from user_metric_weekly_trends_current showing weekly movement and biggest driver. Backend complete — app UI card still needed. |
+| F097 | Whiskey Card Revamp + Related Whiskey Features | Tasting | High | v1.1.2 | High | Low | 🔍 Scoped | Full whiskey feature release: Whiskey Card revamp (F050), Go-UPC fallback + bottle images (F053), user submit edits for whiskey records (F054), whiskey profile page rework (F069). Consolidates all whiskey-surface improvements into one focused release. |
 ---
 
 ## Feature Detail
@@ -825,6 +828,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 - F045 — Whiskey Type Correlation Insights (v1.1.0)
 - F090 — Insights Teaser on Home + Milestone Cards (v1.1.0)
 - F091 — Recommendations Foundation (v1.1.0)
+- F096 — Weekly Palate Clarity Update System (v1.1.2) 🔍 Scoped
 
 ### Tasting
 - F001 — All Tastings Page Revamp ✅ Done
@@ -836,6 +840,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 - F048 — Custom Whiskey Submission Flow Redesign (v1.1.0)
 - F050 — Whiskey Card Revamp (v1.1.0)
 - F054 — User Submit Edits for Whiskey Records (v1.0.9)
+- F097 — Whiskey Card Revamp + Related Whiskey Features (v1.1.2) 🔍 Scoped
 
 ### Venue
 - F005 — Fix hardcoded venue data fallbacks ✅ Done
@@ -896,6 +901,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 - F063 — search_whiskeys RPC ✅ Done
 - F070 — Catalog Duplicate Audit Bulk Brands (v1.1.0)
 - F088 — Phone Auth Analytics Events (v1.1.0)
+- F095 — Notification Tap Navigation (v1.1.2) 🔍 Scoped
 
 ### Website
 - F035 — Core Marketing Site (Website)
@@ -930,6 +936,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 
 | Date | Update |
 |---|---|
+| May 26, 2026 | F095, F096, F097 added — notification tap navigation, weekly palate clarity update system, and whiskey card revamp scoped as next action items for v1.1.2. |
 | May 26, 2026 | F094 shipped — Sign in with Apple via expo-apple-authentication. Apple Developer capability enabled, Supabase Apple provider configured, signInWithIdToken flow, name capture on first sign-in. F020 shipped — Push notification system complete. user_push_tokens and notification_preferences tables, send-scheduled-notifications and send-behavioral-notifications Edge Functions deployed, pg_cron jobs live (Friday 5pm ET + daily 10am UTC), contextual permission ask after 3rd tasting, notification settings screen in Account Settings. F010 shipped — .maybeSingle() fix eliminates PGRST116 errors for new users. Security: user_metrics_90d_v4 switched to security_invoker — RLS now enforced. Permissions: Android media permissions scoped, expo-image-picker unused plugin removed, locationAlwaysPermission removed. |
 | May 19, 2026 | F084, F085, F090, F091 shipped — Home Screen Redesign, guided onboarding, Insights teaser CTA, and Recommendations Foundation complete. |
 | May 18, 2026 | F093 added and shipped — Phone-First Signup Flow Redesign. Phone-first OTP path creates account with phone as primary identity via signInWithOtp (shouldCreateUser: true). Email + password linked after OTP verification via linkIdentity + updateUser. Email-only fallback retained. |
