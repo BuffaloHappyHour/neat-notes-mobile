@@ -168,10 +168,15 @@ export function useClarityInsightsData(): ClarityInsightsData {
         .from("user_metrics_90d_v4")
         .select("*")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (error || !data) {
+      if (error) {
         console.error("Failed to load clarity metrics", error);
+        setState((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+      if (!data) {
+        // No metrics yet — user has no tastings, leave defaults
         setState((prev) => ({ ...prev, loading: false }));
         return;
       }
