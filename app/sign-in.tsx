@@ -16,9 +16,11 @@ import {
   View,
 } from "react-native";
 
+import * as AppleAuthentication from "expo-apple-authentication";
 import Purchases from "react-native-purchases";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
+import { useAppleAuth } from "../hooks/useAppleAuth";
 import { fetchMyProfile } from "../lib/cloudProfile";
 import { syncPremiumStatusFromRevenueCat } from "../lib/premiumSync";
 import { radii } from "../lib/radii";
@@ -285,6 +287,8 @@ export default function SignInScreen() {
   const [signupOtp, setSignupOtp] = useState("");
   const [signupPendingPhone, setSignupPendingPhone] = useState("");
   const [signupDisplayName, setSignupDisplayName] = useState("");
+
+  const { isAvailable: isAppleAvailable, signIn: appleSignIn } = useAppleAuth();
 
   const titleText = useMemo(() => {
     if (mode === "signup") return "Create Account";
@@ -655,6 +659,22 @@ export default function SignInScreen() {
     await finishSignIn();
   };
 
+  /* ---- Apple Sign-In ---- */
+  const handleAppleSignIn = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await appleSignIn();
+      await finishSignIn();
+    } catch (err: any) {
+      if (!err?.cancelled) {
+        Alert.alert("Sign in failed", err?.message ?? "An error occurred. Please try again.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
   /* ---- Google Sign-In ---- */
   const signInWithGoogle = async () => {
     if (busy) return;
@@ -928,6 +948,18 @@ export default function SignInScreen() {
         ) : mode === "signup" ? (
           <Card title="Create Account" subtitle="Start your whiskey journey.">
             <GoogleSignInButton onPress={signInWithGoogle} disabled={busy} />
+            {isAppleAvailable && (
+              <>
+                <OrDivider />
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                  cornerRadius={8}
+                  style={{ width: "100%", height: 50 }}
+                  onPress={handleAppleSignIn}
+                />
+              </>
+            )}
             <OrDivider />
             <ThemedInput
               placeholder="Email"
@@ -1040,6 +1072,18 @@ export default function SignInScreen() {
         ) : (
           <Card title="Sign In" subtitle="Sign in to keep a record of your tastings">
             <GoogleSignInButton onPress={signInWithGoogle} disabled={busy} />
+            {isAppleAvailable && (
+              <>
+                <OrDivider />
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                  cornerRadius={8}
+                  style={{ width: "100%", height: 50 }}
+                  onPress={handleAppleSignIn}
+                />
+              </>
+            )}
             <OrDivider />
             <ThemedInput
               placeholder="Email"

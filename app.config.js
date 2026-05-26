@@ -21,6 +21,8 @@ module.exports = {
         ITSAppUsesNonExemptEncryption: false,
         NSUserNotificationUsageDescription:
           "Allow Neat Notes to send you palate updates and event notifications",
+        NSAppleSignInUsageDescription:
+          "Sign in quickly and securely with your Apple ID",
       },
     },
 
@@ -95,6 +97,7 @@ module.exports = {
           },
         },
       ],
+      "expo-apple-authentication",
       [
         "expo-build-properties",
         {
