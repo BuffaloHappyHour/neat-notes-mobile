@@ -1,6 +1,6 @@
 WhiskeyAppBeta — Feature Ideas & Roadmap
 
-> Last updated: May 17, 2026  
+> Last updated: May 26, 2026  
 > Maintained by: Derek  
 
 ---
@@ -45,7 +45,7 @@ Each feature includes:
 | F007 | Add user_id filters to profile queries (C1) | Profile | Low | v1.1.0 | Low | Low | 💡 Idea | 5 profile queries missing user_id filter — mitigated by RLS but should be fixed |
 | F008 | Add ownership checks to update/delete (C3/M1) | Infrastructure | Low | v1.1.0 | Low | Low | 💡 Idea | Update and delete paths missing user_id check — mitigated by RLS |
 | F009 | Fix null guard on avg_rating (C4/L5) | Tasting | Low | — | Low | Low | ✅ Done | .toFixed(1) on nullable avg_rating + fix type definition |
-| F010 | Replace .single() with .maybeSingle() (M2) | Infrastructure | Low | v1.1.0 | Low | Low | 💡 Idea | Spurious errors logged for new users with no metrics data |
+| F010 | Replace .single() with .maybeSingle() (M2) | Infrastructure | Low | v1.1.0 | Low | Low | ✅ Done | Spurious errors logged for new users with no metrics data |
 | F011 | Move category breakdown to server-side RPC (M5) | Infrastructure | Low | v1.1.0 | Medium | Low | 💡 Idea | 3000-row client-side fetch for a simple bar chart — needs server aggregation |
 | F012 | Fix route type casting (L1) | Infrastructure | Low | Backlog | Low | Low | 💡 Idea | as any casts suppress Expo Router compile-time route checking |
 | F013 | Align RPC limit with UI display (L2) | Analytics | Low | Backlog | Low | Low | 💡 Idea | RPC fetches 10 top whiskies, UI shows 5 — align to avoid wasted network call |
@@ -55,7 +55,7 @@ Each feature includes:
 | F017 | Enforce minimum rating floor (L7) | Tasting | Low | Backlog | Low | Low | 💡 Idea | Rating 0 is submittable — decide on minimum valid rating and enforce it |
 | F018 | Shareable Flavor Profile Card | UX | High | v1.1.0 | Medium | Low | 💡 Idea | Branded shareable image card (Stories + Square) with radar chart, Palate Clarity score, top traits, and personalized tagline |
 | F019 | Insights Revamp | Insights | High | v1.0.8 | High | Medium | ✅ Done | Summary tab restructured, Pour Profile tab added, Flavor Map renamed, Hero Card shipped. |
-| F020 | Push Notification System | Infrastructure | High | v1.1.0 | Medium | Low | 💡 Idea | Weekly palate check-ins, palate score updates, milestone alerts (50 tastings, Refining tier, etc.) with Whoop-style retention model |
+| F020 | Push Notification System | Infrastructure | High | v1.1.0 | Medium | Low | ✅ Done | Weekly Friday pour reminders (12-message rotation), behavioral milestone triggers (3 tastings, 10 tastings, 7-day inactive, premium nudge), opt-out preference controls per notification type. Edge Functions deployed, pg_cron scheduled. |
 | F021 | Location Platform Foundation | Infrastructure | High | v1.2.0 | High | Medium | 💡 Idea | Enable location permissions, core location infrastructure, privacy controls — foundation for all location-based features |
 | F022 | Nearby Whiskey Alerts | UX | Medium | v1.2.0 | Medium | Low | 💡 Idea | Push notification when a favorited whiskey is logged nearby by another user |
 | F023 | Bars Nearby with Your Whiskey | Discover | Medium | v1.2.0 | Medium | Low | 💡 Idea | Find bars serving whiskies that match your flavor profile and favorites |
@@ -127,7 +127,7 @@ Each feature includes:
 | F091 | Recommendations Foundation | Insights | High | v1.1.0 | Medium | Low | ✅ Done | get_recommendations_for_user RPC using L2/L3 flavor + whiskey_type_id overlap — powers Home rail with "Because you liked…" suggestions |
 | F092 | Community Pulse Modules | UX | Medium | v1.1.0 | Medium | Low | 💡 Idea | Trending bottles (last 7 days, min 3 logs) and highest rated (min 5 logs) on Home — anonymous aggregates from materialized Supabase views |
 | F093 | Phone-First Signup Flow Redesign | Profile | High | v1.1.0 | Medium | Low | ✅ Done | Phone-first signup: OTP creates account with phone as primary identity, email + password linked after verification. Email-only fallback if no phone provided. signInWithOtp (shouldCreateUser: true) + linkIdentity email + updateUser password. Ghost-account bug fixed (sendSignUpOtp uses updateUser not signInWithOtp). Shipped May 18, 2026. |
-| F094 | Sign in with Apple | Profile | High | v1.1.2 | Low | Low | 💡 Idea | Required by Apple Guideline 4.8 — must be offered as equivalent login option alongside any third-party auth. Blocks App Store approval if missing. |
+| F094 | Sign in with Apple | Profile | High | v1.1.2 | Low | Low | ✅ Done | Required by Apple Guideline 4.8 — must be offered as equivalent login option alongside any third-party auth. Blocks App Store approval if missing. |
 ---
 
 ## Feature Detail
@@ -804,7 +804,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 - F049 — Account Settings — Add / Change Phone Number ✅ Done
 - F087 — Google Sign-In 🔨 In Progress (v1.1.0)
 - F093 — Phone-First Signup Flow Redesign ✅ Done (v1.1.0)
-- F094 — Sign in with Apple (v1.1.2)
+- F094 — Sign in with Apple ✅ Done
 
 ### Analytics
 - F002 — Fix Host Analytics Event Snapshot metrics ✅ Done
@@ -815,7 +815,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 
 ### Insights
 - F019 — Insights Revamp ✅ Done
-- F020 — Push Notification System (v1.1.0)
+- F020 — Push Notification System ✅ Done
 - F033 — Palate Clarity Unique Whiskey Calculation (v1.1.0)
 - F034 — Whiskey Evolution Insights (v1.1.0)
 - F038 — Claude "What Should I Drink?" Recommendation (v1.1.0)
@@ -880,7 +880,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 - F004 — Verify personal_notes in public mirror ✅ Done
 - F006 — Investigate Exposed Auth Users views ✅ Done
 - F008 — Add ownership checks to update/delete (v1.1.0)
-- F010 — Replace .single() with .maybeSingle() (v1.1.0)
+- F010 — Replace .single() with .maybeSingle() ✅ Done
 - F011 — Move category breakdown to server-side RPC (v1.1.0)
 - F012 — Fix route type casting (Backlog)
 - F014 — Remove console.log from production ✅ Done
@@ -919,7 +919,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 | v1.0.9 | TBD | Final UI push — catalog, discovery & web foundation | 💡 Planning | **Shipped:** admin dashboard redesign (F059), new admin KPIs + Monetization tab (F060), admin reject RPC fix (F061), find_duplicate_whiskey_candidates RPC (F062), search_whiskeys RPC (F063), full-screen search modal (F064), submission-time duplicate detection (F065). **In queue (priority order):** whiskey card revamp (F050), Go-UPC fallback + bottle images (F053, alongside F050), user submit edits for whiskey records (F054), web platform consolidation neatnotes-web → neatnotesapp.com (F058), fuzzy/trigram search app-side wiring (F055, confirm F063 coverage first), search relevance ranking app-side wiring (F057, confirm F063 coverage first) |
 | v1.1.0 | TBD | "Your palate comes into focus" — shift from journal to palate intelligence platform | 💡 Planning | Whiskey card revamp, Hero Card, Go-UPC fallback + bottle images, shareable flavor profile card, push notifications, custom whiskey submission redesign, whiskey type correlation insights, candidate review duplicate detection panel (F066), candidate review merge target on reject (F067), candidate review pre-promotion validation (F068), whiskey profile page rework (F069), catalog duplicate audit bulk brands (F070), Export Analytics (F071), Home redesign (F084), guided onboarding (F085), What's New modal (F086), Google Sign-In (F087 — code complete, pending build), phone auth analytics (F088), duplicate auth view (F089), Insights teaser + milestone cards on Home (F090), recommendations foundation (F091), Community Pulse modules (F092), phone-first signup flow (F093 ✅ Done) |
 | v1.1.1 | TBD | Venue Foundation & Analytics Revamp | 💡 Planning | Venue check-in infrastructure, tastings mapped to venues, event host analytics revamp, Bar/Venue Menu feature |
-| v1.1.2 | TBD | B2B Monetization | 💡 Planning | Venue owner analytics dashboard, B2B access & subscription model, Palate Match for venue menus |
+| v1.1.2 | TBD | B2B Monetization | 💡 Planning | F094 Sign in with Apple ✅ Done. Venue owner analytics dashboard, B2B access & subscription model, Palate Match for venue menus |
 | v1.2.0 | TBD | Location Platform | 💡 Planning | Location foundation, nearby whiskey alerts, bar discovery fed by venue data, event discovery by location |
 | Website | TBD | Web Presence | 💡 Planning | Core marketing site + public events finder (events finder depends on v1.2.0 location platform) |
 | Backlog | — | Unscheduled ideas | — | |
@@ -930,6 +930,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 
 | Date | Update |
 |---|---|
+| May 26, 2026 | F094 shipped — Sign in with Apple via expo-apple-authentication. Apple Developer capability enabled, Supabase Apple provider configured, signInWithIdToken flow, name capture on first sign-in. F020 shipped — Push notification system complete. user_push_tokens and notification_preferences tables, send-scheduled-notifications and send-behavioral-notifications Edge Functions deployed, pg_cron jobs live (Friday 5pm ET + daily 10am UTC), contextual permission ask after 3rd tasting, notification settings screen in Account Settings. F010 shipped — .maybeSingle() fix eliminates PGRST116 errors for new users. Security: user_metrics_90d_v4 switched to security_invoker — RLS now enforced. Permissions: Android media permissions scoped, expo-image-picker unused plugin removed, locationAlwaysPermission removed. |
 | May 19, 2026 | F084, F085, F090, F091 shipped — Home Screen Redesign, guided onboarding, Insights teaser CTA, and Recommendations Foundation complete. |
 | May 18, 2026 | F093 added and shipped — Phone-First Signup Flow Redesign. Phone-first OTP path creates account with phone as primary identity via signInWithOtp (shouldCreateUser: true). Email + password linked after OTP verification via linkIdentity + updateUser. Email-only fallback retained. |
 | May 18, 2026 | F087 — Google Sign-In implementation committed. Supabase OAuth via expo-auth-session, PKCE + implicit flow handling, GoogleSignInButton + OrDivider components added to sign-in.tsx. iOS client ID wired in app.config.js. Pending production build. |
