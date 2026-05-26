@@ -7,7 +7,9 @@ import {
   Text,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import Purchases, { type PurchasesPackage } from "react-native-purchases";
+import Svg, { Circle, Line as SvgLine, Polygon, Text as SvgText } from "react-native-svg";
 
 import { trackInsightsScreenViewed, trackPurchaseCompleted, trackPurchaseTapped, trackRestoreCompleted } from "../../../lib/analytics";
 import { syncPremiumStatusFromRevenueCat } from "../../../lib/premiumSync";
@@ -16,6 +18,7 @@ import {
   purchasePackage,
   restoreMyPurchases,
 } from "../../../lib/purchases";
+import { radii } from "../../../lib/radii";
 import { spacing } from "../../../lib/spacing";
 import { colors } from "../../../lib/theme";
 import { type } from "../../../lib/typography";
@@ -333,8 +336,8 @@ function PackageOption({
         setPackages(sorted);
 
         const defaultPackage =
-          sorted.find((pkg) => pkg.identifier === "$rc_monthly") ??
           sorted.find((pkg) => pkg.identifier === "$rc_annual") ??
+          sorted.find((pkg) => pkg.identifier === "$rc_monthly") ??
           sorted[0] ??
           null;
 
@@ -418,66 +421,336 @@ async function handleRestorePurchases() {
   }
 
   if (!hasPremiumAccess) {
+    const tastingCount = metrics?.tasting_count ?? 0;
+    const monthlyPkg = packages.find((p) => p.identifier === "$rc_monthly");
+    const annualPkg = packages.find((p) => p.identifier === "$rc_annual");
+    const annualSavingsPct =
+      monthlyPkg && annualPkg
+        ? Math.round(
+            ((monthlyPkg.product.price * 12) - annualPkg.product.price) /
+              (monthlyPkg.product.price * 12) *
+              100
+          )
+        : null;
+
+    const features = [
+      {
+        title: "Tailored bottle recommendations",
+        subtitle: "Matched to your actual flavor preferences",
+      },
+      {
+        title: "Top traits + avoided notes",
+        subtitle: "What your palate seeks and rejects",
+      },
+      {
+        title: "Texture, proof & flavor intensity",
+        subtitle: "What you reach for vs. what you actually love",
+      },
+      {
+        title: "Proof point analysis",
+        subtitle: "The proof range where your ratings peak",
+      },
+      {
+        title: "Depth, diversity, consistency & confidence",
+        subtitle: "How your palate is maturing over time",
+      },
+      {
+        title: "Palate narrative",
+        subtitle: "Who you are as a whiskey drinker",
+      },
+    ];
+
+    // Decorative radar SVG — shown when tasting_count < 3
+    const radarCx = 150;
+    const radarCy = 150;
+    const radarOuterR = 120;
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const radarFlavors = [
+      { label: "Sweet",      angle: 270, fraction: 0.85 },
+      { label: "Spicy",      angle: 297, fraction: 0.70 },
+      { label: "Smoke Peat", angle: 324, fraction: 0.30 },
+      { label: "Grainy",     angle: 351, fraction: 0.25 },
+      { label: "Nutty",      angle: 18,  fraction: 0.40 },
+      { label: "Herbal",     angle: 45,  fraction: 0.35 },
+      { label: "Off-Notes",  angle: 72,  fraction: 0.20 },
+      { label: "Fruity",     angle: 99,  fraction: 0.75 },
+      { label: "Floral",     angle: 126, fraction: 0.30 },
+      { label: "Woody",      angle: 153, fraction: 0.80 },
+      { label: "Earthy",     angle: 207, fraction: 0.60 },
+    ];
+    const radarAxisPts = radarFlavors.map(({ angle }) => ({
+      x: radarCx + radarOuterR * Math.cos(toRad(angle)),
+      y: radarCy + radarOuterR * Math.sin(toRad(angle)),
+    }));
+    const radarLabelPts = radarFlavors.map(({ angle, label }) => ({
+      x: radarCx + radarOuterR * 1.35 * Math.cos(toRad(angle)),
+      y: radarCy + radarOuterR * 1.35 * Math.sin(toRad(angle)),
+      label,
+    }));
+    const radarDataPoints = radarFlavors
+      .map(({ angle, fraction }) => {
+        const a = toRad(angle);
+        return `${radarCx + radarOuterR * fraction * Math.cos(a)},${radarCy + radarOuterR * fraction * Math.sin(a)}`;
+      })
+      .join(" ");
+
     return (
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
           paddingHorizontal: spacing.md,
-          paddingBottom: spacing.xl,
-          gap: spacing.lg,
+          paddingBottom: spacing.xxl,
+          gap: spacing.xs,
         }}
       >
-        <View style={{ padding: spacing.lg }}>
-          <Text style={type.sectionHeader}>Premium Insights</Text>
-
-          <Text
-            style={[
-              type.body,
-              {
-                marginTop: spacing.sm,
-                color: colors.textSecondary,
-              },
-            ]}
+        {/* ── Hero ── */}
+        <View style={{ position: "relative", height: 220, overflow: "hidden" }}>
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 280,
+              opacity: 0.35,
+              overflow: "hidden",
+            }}
           >
-            Unlock your advanced whiskey insights with the plan that fits you best.
-          </Text>
-
-          {packagesLoading ? (
-            <View style={{ marginTop: spacing.lg, paddingVertical: spacing.lg }}>
-              <ActivityIndicator color={colors.textPrimary} />
-            </View>
-          ) : packages.length > 0 ? (
-            <>
-              {packages.map((pkg) => (
-                <PackageOption
-                  key={pkg.identifier}
-                  pkg={pkg}
-                  selected={pkg.identifier === selectedPackageId}
-                  onPress={() => setSelectedPackageId(pkg.identifier)}
+            {(metrics?.tasting_count ?? 0) >= 3 ? (
+              <TasteProfileRadar />
+            ) : (
+              <Svg width="100%" height={280} viewBox="0 0 300 300">
+                {/* 4 concentric rings at r=30,60,90,120 */}
+                {[30, 60, 90, 120].map((r) => (
+                  <Circle
+                    key={r}
+                    cx={radarCx}
+                    cy={radarCy}
+                    r={r}
+                    stroke={colors.accent}
+                    strokeOpacity={0.4}
+                    strokeWidth={0.5}
+                    fill="none"
+                  />
+                ))}
+                {/* 11 axis lines */}
+                {radarAxisPts.map(({ x, y }, i) => (
+                  <SvgLine
+                    key={i}
+                    x1={radarCx}
+                    y1={radarCy}
+                    x2={x}
+                    y2={y}
+                    stroke={colors.accent}
+                    strokeOpacity={0.45}
+                    strokeWidth={0.5}
+                  />
+                ))}
+                {/* Irregular data polygon */}
+                <Polygon
+                  points={radarDataPoints}
+                  stroke={colors.accent}
+                  strokeOpacity={0.8}
+                  strokeWidth={1}
+                  fill={colors.accent}
+                  fillOpacity={0.2}
                 />
-              ))}
-            </>
-          ) : (
+                {/* Flavor axis labels */}
+                {radarLabelPts.map(({ x, y, label }) => (
+                  <SvgText
+                    key={label}
+                    x={x}
+                    y={y}
+                    fontSize={8}
+                    fill={colors.accent}
+                    fillOpacity={0.7}
+                    textAnchor="middle"
+                  >
+                    {label}
+                  </SvgText>
+                ))}
+              </Svg>
+            )}
+          </View>
+
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: spacing.md,
+              gap: spacing.sm,
+            }}
+          >
+            <Text style={[type.labelCaps, { color: colors.accent, textAlign: "center" }]}>
+              Neat Notes Premium
+            </Text>
             <Text
               style={[
-                type.body,
+                type.screenTitle,
                 {
-                  marginTop: spacing.lg,
-                  color: colors.textSecondary,
+                  fontSize: type.heroMetric.fontSize,
+                  lineHeight: type.heroMetric.lineHeight,
+                  textAlign: "center",
                 },
               ]}
             >
+              Understand Your Palate
+            </Text>
+            <Text
+              style={[
+                type.microcopyItalic,
+                { color: colors.textSecondary, textAlign: "center" },
+              ]}
+            >
+              {tastingCount > 0
+                ? `You've logged ${tastingCount} tastings. Here's what we're learning.`
+                : "Start logging to build your palate profile."}
+            </Text>
+          </View>
+        </View>
+
+        {/* ── Features ── */}
+        <View style={{ gap: spacing.md }}>
+          <Text style={[type.labelCaps, { color: colors.accent }]}>What unlocks</Text>
+          <View>
+            {features.map((feature, index) => (
+              <View key={feature.title}>
+                <View style={{ paddingVertical: spacing.xs, gap: spacing.xs }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+                    <Ionicons name="chevron-forward" size={14} color={colors.accent} />
+                    <Text style={[type.sectionHeader, { flex: 1 }]}>{feature.title}</Text>
+                  </View>
+                  <Text style={[type.caption, { paddingLeft: 14 + spacing.xs }]} numberOfLines={1} ellipsizeMode="tail">{feature.subtitle}</Text>
+                </View>
+                {index < features.length - 1 && (
+                  <View style={{ height: 1, backgroundColor: colors.divider }} />
+                )}
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* ── Pricing + CTA card ── */}
+        <View
+          style={{
+            borderRadius: radii.xxl,
+            overflow: "hidden",
+            backgroundColor: colors.surfaceRaised,
+            borderWidth: 1,
+            borderColor: colors.borderStrong,
+            padding: spacing.heroPadding,
+            gap: spacing.md,
+          }}
+        >
+          <Text style={[type.labelCaps, { color: colors.accent, textAlign: "center" }]}>Choose a plan</Text>
+          {packagesLoading ? (
+            <View style={{ paddingVertical: spacing.lg }}>
+              <ActivityIndicator color={colors.textPrimary} />
+            </View>
+          ) : packages.length > 0 ? (
+            <View style={{ gap: spacing.sm }}>
+              {packages.map((pkg) => {
+                const isAnnual = pkg.identifier === "$rc_annual";
+                const isSelected = pkg.identifier === selectedPackageId;
+                return (
+                  <View key={pkg.identifier}>
+                    {isAnnual && (
+                      <View
+                        style={{
+                          alignSelf: "flex-start",
+                          paddingHorizontal: spacing.sm,
+                          paddingVertical: spacing.xs,
+                          borderRadius: 999,
+                          backgroundColor: colors.accentSoft,
+                          borderWidth: 1,
+                          borderColor: colors.borderStrong,
+                          marginBottom: spacing.xs,
+                        }}
+                      >
+                        <Text style={[type.labelCaps, { color: colors.accent }]}>Best value</Text>
+                      </View>
+                    )}
+                    <Pressable
+                      onPress={() => setSelectedPackageId(pkg.identifier)}
+                      style={({ pressed }) => ({
+                        borderRadius: 20,
+                        borderWidth: 1.5,
+                        borderColor: isSelected ? colors.accent : colors.divider,
+                        backgroundColor: isSelected
+                          ? colors.accentSoft
+                          : pressed
+                            ? colors.surfaceRaised
+                            : colors.surfaceSunken,
+                        padding: spacing.md,
+                      })}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: spacing.md,
+                        }}
+                      >
+                        <View style={{ flex: 1, gap: spacing.xs }}>
+                          <Text style={type.sectionHeader}>
+                            {isAnnual ? "Annual" : "Monthly"}
+                          </Text>
+                          <Text style={[type.body, { color: colors.textSecondary }]}>
+                            {pkg.product.priceString}
+                            {isAnnual ? " / year" : " / month"}
+                          </Text>
+                          {isAnnual && annualSavingsPct ? (
+                            <Text style={[type.caption, { color: colors.accent }]}>
+                              Save {annualSavingsPct}% vs monthly
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 999,
+                            borderWidth: 2,
+                            borderColor: isSelected ? colors.accent : colors.divider,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {isSelected ? (
+                            <View
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: 999,
+                                backgroundColor: colors.accent,
+                              }}
+                            />
+                          ) : null}
+                        </View>
+                      </View>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={[type.body, { color: colors.textSecondary }]}>
               No subscription options are currently available.
             </Text>
           )}
-
           <PrimaryButton
-            label="Unlock Insights"
+            label="Unlock My Insights"
             loading={purchaseLoading}
             onPress={handleUnlockInsights}
             disabled={!selectedPackage || packagesLoading || packages.length === 0}
           />
-
           <SecondaryButton
             label="Restore Purchases"
             loading={restoreLoading}
