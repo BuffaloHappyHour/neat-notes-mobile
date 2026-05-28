@@ -27,7 +27,7 @@ import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
-type Filter = "needs_review" | "promoted" | "rejected" | "all" | "pending_whiskeys";
+type Filter = "needs_review" | "promoted" | "rejected" | "all" | "pending_whiskeys" | "edit_suggestions";
 
 function MiniButton({
   label,
@@ -127,6 +127,8 @@ export default function AdminInboxScreen() {
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<CandidateRow[]>([]);
   const [pendingWhiskeys, setPendingWhiskeys] = useState<any[]>([]);
+  const [editSuggestions, setEditSuggestions] = useState<any[]>([]);
+  const [actingSuggestionId, setActingSuggestionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -144,10 +146,22 @@ export default function AdminInboxScreen() {
         if (error) throw error;
         setPendingWhiskeys(Array.isArray(data) ? data : []);
         setRows([]);
+        setEditSuggestions([]);
+      } else if (filter === "edit_suggestions") {
+        const { data, error } = await supabase
+          .from("whiskey_edit_suggestions")
+          .select("id, whiskey_id, field_name, current_value, suggested_value, status, created_at, whiskeys(display_name)")
+          .eq("status", "pending")
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        setEditSuggestions(Array.isArray(data) ? data : []);
+        setRows([]);
+        setPendingWhiskeys([]);
       } else {
         const data = await fetchCandidates({ q, filter: filter as CandidateFilter });
         setRows(data);
         setPendingWhiskeys([]);
+        setEditSuggestions([]);
       }
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load");
@@ -212,6 +226,93 @@ export default function AdminInboxScreen() {
             Alert.alert("Reject failed", e?.message ?? "Unknown error");
           } finally {
             setActingId(null);
+          }
+        },
+      },
+    ]);
+  }
+
+  async function approveSuggestion(suggestion: any) {
+    Alert.alert("Approve edit?", `Apply "${suggestion.suggested_value}" for ${suggestion.field_name}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Approve",
+        onPress: async () => {
+          try {
+            setActingSuggestionId(suggestion.id);
+
+            const fieldMap: Record<string, string> = {
+              distillery: "distillery",
+              proof: "proof",
+              age: "age",
+              mash_bill: "mash_bill",
+              whiskey_type: "whiskey_type",
+              category: "category",
+              region: "region",
+              sub_region: "sub_region",
+            };
+
+            const col = fieldMap[suggestion.field_name];
+            if (col) {
+              const value = ["proof", "age"].includes(suggestion.field_name)
+                ? Number(suggestion.suggested_value)
+                : suggestion.suggested_value;
+
+              await supabase
+                .from("whiskeys")
+                .update({ [col]: value, status: "verified" })
+                .eq("id", suggestion.whiskey_id);
+            }
+
+            await supabase
+              .from("whiskey_edit_suggestions")
+              .update({ status: "approved", reviewed_at: new Date().toISOString() })
+              .eq("id", suggestion.id);
+
+            await load();
+          } catch (e: any) {
+            Alert.alert("Approve failed", e?.message ?? "Unknown error");
+          } finally {
+            setActingSuggestionId(null);
+          }
+        },
+      },
+    ]);
+  }
+
+  async function rejectSuggestion(suggestion: any) {
+    Alert.alert("Reject edit?", `Discard suggested "${suggestion.suggested_value}" for ${suggestion.field_name}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Reject",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setActingSuggestionId(suggestion.id);
+
+            await supabase
+              .from("whiskey_edit_suggestions")
+              .update({ status: "rejected", reviewed_at: new Date().toISOString() })
+              .eq("id", suggestion.id);
+
+            const { data: remaining } = await supabase
+              .from("whiskey_edit_suggestions")
+              .select("id")
+              .eq("whiskey_id", suggestion.whiskey_id)
+              .eq("status", "pending");
+
+            if (!remaining || remaining.length === 0) {
+              await supabase
+                .from("whiskeys")
+                .update({ status: "verified" })
+                .eq("id", suggestion.whiskey_id);
+            }
+
+            await load();
+          } catch (e: any) {
+            Alert.alert("Reject failed", e?.message ?? "Unknown error");
+          } finally {
+            setActingSuggestionId(null);
           }
         },
       },
@@ -285,6 +386,7 @@ export default function AdminInboxScreen() {
         <FilterPill label="Rejected" active={filter === "rejected"} onPress={() => setFilter("rejected")} />
         <FilterPill label="All" active={filter === "all"} onPress={() => setFilter("all")} />
         <FilterPill label="Pending Whiskeys" active={filter === "pending_whiskeys"} onPress={() => setFilter("pending_whiskeys")} />
+        <FilterPill label="Edit Suggestions" active={filter === "edit_suggestions"} onPress={() => setFilter("edit_suggestions")} />
       </View>
 
       {loading ? (
@@ -293,6 +395,66 @@ export default function AdminInboxScreen() {
         </View>
       ) : err ? (
         <Text style={[type.body, { color: colors.textSecondary }]}>{err}</Text>
+      ) : filter === "edit_suggestions" ? (
+        <FlatList
+          data={editSuggestions}
+          keyExtractor={(r) => r.id}
+          contentContainerStyle={{ paddingBottom: spacing.xl }}
+          ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+          renderItem={({ item: s }) => {
+            const busy = actingSuggestionId === s.id;
+            const whiskeyName = (s.whiskeys as any)?.display_name ?? "Unknown whiskey";
+            return (
+              <View
+                style={{
+                  backgroundColor: colors.surface,
+                  borderRadius: radii.lg,
+                  borderWidth: 1,
+                  borderColor: colors.accent,
+                  ...shadows.card,
+                  padding: spacing.md,
+                  gap: spacing.sm,
+                }}
+              >
+                <Text style={[type.body, { color: colors.textPrimary, fontWeight: "800" }]} numberOfLines={1}>
+                  {whiskeyName}
+                </Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={[type.microcopyItalic, { color: colors.textSecondary, flex: 1 }]}>
+                    {s.field_name}
+                  </Text>
+                  <View style={{ flex: 2, gap: 2 }}>
+                    <Text style={[type.microcopyItalic, { color: colors.textMuted }]}>
+                      Current: {s.current_value ?? "—"}
+                    </Text>
+                    <Text style={[type.microcopyItalic, { color: colors.accent }]}>
+                      Suggested: {s.suggested_value}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: "row", gap: spacing.sm }}>
+                  <MiniButton
+                    label={busy ? "…" : "Approve"}
+                    variant="primary"
+                    disabled={busy}
+                    onPress={() => approveSuggestion(s)}
+                  />
+                  <MiniButton
+                    label={busy ? "…" : "Reject"}
+                    variant="danger"
+                    disabled={busy}
+                    onPress={() => rejectSuggestion(s)}
+                  />
+                  <MiniButton
+                    label="View"
+                    variant="neutral"
+                    onPress={() => router.push(`/whiskey/${s.whiskey_id}` as any)}
+                  />
+                </View>
+              </View>
+            );
+          }}
+        />
       ) : filter === "pending_whiskeys" ? (
           <FlatList
             data={pendingWhiskeys}

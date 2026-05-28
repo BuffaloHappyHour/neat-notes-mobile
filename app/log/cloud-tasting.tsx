@@ -17,7 +17,6 @@ import {
 
 import { Card } from "../../components/ui/Card";
 import { AppToast } from "../../src/components/ui/AppToast";
-import { MetadataModal } from "../../src/log/components/metadata/MetadataModal";
 import { RefineModal } from "../../src/log/components/refine/RefineModal";
 import { BottleDetailsCard } from "../../src/log/components/tasting/BottleDetailsCard";
 import FlavorNotesSection from "../../src/log/components/tasting/FlavorNotesSection";
@@ -32,7 +31,6 @@ import {
   useFlavorNodesEngine,
   type FlavorNode,
 } from "../../src/log/hooks/useFlavorNodes";
-import { usePostSaveMetadata } from "../../src/log/hooks/usePostSaveMetadata";
 import { loadTastingById } from "../../src/log/services/tastingLoad.service";
 import { saveCloudTasting } from "../../src/log/services/tastingSave.service";
 
@@ -260,7 +258,6 @@ export default function CloudTastingScreen() {
   const isExisting = !!tastingId;
   const hasTemplate = !isExisting && !!templateTastingId;
 
-  const postSaveMeta = usePostSaveMetadata();
   const [loading, setLoading] = useState(isExisting || hasTemplate);
   const [saving, setSaving] = useState(false);
   const [locked, setLocked] = useState(isExisting);
@@ -1249,82 +1246,6 @@ export default function CloudTastingScreen() {
         setSelectedNodeIds={setSelectedNodeIds}
         sentimentById={sentimentById}
         setSentimentById={setSentimentById}
-      />
-
-      <MetadataModal
-        visible={postSaveMeta.metaOpen}
-        loading={postSaveMeta.metaLoading}
-        saving={postSaveMeta.metaSaving}
-        isCustom={postSaveMeta.metaIsCustom}
-        metaMissingKeys={postSaveMeta.metaMissingKeys}
-        onSkip={() => {
-          const to = postSaveMeta.finishPostSaveFlow();
-          if (to) {
-            const toastUrl =
-              `${to}${String(to).includes("?") ? "&" : "?"}` +
-              `toastTitle=${encodeURIComponent("Saved")}&` +
-              `toastMessage=${encodeURIComponent(
-                "Your tasting has been saved."
-              )}`;
-
-            router.replace(toastUrl as any);
-          }
-        }}
-        onSave={async () => {
-          const to = await postSaveMeta.saveMetadataFromModal(routeBarcode || undefined);
-          if (to) {
-            const toastUrl =
-              `${to}${String(to).includes("?") ? "&" : "?"}` +
-              `toastTitle=${encodeURIComponent("Saved")}&` +
-              `toastMessage=${encodeURIComponent(
-                "Your tasting has been saved."
-              )}`;
-
-            router.replace(toastUrl as any);
-            return;
-          }
-
-          const fallback = postSaveMeta.finishPostSaveFlow();
-          if (fallback) {
-            const toastUrl =
-              `${fallback}${String(fallback).includes("?") ? "&" : "?"}` +
-              `toastTitle=${encodeURIComponent("Saved")}&` +
-              `toastMessage=${encodeURIComponent(
-                "Your tasting has been saved."
-              )}`;
-
-            router.replace(toastUrl as any);
-          }
-        }}
-        fName={postSaveMeta.fName}
-        setFName={postSaveMeta.setFName}
-        fDistillery={postSaveMeta.fDistillery}
-        setFDistillery={postSaveMeta.setFDistillery}
-        fTypeId={postSaveMeta.fTypeId}
-        setFTypeId={postSaveMeta.setFTypeId}
-        whiskeyTypeOptions={postSaveMeta.whiskeyTypeOptions}
-        selectedWhiskeyTypeName={postSaveMeta.selectedWhiskeyTypeName}
-        fProof={postSaveMeta.fProof}
-        setFProof={postSaveMeta.setFProof}
-        fAge={postSaveMeta.fAge}
-        setFAge={postSaveMeta.setFAge}
-        fCategory={postSaveMeta.fCategory}
-        setFCategory={postSaveMeta.setFCategory}
-        fRegion={postSaveMeta.fRegion}
-        setFRegion={postSaveMeta.setFRegion}
-        fSubRegion={postSaveMeta.fSubRegion}
-        setFSubRegion={postSaveMeta.setFSubRegion}
-        categoryOptions={postSaveMeta.categoryOptions}
-        regionOptions={postSaveMeta.regionOptions}
-        subRegionOptions={postSaveMeta.subRegionOptions}
-        canEditCategory={postSaveMeta.canEditCategory}
-        canEditRegion={postSaveMeta.canEditRegion}
-        canEditSubRegion={postSaveMeta.canEditSubRegion}
-        showCategoryBlock={postSaveMeta.showCategoryBlock}
-        showRegionBlock={postSaveMeta.showRegionBlock}
-        showSubRegionBlock={postSaveMeta.showSubRegionBlock}
-        onCategoryChange={postSaveMeta.onCategoryChange}
-        onRegionChange={postSaveMeta.onRegionChange}
       />
 
       <AppToast
