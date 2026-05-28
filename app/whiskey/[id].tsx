@@ -605,24 +605,59 @@ useEffect(() => {
   const uploadPhoto = async () => {
     if (improvePhotoUploading) return;
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert("Permission required", "Please allow photo access to upload.");
-        return;
-      }
+      Alert.alert(
+        "Add a photo",
+        "Take a new photo or choose from your library.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Camera",
+            onPress: async () => {
+              const permission = await ImagePicker.requestCameraPermissionsAsync();
+              if (!permission.granted) {
+                Alert.alert("Permission required", "Please allow camera access.");
+                return;
+              }
+              const result = await ImagePicker.launchCameraAsync({
+                allowsEditing: true,
+                aspect: [3, 4],
+                quality: 0.8,
+              });
+              if (!result.canceled && result.assets?.[0]) {
+                await processAndUploadPhoto(result.assets[0]);
+              }
+            },
+          },
+          {
+            text: "Photo Library",
+            onPress: async () => {
+              const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (!permission.granted) {
+                Alert.alert("Permission required", "Please allow photo library access.");
+                return;
+              }
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [3, 4],
+                quality: 0.8,
+              });
+              if (!result.canceled && result.assets?.[0]) {
+                await processAndUploadPhoto(result.assets[0]);
+              }
+            },
+          },
+        ]
+      );
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.message ?? "Please try again.");
+      await hapticError();
+    }
+  };
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [3, 4],
-        quality: 0.8,
-      });
-
-      if (result.canceled || !result.assets?.[0]) return;
-
-      setImprovePhotoUploading(true);
-
-      const asset = result.assets[0];
+  const processAndUploadPhoto = async (asset: ImagePicker.ImagePickerAsset) => {
+    setImprovePhotoUploading(true);
+    try {
       const ext = asset.uri.split(".").pop() ?? "jpg";
       const fileName = `${whiskeyId}/${Date.now()}.${ext}`;
 
