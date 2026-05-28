@@ -477,6 +477,29 @@ useEffect(() => {
   const [improveAge, setImproveAge] = useState("");
   const [improveSaving, setImproveSaving] = useState(false);
   const [improvePhotoUploading, setImprovePhotoUploading] = useState(false);
+  const [improveTypeId, setImproveTypeId] = useState<string | null>(null);
+  const [improveTypeName, setImproveTypeName] = useState<string | null>(null);
+  const [improveCategory, setImproveCategory] = useState<string | null>(null);
+  const [improveRegion, setImproveRegion] = useState<string | null>(null);
+  const [improveSubRegion, setImproveSubRegion] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editDistillery, setEditDistillery] = useState("");
+  const [editProof, setEditProof] = useState("");
+  const [editAge, setEditAge] = useState("");
+  const [editMashBill, setEditMashBill] = useState("");
+  const [editTypeId, setEditTypeId] = useState<string | null>(null);
+  const [editTypeName, setEditTypeName] = useState<string | null>(null);
+  const [editCategory, setEditCategory] = useState<string | null>(null);
+  const [editRegion, setEditRegion] = useState<string | null>(null);
+  const [editSubRegion, setEditSubRegion] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editDropdownOpen, setEditDropdownOpen] = useState<string | null>(null);
+  const [taxLoading, setTaxLoading] = useState(false);
+  const [taxWhiskeyTypes, setTaxWhiskeyTypes] = useState<{ id: string; name: string }[]>([]);
+  const [taxCategories, setTaxCategories] = useState<string[]>([]);
+  const [taxRegions, setTaxRegions] = useState<string[]>([]);
+  const [taxSubRegions, setTaxSubRegions] = useState<string[]>([]);
+  const [taxDropdownOpen, setTaxDropdownOpen] = useState<string | null>(null);
 
   const { axes: whiskeyAxes } = useWhiskeyRadarData(whiskeyId, community.total);
   const { axes: personalAxes } = useInsightsData();
@@ -546,13 +569,13 @@ useEffect(() => {
       const { error } = await supabase.rpc("user_fill_whiskey_missing_fields", {
         p_whiskey_id: whiskeyId,
         p_distillery: distillery,
-        p_whiskey_type_id: null,
-        p_whiskey_type: null,
+        p_whiskey_type_id: improveTypeId,
+        p_whiskey_type: improveTypeName,
         p_proof: proof,
         p_age: age,
-        p_category: null,
-        p_region: null,
-        p_sub_region: null,
+        p_category: improveCategory,
+        p_region: improveRegion,
+        p_sub_region: improveSubRegion,
       });
 
       if (error) throw new Error(error.message);
@@ -563,6 +586,11 @@ useEffect(() => {
       setImproveProof("");
       setImproveDistillery("");
       setImproveAge("");
+      setImproveTypeId(null);
+      setImproveTypeName(null);
+      setImproveCategory(null);
+      setImproveRegion(null);
+      setImproveSubRegion(null);
       setImproveOpen(false);
       showToast("Thanks!", "Your contribution helps improve the catalog.");
       await hapticTick();
@@ -632,6 +660,144 @@ useEffect(() => {
       await hapticError();
     } finally {
       setImprovePhotoUploading(false);
+    }
+  };
+
+  const loadTaxonomy = async (category: string | null, region: string | null) => {
+    setTaxLoading(true);
+    try {
+      const [typesRes, catsRes] = await Promise.all([
+        supabase.from("whiskey_types").select("id, name").order("name"),
+        supabase.from("whiskey_categories").select("category").order("category"),
+      ]);
+      setTaxWhiskeyTypes((typesRes.data ?? []).map((r: any) => ({ id: r.id, name: r.name })));
+      setTaxCategories((catsRes.data ?? []).map((r: any) => r.category).filter(Boolean));
+
+      if (category) {
+        const regRes = await supabase
+          .from("whiskey_regions")
+          .select("region")
+          .eq("category", category)
+          .order("region");
+        setTaxRegions((regRes.data ?? []).map((r: any) => r.region).filter(Boolean));
+
+        if (region) {
+          const subRes = await supabase
+            .from("whiskey_sub_regions")
+            .select("sub_region")
+            .eq("category", category)
+            .eq("region", region)
+            .order("sub_region");
+          setTaxSubRegions((subRes.data ?? []).map((r: any) => r.sub_region).filter(Boolean));
+        } else {
+          setTaxSubRegions([]);
+        }
+      } else {
+        setTaxRegions([]);
+        setTaxSubRegions([]);
+      }
+    } catch {
+      // silent fail — taxonomy is optional
+    } finally {
+      setTaxLoading(false);
+    }
+  };
+
+  const openEditMode = async () => {
+    setEditDistillery(details.distillery ?? "");
+    setEditProof(details.proofLabel ? String(details.proofLabel).replace(/[^0-9.]/g, "") : "");
+    setEditAge(details.ageLabel ? String(details.ageLabel).replace(/[^0-9.]/g, "") : "");
+    setEditMashBill(details.mashBill ?? "");
+    setEditTypeName(details.style ?? null);
+    setEditTypeId(null);
+    setEditCategory(details.category ?? null);
+    setEditRegion(details.region ?? null);
+    setEditSubRegion(details.subRegion ?? null);
+    setEditMode(true);
+    setEditDropdownOpen(null);
+    if (taxWhiskeyTypes.length === 0) {
+      await loadTaxonomy(details.category ?? null, details.region ?? null);
+    }
+  };
+
+  const cancelEditMode = () => {
+    setEditMode(false);
+    setEditDropdownOpen(null);
+  };
+
+  const submitEdits = async () => {
+    if (editSaving) return;
+    setEditSaving(true);
+    try {
+      const { data: authData } = await supabase.auth.getSession();
+      const userId = authData.session?.user?.id;
+      if (!userId) throw new Error("Not signed in.");
+
+      const suggestions: { field_name: string; current_value: string | null; suggested_value: string }[] = [];
+
+      const proofNum = editProof.trim() ? Number(editProof.trim()) : null;
+      const ageNum = editAge.trim() ? Number(editAge.trim()) : null;
+
+      if (editDistillery.trim() && editDistillery.trim() !== (details.distillery ?? "")) {
+        suggestions.push({ field_name: "distillery", current_value: details.distillery, suggested_value: editDistillery.trim() });
+      }
+      if (proofNum !== null && String(proofNum) !== String(details.proofLabel?.replace(/[^0-9.]/g, "") ?? "")) {
+        suggestions.push({ field_name: "proof", current_value: details.proofLabel, suggested_value: String(proofNum) });
+      }
+      if (ageNum !== null && String(ageNum) !== String(details.ageLabel?.replace(/[^0-9.]/g, "") ?? "")) {
+        suggestions.push({ field_name: "age", current_value: details.ageLabel, suggested_value: String(ageNum) });
+      }
+      if (editMashBill.trim() && editMashBill.trim() !== (details.mashBill ?? "")) {
+        suggestions.push({ field_name: "mash_bill", current_value: details.mashBill, suggested_value: editMashBill.trim() });
+      }
+      if (editTypeName && editTypeName !== details.style) {
+        suggestions.push({ field_name: "whiskey_type", current_value: details.style, suggested_value: editTypeName });
+      }
+      if (editCategory && editCategory !== details.category) {
+        suggestions.push({ field_name: "category", current_value: details.category, suggested_value: editCategory });
+      }
+      if (editRegion && editRegion !== details.region) {
+        suggestions.push({ field_name: "region", current_value: details.region, suggested_value: editRegion });
+      }
+      if (editSubRegion && editSubRegion !== details.subRegion) {
+        suggestions.push({ field_name: "sub_region", current_value: details.subRegion, suggested_value: editSubRegion });
+      }
+
+      if (suggestions.length === 0) {
+        setEditMode(false);
+        return;
+      }
+
+      const rows = suggestions.map(s => ({
+        whiskey_id: whiskeyId,
+        user_id: userId,
+        field_name: s.field_name,
+        current_value: s.current_value ?? null,
+        suggested_value: s.suggested_value,
+        status: "pending",
+      }));
+
+      const { error: insertErr } = await supabase
+        .from("whiskey_edit_suggestions")
+        .insert(rows);
+
+      if (insertErr) throw new Error(insertErr.message);
+
+      // Flag whiskey as pending review
+      await supabase
+        .from("whiskeys")
+        .update({ status: "pending" })
+        .eq("id", whiskeyId);
+
+      whiskeyProfileCache.delete(routeId);
+      setEditMode(false);
+      showToast("Thanks!", `${suggestions.length} edit${suggestions.length > 1 ? "s" : ""} submitted for review.`);
+      await hapticTick();
+    } catch (e: any) {
+      Alert.alert("Submission failed", e?.message ?? "Please try again.");
+      await hapticError();
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -845,6 +1011,168 @@ useEffect(() => {
     };
   }, [routeId]);
 
+  useEffect(() => {
+    if (improveOpen && taxWhiskeyTypes.length === 0) {
+      void loadTaxonomy(improveCategory, improveRegion);
+    }
+  }, [improveOpen]);
+
+  function TaxDropdown({
+    label,
+    value,
+    options,
+    disabled,
+    dropdownKey,
+    onSelect,
+  }: {
+    label: string;
+    value: string | null;
+    options: string[];
+    disabled?: boolean;
+    dropdownKey: string;
+    onSelect: (v: string) => void;
+  }) {
+    const isOpen = taxDropdownOpen === dropdownKey;
+    const canOpen = !disabled && options.length > 0;
+    return (
+      <View style={{ gap: spacing.xs }}>
+        <Text style={[type.caption, { opacity: 0.7 }]}>{label}</Text>
+        <Pressable
+          disabled={!canOpen}
+          onPress={() => setTaxDropdownOpen(isOpen ? null : dropdownKey)}
+          style={({ pressed }) => ({
+            paddingVertical: 10,
+            paddingHorizontal: spacing.md,
+            borderRadius: radii.md,
+            borderWidth: 1,
+            borderColor: colors.divider,
+            backgroundColor: pressed ? colors.surfaceSunken : "transparent",
+            opacity: canOpen ? 1 : 0.45,
+            flexDirection: "row" as const,
+            alignItems: "center" as const,
+            justifyContent: "space-between" as const,
+          })}
+        >
+          <Text style={[type.body, { color: value ? colors.textPrimary : colors.textMuted, fontSize: 15 }]} numberOfLines={1}>
+            {value ?? (disabled ? "Select above first…" : `Select ${label.toLowerCase()}…`)}
+          </Text>
+          <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.textMuted} />
+        </Pressable>
+        {isOpen && (
+          <View style={{
+            borderRadius: radii.md,
+            borderWidth: 1,
+            borderColor: colors.divider,
+            overflow: "hidden",
+            maxHeight: 220,
+          }}>
+            <ScrollView
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {options.map(opt => (
+                <Pressable
+                  key={opt}
+                  onPress={() => {
+                    onSelect(opt);
+                    setTaxDropdownOpen(null);
+                  }}
+                  style={({ pressed }) => ({
+                    paddingVertical: 11,
+                    paddingHorizontal: spacing.md,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.divider,
+                    backgroundColor: opt === value ? colors.accentFaint : pressed ? colors.surfaceSunken : "transparent",
+                  })}
+                >
+                  <Text style={[type.body, { fontSize: 15, color: colors.textPrimary, fontWeight: opt === value ? "900" : "400" }]}>
+                    {opt}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  function EditDropdown({
+    label,
+    value,
+    options,
+    disabled,
+    dropdownKey,
+    onSelect,
+  }: {
+    label: string;
+    value: string | null;
+    options: string[];
+    disabled?: boolean;
+    dropdownKey: string;
+    onSelect: (v: string) => void;
+  }) {
+    const isOpen = editDropdownOpen === dropdownKey;
+    const canOpen = !disabled && options.length > 0;
+    return (
+      <View style={{ flex: 1 }}>
+        <Pressable
+          disabled={!canOpen}
+          onPress={() => setEditDropdownOpen(isOpen ? null : dropdownKey)}
+          style={({ pressed }) => ({
+            paddingVertical: 6,
+            paddingHorizontal: spacing.sm,
+            borderRadius: radii.sm,
+            borderWidth: 1,
+            borderColor: colors.accent,
+            backgroundColor: pressed ? colors.accentFaint : "transparent",
+            opacity: canOpen ? 1 : 0.45,
+            flexDirection: "row" as const,
+            alignItems: "center" as const,
+            justifyContent: "space-between" as const,
+          })}
+        >
+          <Text style={[type.body, { color: value ? colors.textPrimary : colors.textMuted, fontSize: 14 }]} numberOfLines={1}>
+            {value ?? (disabled ? "Select above first…" : `Select…`)}
+          </Text>
+          <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={14} color={colors.accent} />
+        </Pressable>
+        {isOpen && (
+          <View style={{
+            borderRadius: radii.md,
+            borderWidth: 1,
+            borderColor: colors.divider,
+            overflow: "hidden",
+            maxHeight: 200,
+            marginTop: 4,
+            zIndex: 999,
+          }}>
+            <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              {options.map(opt => (
+                <Pressable
+                  key={opt}
+                  onPress={() => { onSelect(opt); setEditDropdownOpen(null); }}
+                  style={({ pressed }) => ({
+                    paddingVertical: 10,
+                    paddingHorizontal: spacing.md,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.divider,
+                    backgroundColor: opt === value ? colors.accentFaint : pressed ? colors.surfaceSunken : "transparent",
+                  })}
+                >
+                  <Text style={[type.body, { fontSize: 14, color: colors.textPrimary, fontWeight: opt === value ? "900" : "400" }]}>
+                    {opt}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+      </View>
+    );
+  }
+
   return (
   <>
     <ScrollView style={{ flex: 1, backgroundColor: "transparent" }}>
@@ -943,21 +1271,219 @@ useEffect(() => {
         </View>
 
         {/* Bottle details */}
-        <View style={{ gap: 5, marginTop: 4 }}>
-          <Text style={[type.sectionHeader, { fontSize: 20 }]}>
-            Bottle details
-          </Text>
+        <View style={{ gap: 4, marginTop: 4 }}>
+          {/* Header row */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={[type.sectionHeader, { fontSize: 20 }]}>Bottle details</Text>
+            {!editMode ? (
+              <Pressable
+                onPress={withTick(openEditMode)}
+                style={({ pressed }) => ({
+                  paddingVertical: 4,
+                  paddingHorizontal: 10,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: colors.borderSubtle,
+                  backgroundColor: pressed ? colors.surfaceSunken : "transparent",
+                })}
+              >
+                <Text style={[type.labelCaps, { fontSize: 11, color: colors.textSecondary }]}>Suggest edits</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={cancelEditMode}
+                style={({ pressed }) => ({
+                  paddingVertical: 4,
+                  paddingHorizontal: 10,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: colors.borderSubtle,
+                  backgroundColor: pressed ? colors.surfaceSunken : "transparent",
+                })}
+              >
+                <Text style={[type.labelCaps, { fontSize: 11, color: colors.textMuted }]}>Cancel</Text>
+              </Pressable>
+            )}
+          </View>
+
           <SectionDivider />
-          <Row label="Distillery" value={details.distillery} />
-          <Row label="Category" value={details.category} />
-          <Row label="Region" value={details.region} />
-          <Row label="Sub-Region" value={details.subRegion} />
-          <Row label="Style" value={details.style} />
-          <Row label="Proof" value={details.proofLabel} />
-          <Row label="Age" value={details.ageLabel} />
-          {details.mashBill != null ? (
-            <Row label="Mash Bill" value={details.mashBill} />
-          ) : null}
+
+          {/* Distillery */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, gap: spacing.lg }}>
+            <Text style={[type.caption, { opacity: 0.7, flexShrink: 0 }]}>Distillery</Text>
+            {editMode ? (
+              <TextInput
+                value={editDistillery}
+                onChangeText={setEditDistillery}
+                autoCapitalize="words"
+                placeholder="Enter distillery…"
+                placeholderTextColor={colors.textMuted}
+                style={{ flex: 1, textAlign: "right", color: colors.textPrimary, fontFamily: type.body.fontFamily, fontSize: 14, borderBottomWidth: 1, borderBottomColor: colors.accent, paddingVertical: 2 }}
+              />
+            ) : (
+              <Text style={[type.body, { fontWeight: "900", opacity: 0.96 }]} numberOfLines={1}>{details.distillery ?? "—"}</Text>
+            )}
+          </View>
+
+          {/* Category */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, gap: spacing.lg }}>
+            <Text style={[type.caption, { opacity: 0.7, flexShrink: 0 }]}>Category</Text>
+            {editMode ? (
+              <EditDropdown
+                label="Category"
+                value={editCategory}
+                options={taxCategories}
+                dropdownKey="edit-category"
+                onSelect={async v => {
+                  setEditCategory(v);
+                  setEditRegion(null);
+                  setEditSubRegion(null);
+                  await loadTaxonomy(v, null);
+                }}
+              />
+            ) : (
+              <Text style={[type.body, { fontWeight: "900", opacity: 0.96 }]} numberOfLines={1}>{details.category ?? "—"}</Text>
+            )}
+          </View>
+
+          {/* Region */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, gap: spacing.lg }}>
+            <Text style={[type.caption, { opacity: 0.7, flexShrink: 0 }]}>Region</Text>
+            {editMode ? (
+              <EditDropdown
+                label="Region"
+                value={editRegion}
+                options={taxRegions}
+                disabled={!editCategory}
+                dropdownKey="edit-region"
+                onSelect={async v => {
+                  setEditRegion(v);
+                  setEditSubRegion(null);
+                  await loadTaxonomy(editCategory, v);
+                }}
+              />
+            ) : (
+              <Text style={[type.body, { fontWeight: "900", opacity: 0.96 }]} numberOfLines={1}>{details.region ?? "—"}</Text>
+            )}
+          </View>
+
+          {/* Sub-Region */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, gap: spacing.lg }}>
+            <Text style={[type.caption, { opacity: 0.7, flexShrink: 0 }]}>Sub-Region</Text>
+            {editMode ? (
+              <EditDropdown
+                label="Sub-Region"
+                value={editSubRegion}
+                options={taxSubRegions}
+                disabled={!editCategory || !editRegion}
+                dropdownKey="edit-subregion"
+                onSelect={v => setEditSubRegion(v)}
+              />
+            ) : (
+              <Text style={[type.body, { fontWeight: "900", opacity: 0.96 }]} numberOfLines={1}>{details.subRegion ?? "—"}</Text>
+            )}
+          </View>
+
+          {/* Style */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, gap: spacing.lg }}>
+            <Text style={[type.caption, { opacity: 0.7, flexShrink: 0 }]}>Style</Text>
+            {editMode ? (
+              <EditDropdown
+                label="Style"
+                value={editTypeName}
+                options={taxWhiskeyTypes.map(t => t.name)}
+                dropdownKey="edit-type"
+                onSelect={name => {
+                  const hit = taxWhiskeyTypes.find(t => t.name === name);
+                  setEditTypeId(hit?.id ?? null);
+                  setEditTypeName(name);
+                }}
+              />
+            ) : (
+              <Text style={[type.body, { fontWeight: "900", opacity: 0.96 }]} numberOfLines={1}>{details.style ?? "—"}</Text>
+            )}
+          </View>
+
+          {/* Proof */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, gap: spacing.lg }}>
+            <Text style={[type.caption, { opacity: 0.7, flexShrink: 0 }]}>Proof</Text>
+            {editMode ? (
+              <TextInput
+                value={editProof}
+                onChangeText={t => setEditProof(t.replace(/[^0-9.]/g, ""))}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 90"
+                placeholderTextColor={colors.textMuted}
+                style={{ flex: 1, textAlign: "right", color: colors.textPrimary, fontFamily: type.body.fontFamily, fontSize: 14, borderBottomWidth: 1, borderBottomColor: colors.accent, paddingVertical: 2 }}
+              />
+            ) : (
+              <Text style={[type.body, { fontWeight: "900", opacity: 0.96 }]} numberOfLines={1}>{details.proofLabel ?? "—"}</Text>
+            )}
+          </View>
+
+          {/* Age */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, gap: spacing.lg }}>
+            <Text style={[type.caption, { opacity: 0.7, flexShrink: 0 }]}>Age</Text>
+            {editMode ? (
+              <TextInput
+                value={editAge}
+                onChangeText={t => setEditAge(t.replace(/[^0-9.]/g, ""))}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 12"
+                placeholderTextColor={colors.textMuted}
+                style={{ flex: 1, textAlign: "right", color: colors.textPrimary, fontFamily: type.body.fontFamily, fontSize: 14, borderBottomWidth: 1, borderBottomColor: colors.accent, paddingVertical: 2 }}
+              />
+            ) : (
+              <Text style={[type.body, { fontWeight: "900", opacity: 0.96 }]} numberOfLines={1}>{details.ageLabel ?? "—"}</Text>
+            )}
+          </View>
+
+          {/* Mash Bill */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, gap: spacing.lg }}>
+            <Text style={[type.caption, { opacity: 0.7, flexShrink: 0 }]}>Mash Bill</Text>
+            {editMode ? (
+              <TextInput
+                value={editMashBill}
+                onChangeText={setEditMashBill}
+                autoCapitalize="none"
+                placeholder="e.g. 75% corn, 21% rye"
+                placeholderTextColor={colors.textMuted}
+                style={{ flex: 1, textAlign: "right", color: colors.textPrimary, fontFamily: type.body.fontFamily, fontSize: 14, borderBottomWidth: 1, borderBottomColor: colors.accent, paddingVertical: 2 }}
+              />
+            ) : (
+              <Text style={[type.body, { fontWeight: "900", opacity: 0.96 }]} numberOfLines={1}>{details.mashBill ?? "—"}</Text>
+            )}
+          </View>
+
+          {/* Edit mode actions */}
+          {editMode && (
+            <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+              {taxLoading && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                  <Text style={[type.caption, { color: colors.textMuted }]}>Loading options…</Text>
+                </View>
+              )}
+              <Pressable
+                onPress={submitEdits}
+                disabled={editSaving}
+                style={({ pressed }) => ({
+                  paddingVertical: 12,
+                  borderRadius: radii.md,
+                  alignItems: "center",
+                  backgroundColor: colors.accent,
+                  opacity: editSaving ? 0.5 : pressed ? 0.85 : 1,
+                })}
+              >
+                <Text style={[type.button, { color: colors.background }]}>
+                  {editSaving ? "Submitting…" : "Submit edits"}
+                </Text>
+              </Pressable>
+              <Text style={[type.caption, { color: colors.textMuted, textAlign: "center", opacity: 0.7 }]}>
+                Edits are reviewed before going live. Only changed fields are submitted.
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={{ gap: 5, marginTop: spacing.sm }}>
@@ -1042,6 +1568,68 @@ useEffect(() => {
                 </View>
               )}
 
+              {taxLoading && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                  <Text style={[type.caption, { color: colors.textMuted }]}>Loading options…</Text>
+                </View>
+              )}
+
+              {!details.style && !taxLoading && (
+                <TaxDropdown
+                  label="Whiskey Type"
+                  value={improveTypeName}
+                  options={taxWhiskeyTypes.map(t => t.name)}
+                  dropdownKey="type"
+                  onSelect={name => {
+                    const hit = taxWhiskeyTypes.find(t => t.name === name);
+                    setImproveTypeId(hit?.id ?? null);
+                    setImproveTypeName(name);
+                  }}
+                />
+              )}
+
+              {!details.category && !taxLoading && (
+                <TaxDropdown
+                  label="Category"
+                  value={improveCategory}
+                  options={taxCategories}
+                  dropdownKey="category"
+                  onSelect={async v => {
+                    setImproveCategory(v);
+                    setImproveRegion(null);
+                    setImproveSubRegion(null);
+                    await loadTaxonomy(v, null);
+                  }}
+                />
+              )}
+
+              {!details.region && !taxLoading && (
+                <TaxDropdown
+                  label="Region"
+                  value={improveRegion}
+                  options={taxRegions}
+                  disabled={!improveCategory}
+                  dropdownKey="region"
+                  onSelect={async v => {
+                    setImproveRegion(v);
+                    setImproveSubRegion(null);
+                    await loadTaxonomy(improveCategory, v);
+                  }}
+                />
+              )}
+
+              {!details.subRegion && !taxLoading && (
+                <TaxDropdown
+                  label="Sub-Region"
+                  value={improveSubRegion}
+                  options={taxSubRegions}
+                  disabled={!improveCategory || !improveRegion}
+                  dropdownKey="subregion"
+                  onSelect={v => setImproveSubRegion(v)}
+                />
+              )}
+
               <Pressable
                 onPress={uploadPhoto}
                 disabled={improvePhotoUploading}
@@ -1066,13 +1654,13 @@ useEffect(() => {
 
               <Pressable
                 onPress={submitImprovement}
-                disabled={improveSaving || (!improveProof.trim() && !improveDistillery.trim() && !improveAge.trim())}
+                disabled={improveSaving || (!improveProof.trim() && !improveDistillery.trim() && !improveAge.trim() && !improveTypeId && !improveCategory)}
                 style={({ pressed }) => ({
                   paddingVertical: 13,
                   borderRadius: radii.md,
                   alignItems: "center",
                   backgroundColor: colors.accent,
-                  opacity: improveSaving || (!improveProof.trim() && !improveDistillery.trim() && !improveAge.trim()) ? 0.4 : pressed ? 0.85 : 1,
+                  opacity: improveSaving || (!improveProof.trim() && !improveDistillery.trim() && !improveAge.trim() && !improveTypeId && !improveCategory) ? 0.4 : pressed ? 0.85 : 1,
                 })}
               >
                 <Text style={[type.button, { color: colors.background }]}>
