@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { hapticError, hapticSuccess } from "../../../lib/haptics";
 import { supabase } from "../../../lib/supabase";
-import { maybeCreateWhiskeyCandidate } from "../services/whiskeyCandidates.service";
+import { createPendingWhiskey, maybeCreateWhiskeyCandidate } from "../services/whiskeyCandidates.service";
 
 import {
   cleanText,
@@ -303,53 +303,38 @@ export function usePostSaveMetadata() {
     if (metaSaving) return null;
 
     // ✅ Custom: no whiskey_id to update — just close after validation (modal enforces required)
-   if (metaIsCustom) {
-  const dist = cleanText(fDistillery);
-  const proof = parseNumericOrNull(fProof);
-  const age = parseNumericOrNull(fAge);
+    if (metaIsCustom) {
+      const dist = cleanText(fDistillery);
+      const proof = parseNumericOrNull(fProof);
+      const age = parseNumericOrNull(fAge);
 
-  const whiskeyTypeName =
-    (whiskeyTypeOptions || []).find((x) => safeText(x.id) === safeText(fTypeId))?.name ?? null;
+      const whiskeyTypeName =
+        (whiskeyTypeOptions || []).find((x) => safeText(x.id) === safeText(fTypeId))?.name ?? null;
 
-  setMetaSaving(true);
-  try {
-   const candidateId = await maybeCreateWhiskeyCandidate({
-  nameRaw: fName,
-  whiskeyType: whiskeyTypeName,
-  distillery: dist,
-  proof,
-  age,
-  category: fCategory,
-  region: fRegion,
-  subRegion: fSubRegion,
-});
+      setMetaSaving(true);
+      try {
+        const newWhiskeyId = await createPendingWhiskey({
+          nameRaw: fName,
+          whiskeyType: whiskeyTypeName,
+          distillery: dist,
+          proof,
+          age,
+          category: fCategory,
+          region: fRegion,
+          subRegion: fSubRegion,
+        });
 
-  // If this came from a barcode scan, save the pending mapping now that we have the candidate ID
-  if (pendingBarcode && candidateId) {
-    try {
-      await supabase.rpc("save_barcode_mapping", {
-        p_barcode: pendingBarcode,
-        p_whiskey_id: null,
-        p_source: "pending_candidate",
-        p_confidence: 0.5,
-        p_verified: false,
-        p_barcode_format: null,
-        p_candidate_id: candidateId,
-      });
-    } catch (e) {
-      console.warn("[barcode] pending mapping failed:", e);
+        setPendingNavigateTo(`/whiskey/${encodeURIComponent(newWhiskeyId)}` as any);
+
+        await hapticSuccess();
+        return finishPostSaveFlow();
+      } catch {
+        await hapticError();
+        return null;
+      } finally {
+        setMetaSaving(false);
+      }
     }
-  }
-
-    await hapticSuccess();
-    return finishPostSaveFlow();
-  } catch {
-    await hapticError();
-    return null;
-  } finally {
-    setMetaSaving(false);
-  }
-}
 
     // Normal: must have uuid
     if (!postSaveTargetWhiskeyId || !isUuid(postSaveTargetWhiskeyId)) {
@@ -370,13 +355,8 @@ export function usePostSaveMetadata() {
       const { error } = await supabase.rpc("user_fill_whiskey_missing_fields", {
         p_whiskey_id: postSaveTargetWhiskeyId,
         p_distillery: dist,
-
-        // ✅ canonical now
         p_whiskey_type_id: fTypeId,
-
-        // legacy stays null (server can keep back-compat if it wants)
-        p_whiskey_type: null,
-
+        p_whiskey_type: whiskeyTypeOptions.find(x => x.id === fTypeId)?.name ?? null,
         p_proof: proof,
         p_age: age,
         p_category: cat,

@@ -1,14 +1,19 @@
 // app/whiskey/[id].tsx
+import { Ionicons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   Linking,
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 
 import { radii } from "../../lib/radii";
 import { shadows } from "../../lib/shadows";
@@ -17,6 +22,9 @@ import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 import { AppToast } from "../../src/components/ui/AppToast";
+import { RadarChart } from "../../src/profile/insights/components/RadarChart";
+import { useInsightsData } from "../../src/profile/insights/hooks/useInsightsData";
+import { useWhiskeyRadarData } from "../../src/whiskey/hooks/useWhiskeyRadarData";
 
 
 import {
@@ -40,10 +48,13 @@ type WhiskeyProfileCacheEntry = {
     style: string | null;
     proofLabel: string | null;
     ageLabel: string | null;
+    mashBill: string | null;
   };
   bhh: { score: number | null; youtubeUrl: string | null };
   community: { total: number; avg: number | null };
   recent: TastingSupabaseRow[];
+  photos: WhiskeyPhoto[];
+  whiskeyStatus: string | null;
   cachedAt: number;
 };
 
@@ -350,7 +361,19 @@ type WhiskeySupabaseRow = {
 
   proof: number | null;
   age: number | null;
+  mash_bill: string | null;
   whiskey_canonical: string | null;
+  status: string | null;
+};
+
+type WhiskeyPhoto = {
+  id: string;
+  storage_path: string;
+  caption: string | null;
+  upvotes: number;
+  downvotes: number;
+  is_featured: boolean;
+  user_id: string;
 };
 
 type BhhReviewSupabaseRow = {
@@ -422,6 +445,7 @@ useEffect(() => {
     style: string | null;
     proofLabel: string | null;
     ageLabel: string | null;
+    mashBill: string | null;
   }>({
     distillery: null,
     category: null,
@@ -430,6 +454,7 @@ useEffect(() => {
     style: null,
     proofLabel: null,
     ageLabel: null,
+    mashBill: null,
   });
 
   const [bhh, setBhh] = useState<{ score: number | null; youtubeUrl: string | null }>({
@@ -443,6 +468,18 @@ useEffect(() => {
   });
 
   const [recent, setRecent] = useState<TastingSupabaseRow[]>([]);
+  const [photos, setPhotos] = useState<WhiskeyPhoto[]>([]);
+  const [isPremium, setIsPremium] = useState(false);
+  const [whiskeyStatus, setWhiskeyStatus] = useState<string | null>(null);
+  const [improveOpen, setImproveOpen] = useState(false);
+  const [improveProof, setImproveProof] = useState("");
+  const [improveDistillery, setImproveDistillery] = useState("");
+  const [improveAge, setImproveAge] = useState("");
+  const [improveSaving, setImproveSaving] = useState(false);
+  const [improvePhotoUploading, setImprovePhotoUploading] = useState(false);
+
+  const { axes: whiskeyAxes } = useWhiskeyRadarData(whiskeyId, community.total);
+  const { axes: personalAxes } = useInsightsData();
 
   // dev strict-mode + navigation remount guard (once per routeId)
   const fetchedOnceRef = useRef<Set<string>>(new Set());
@@ -471,6 +508,133 @@ useEffect(() => {
     }
   };
 
+  const incrementPhotoVote = async (id: string, direction: "up" | "down") => {
+    const { error } = await supabase.rpc("increment_photo_vote", {
+      photo_id: id,
+      direction,
+    });
+    if (error) {
+      await hapticError();
+      return;
+    }
+    setPhotos((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              upvotes: direction === "up" ? p.upvotes + 1 : p.upvotes,
+              downvotes: direction === "down" ? p.downvotes + 1 : p.downvotes,
+            }
+          : p
+      )
+    );
+  };
+
+  const submitImprovement = async () => {
+    if (improveSaving) return;
+    setImproveSaving(true);
+    try {
+      const proof = improveProof.trim() ? Number(improveProof.trim()) : null;
+      const age = improveAge.trim() ? Number(improveAge.trim()) : null;
+      const distillery = improveDistillery.trim() || null;
+
+      if (proof !== null && !Number.isFinite(proof)) {
+        Alert.alert("Invalid proof", "Please enter a valid number.");
+        return;
+      }
+
+      const { error } = await supabase.rpc("user_fill_whiskey_missing_fields", {
+        p_whiskey_id: whiskeyId,
+        p_distillery: distillery,
+        p_whiskey_type_id: null,
+        p_whiskey_type: null,
+        p_proof: proof,
+        p_age: age,
+        p_category: null,
+        p_region: null,
+        p_sub_region: null,
+      });
+
+      if (error) throw new Error(error.message);
+
+      // Invalidate cache so next load shows updated data
+      whiskeyProfileCache.delete(routeId);
+
+      setImproveProof("");
+      setImproveDistillery("");
+      setImproveAge("");
+      setImproveOpen(false);
+      showToast("Thanks!", "Your contribution helps improve the catalog.");
+      await hapticTick();
+    } catch (e: any) {
+      Alert.alert("Submission failed", e?.message ?? "Please try again.");
+      await hapticError();
+    } finally {
+      setImproveSaving(false);
+    }
+  };
+
+  const uploadPhoto = async () => {
+    if (improvePhotoUploading) return;
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permission required", "Please allow photo access to upload.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [3, 4],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      setImprovePhotoUploading(true);
+
+      const asset = result.assets[0];
+      const ext = asset.uri.split(".").pop() ?? "jpg";
+      const fileName = `${whiskeyId}/${Date.now()}.${ext}`;
+
+      const { data: authData } = await supabase.auth.getSession();
+      const userId = authData.session?.user?.id;
+      if (!userId) throw new Error("Not signed in.");
+
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+
+      const { error: uploadError } = await supabase.storage
+        .from("whiskey-photos")
+        .upload(fileName, blob, { contentType: `image/${ext}`, upsert: false });
+
+      if (uploadError) throw new Error(uploadError.message);
+
+      const { error: insertError } = await supabase
+        .from("whiskey_photos")
+        .insert({
+          whiskey_id: whiskeyId,
+          storage_path: fileName,
+          user_id: userId,
+          upvotes: 0,
+          downvotes: 0,
+          is_featured: false,
+        });
+
+      if (insertError) throw new Error(insertError.message);
+
+      whiskeyProfileCache.delete(routeId);
+      showToast("Photo uploaded!", "Thanks for contributing.");
+      await hapticTick();
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.message ?? "Please try again.");
+      await hapticError();
+    } finally {
+      setImprovePhotoUploading(false);
+    }
+  };
+
   const metaLine = useMemo(() => {
     const parts: string[] = [];
     if (details.style) parts.push(details.style);
@@ -490,6 +654,8 @@ useEffect(() => {
       setBhh(cached.bhh);
       setCommunity(cached.community);
       setRecent(cached.recent);
+      setPhotos(cached.photos ?? []);
+      setWhiskeyStatus(cached.whiskeyStatus ?? null);
       setStatusError("");
       setLoading(false);
     }
@@ -513,7 +679,7 @@ useEffect(() => {
         let w: WhiskeySupabaseRow | null = null;
 
         const whiskeySelect =
-          "id, display_name, distillery, whiskey_type, category, region, sub_region, proof, age, whiskey_canonical";
+          "id, display_name, distillery, whiskey_type, category, region, sub_region, proof, age, mash_bill, whiskey_canonical, status";
 
         if (isUuidLike(routeId)) {
           const { data, error } = await supabase
@@ -549,11 +715,15 @@ useEffect(() => {
           style: cleanText(w.whiskey_type),
           proofLabel: formatProof(w.proof),
           ageLabel: formatAge(w.age),
+          mashBill: cleanText(w.mash_bill),
         };
+
+        const nextWhiskeyStatus = cleanText(w.status);
 
         setWhiskeyId(nextWhiskeyId);
         setHeaderNameRaw(nextHeaderNameRaw);
         setDetails(nextDetails);
+        setWhiskeyStatus(nextWhiskeyStatus);
 
         const { data: bhhRows, error: bhhErr } = await supabase
           .from("bhh_reviews")
@@ -625,9 +795,29 @@ useEffect(() => {
           if (recentErr) throw new Error(recentErr.message);
           nextRecent = (((recentRows as any) as TastingSupabaseRow[]) ?? []) as TastingSupabaseRow[];
           setRecent(nextRecent);
+
+          const { data: profileRow } = await supabase
+            .from("profiles")
+            .select("is_premium")
+            .eq("id", user.id)
+            .maybeSingle();
+          if (alive) setIsPremium((profileRow as any)?.is_premium === true);
         } else {
           setRecent([]);
         }
+
+        const { data: photoRows, error: photosErr } = await supabase
+          .from("whiskey_photos")
+          .select("id, storage_path, caption, upvotes, downvotes, is_featured, user_id")
+          .eq("whiskey_id", nextWhiskeyId)
+          .order("is_featured", { ascending: false })
+          .order("upvotes", { ascending: false })
+          .limit(20);
+
+        if (!alive) return;
+        if (photosErr) throw new Error(photosErr.message);
+        const nextPhotos = ((photoRows as any) ?? []) as WhiskeyPhoto[];
+        setPhotos(nextPhotos);
 
         // Cache computed snapshot (so next open is instant)
         whiskeyProfileCache.set(routeId, {
@@ -637,6 +827,8 @@ useEffect(() => {
           bhh: nextBhh,
           community: nextCommunity,
           recent: nextRecent,
+          photos: nextPhotos,
+          whiskeyStatus: nextWhiskeyStatus,
           cachedAt: Date.now(),
         });
       } catch (e: any) {
@@ -679,6 +871,20 @@ useEffect(() => {
           <Text style={[type.body, { opacity: 0.75 }]}>Error: {statusError}</Text>
         ) : null}
 
+        {/* Hero photo */}
+        {photos.length > 0 ? (
+          <View style={{ overflow: "hidden", borderRadius: radii.lg }}>
+            <Image
+              source={{
+                uri: supabase.storage
+                  .from("whiskey-photos")
+                  .getPublicUrl(photos[0].storage_path).data.publicUrl,
+              }}
+              style={{ width: "100%", height: 260, borderRadius: radii.lg, resizeMode: "cover" }}
+            />
+          </View>
+        ) : null}
+
         {/* HERO */}
         <View style={{ alignItems: "center", paddingTop: 6 }}>
           <Text style={[type.screenTitle, { textAlign: "center" }]}>
@@ -695,6 +901,26 @@ useEffect(() => {
               marginTop: 10,
             }}
           />
+
+          {whiskeyStatus === "pending" && (
+            <View style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              marginTop: 8,
+              paddingVertical: 6,
+              paddingHorizontal: 14,
+              borderRadius: 999,
+              backgroundColor: colors.accentFaint,
+              borderWidth: 1,
+              borderColor: colors.accent,
+            }}>
+              <Ionicons name="time-outline" size={14} color={colors.accent} />
+              <Text style={[type.labelCaps, { fontSize: 11, color: colors.accent }]}>
+                Pending Verification
+              </Text>
+            </View>
+          )}
 
           {metaLine ? (
             <Text
@@ -729,6 +955,136 @@ useEffect(() => {
           <Row label="Style" value={details.style} />
           <Row label="Proof" value={details.proofLabel} />
           <Row label="Age" value={details.ageLabel} />
+          {details.mashBill != null ? (
+            <Row label="Mash Bill" value={details.mashBill} />
+          ) : null}
+        </View>
+
+        <View style={{ gap: 5, marginTop: spacing.sm }}>
+          <Pressable
+            onPress={withTick(() => setImproveOpen(v => !v))}
+            style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: spacing.xs }}
+          >
+            <Text style={[type.sectionHeader, { fontSize: 20 }]}>Help improve this entry</Text>
+            <Ionicons name={improveOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} />
+          </Pressable>
+
+          {improveOpen && (
+            <View style={{ gap: spacing.md, paddingTop: spacing.xs }}>
+              <SectionDivider />
+
+              {!details.proofLabel && (
+                <View style={{ gap: spacing.xs }}>
+                  <Text style={[type.caption, { opacity: 0.7 }]}>Proof <Text style={{ color: colors.accent }}>*</Text></Text>
+                  <TextInput
+                    value={improveProof}
+                    onChangeText={t => setImproveProof(t.replace(/[^0-9.]/g, ""))}
+                    placeholder="e.g. 90 or 100.5"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="decimal-pad"
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: spacing.md,
+                      borderRadius: radii.md,
+                      borderWidth: 1,
+                      borderColor: colors.divider,
+                      color: colors.textPrimary,
+                      fontFamily: type.body.fontFamily,
+                      fontSize: 15,
+                    }}
+                  />
+                </View>
+              )}
+
+              {!details.distillery && (
+                <View style={{ gap: spacing.xs }}>
+                  <Text style={[type.caption, { opacity: 0.7 }]}>Distillery</Text>
+                  <TextInput
+                    value={improveDistillery}
+                    onChangeText={setImproveDistillery}
+                    placeholder="e.g. Buffalo Trace"
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="words"
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: spacing.md,
+                      borderRadius: radii.md,
+                      borderWidth: 1,
+                      borderColor: colors.divider,
+                      color: colors.textPrimary,
+                      fontFamily: type.body.fontFamily,
+                      fontSize: 15,
+                    }}
+                  />
+                </View>
+              )}
+
+              {!details.ageLabel && (
+                <View style={{ gap: spacing.xs }}>
+                  <Text style={[type.caption, { opacity: 0.7 }]}>Age (years)</Text>
+                  <TextInput
+                    value={improveAge}
+                    onChangeText={t => setImproveAge(t.replace(/[^0-9.]/g, ""))}
+                    placeholder="e.g. 12"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="decimal-pad"
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: spacing.md,
+                      borderRadius: radii.md,
+                      borderWidth: 1,
+                      borderColor: colors.divider,
+                      color: colors.textPrimary,
+                      fontFamily: type.body.fontFamily,
+                      fontSize: 15,
+                    }}
+                  />
+                </View>
+              )}
+
+              <Pressable
+                onPress={uploadPhoto}
+                disabled={improvePhotoUploading}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: spacing.sm,
+                  paddingVertical: 12,
+                  borderRadius: radii.md,
+                  borderWidth: 1,
+                  borderColor: colors.borderSubtle,
+                  backgroundColor: pressed ? colors.surfaceSunken : "transparent",
+                  opacity: improvePhotoUploading ? 0.5 : 1,
+                })}
+              >
+                <Ionicons name="camera-outline" size={16} color={colors.textSecondary} />
+                <Text style={[type.button, { color: colors.textSecondary }]}>
+                  {improvePhotoUploading ? "Uploading…" : "Upload a photo"}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={submitImprovement}
+                disabled={improveSaving || (!improveProof.trim() && !improveDistillery.trim() && !improveAge.trim())}
+                style={({ pressed }) => ({
+                  paddingVertical: 13,
+                  borderRadius: radii.md,
+                  alignItems: "center",
+                  backgroundColor: colors.accent,
+                  opacity: improveSaving || (!improveProof.trim() && !improveDistillery.trim() && !improveAge.trim()) ? 0.4 : pressed ? 0.85 : 1,
+                })}
+              >
+                <Text style={[type.button, { color: colors.background }]}>
+                  {improveSaving ? "Submitting…" : "Submit"}
+                </Text>
+              </Pressable>
+
+              <Text style={[type.caption, { color: colors.textMuted, textAlign: "center", opacity: 0.7 }]}>
+                Only missing fields are shown. Submissions are reviewed before going live.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Accent divider */}
@@ -756,6 +1112,62 @@ useEffect(() => {
             }}
           />
         </View>
+
+        {/* Flavor Radar */}
+        {community.total >= 2 ? (
+          <View style={{ gap: 5 }}>
+            <Text style={[type.sectionHeader, { fontSize: 20 }]}>Flavor Profile</Text>
+            <SectionDivider />
+
+            <View style={{ position: "relative" }}>
+              <View style={{ marginHorizontal: -spacing.md }}>
+                <RadarChart
+                  axes={whiskeyAxes}
+                  size={350}
+                  levels={4}
+                  showLabels
+                  fillColor={colors.accentFaint}
+                  strokeColor={colors.textSecondary}
+                />
+              </View>
+              {isPremium && personalAxes.length >= 3 ? (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    opacity: 0.45,
+                    marginHorizontal: -spacing.md,
+                  }}
+                >
+                  <RadarChart axes={personalAxes} size={350} levels={4} showLabels={false} />
+                </View>
+              ) : null}
+            </View>
+
+            <Text
+              style={[
+                type.caption,
+                { opacity: 0.6, textAlign: "center", marginTop: spacing.sm },
+              ]}
+            >
+              Community profile · Based on {community.total} tastings
+            </Text>
+
+            {isPremium && personalAxes.length >= 3 ? (
+              <Text
+                style={[
+                  type.caption,
+                  { opacity: 0.5, textAlign: "center", marginTop: 4, color: colors.accent },
+                ]}
+              >
+                Gold overlay = your personal profile
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Community + BHH */}
         <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }}>
@@ -820,6 +1232,62 @@ useEffect(() => {
             </View>
           )}
         </View>
+        {/* Photo carousel */}
+        {photos.length > 0 ? (
+          <View style={{ gap: 8, marginTop: spacing.md }}>
+            <Text style={[type.sectionHeader, { fontSize: 20 }]}>Photos</Text>
+            <SectionDivider />
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingVertical: spacing.sm }}
+            >
+              {photos.map((photo) => (
+                <View key={photo.id} style={{ marginRight: spacing.sm }}>
+                  <Image
+                    source={{
+                      uri: supabase.storage
+                        .from("whiskey-photos")
+                        .getPublicUrl(photo.storage_path).data.publicUrl,
+                    }}
+                    style={{
+                      width: 160,
+                      height: 200,
+                      borderRadius: radii.md,
+                      resizeMode: "cover",
+                    }}
+                  />
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: spacing.sm,
+                      marginTop: spacing.xs,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Pressable
+                      onPress={() => incrementPhotoVote(photo.id, "up")}
+                      hitSlop={8}
+                    >
+                      <Text style={[type.caption, { opacity: 0.75 }]}>
+                        👍 {photo.upvotes}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => incrementPhotoVote(photo.id, "down")}
+                      hitSlop={8}
+                    >
+                      <Text style={[type.caption, { opacity: 0.75 }]}>
+                        👎 {photo.downvotes}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
       </View>
        </ScrollView>
 

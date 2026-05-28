@@ -27,11 +27,15 @@ export function RadarChart({
   size = 220,
   levels = 4,
   showLabels = true,
+  fillColor = colors.accentSoft,
+  strokeColor = colors.accent,
 }: {
   axes: Axis[];
   size?: number;
   levels?: number;
   showLabels?: boolean;
+  fillColor?: string;
+  strokeColor?: string;
 }) {
   const r = size / 2;
   const center = r;
@@ -183,8 +187,8 @@ export function RadarChart({
 
             <Polygon
               points={valuePoly}
-              fill={colors.accentSoft}
-              stroke={colors.accent}
+              fill={fillColor}
+              stroke={strokeColor}
               strokeWidth={2}
               opacity={0.95}
             />

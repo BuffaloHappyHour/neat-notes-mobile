@@ -1,6 +1,6 @@
 WhiskeyAppBeta — Feature Ideas & Roadmap
 
-> Last updated: May 26, 2026  
+> Last updated: May 28, 2026  
 > Maintained by: Derek  
 
 ---
@@ -62,7 +62,7 @@ Each feature includes:
 | F024 | Top Whiskey Bars in Your Area | Discover | Medium | v1.2.0 | Medium | Low | 💡 Idea | Curated bar discovery ranked by community ratings and whiskey selection |
 | F025 | Upcoming Public Events Near You | Events | Medium | v1.2.0 | Low | Low | 💡 Idea | Event discovery surface driven by user location — find tastings, pours, and whiskey events nearby |
 | F026 | Phone Number Sign-In | Profile | High | v1.0.8 | Medium | Low | ✅ Done | Phone auth layer shipped. Sign-in: phone + OTP for users with linked number. Sign-up phone-first path redesigned May 18, 2026 — see F093. |
-| F027 | Venue Check-In Foundation | Venue | High | v1.1.1 | High | Medium | 💡 Idea | Core venue check-in infrastructure — tastings mapped to venues, venue profiles, check-in flow |
+| F027 | Venue Check-In Foundation | Venue | High | v1.1.3 | High | Medium | 🔨 In Progress | Core venue check-in infrastructure — tastings mapped to venues, venue profiles, check-in flow |
 | F028 | Venue Host Analytics Dashboard | Venue | High | v1.1.2 | Medium | Low | 💡 Idea | Real-time analytics for venue owners — popular pours, visitor counts, tasting trends. B2B revenue feature |
 | F029 | B2B Venue Owner Access & Monetization | Infrastructure | High | v1.1.2 | Medium | Medium | 💡 Idea | Gated analytics access sold to venue/bar/restaurant owners — subscription or one-time access model |
 | F030 | Event Host Analytics Revamp | Analytics | High | v1.1.1 | Medium | Low | 💡 Idea | Revamp existing event host analytics to be richer and more actionable — foundation shared with venue analytics.  Should include exportable PDF. |
@@ -79,17 +79,17 @@ Each feature includes:
 | F041 | Insights Summary Tab Restructure | Insights | High | v1.0.8 | Medium | Low | ✅ Done | Summary rebuilt into 6 sections: Identity Header, What to Try Next, Here's Why chips, Palate Snapshot 2x2 grid, Flavor Fingerprint, Coach's Note. |
 | F042 | Hero Card with Here's Why Bullets | Insights | High | v1.0.8 | High | Low | ✅ Done | Hero Card built and shipped in v1.0.8. Single amber-bordered card with horizontal scrollable Safe Pick + Stretch Pick cards, Here's Why data-backed bullets, and tab navigation chips. Stretch Pick driven by whiskey_type_affinity gap logic — targets types user has never or rarely tried. Safe Pick driven by recommendation_rules. Both cards use accent/accentPressed color hierarchy. |
 | F043 | Fix L1 Flavor Sentiment Inference | Infrastructure | High | v1.0.8 | Low | Low | ✅ Done | When user selects L2/L3 LIKE nodes, parent L1 now correctly infers LIKE via hasLikedDescendant() walk. |
-| F044 | Bar / Venue Menu Feature | Venue | High | v1.1.1 | High | Medium | 🔍 Scoped | Venue page with filterable whiskey menu, community ratings, out-of-stock flagging. Premium: Palate Match score. First use case: Hartman's Speakeasy. |
+| F044 | Bar / Venue Menu Feature | Venue | High | v1.1.3 | High | Medium | ✅ Done | Venue page with filterable whiskey menu, community ratings, out-of-stock flagging. Premium: Palate Match score. First use case: Hartman's Speakeasy. Shipped v1.1.3 — Hartman's Barrel Room fully imported (342 whiskeys, 1oz/2oz pricing), filterable menu with community ratings, live check-in count, share deeplink, dynamic last updated stat. |
 | F045 | Whiskey Type Correlation Insights | Insights | High | v1.1.0 | Medium | Low | 💡 Idea | Surface insights like "you prefer high proof Single Malts over Bourbon" using whiskey_type_id joined with tastings and ratings. |
 | F046 | Palate Match for Venue Menus | Venue | High | v1.1.2 | High | Medium | 💡 Idea | Premium feature on venue menu pages. Match user flavor profile + pour preferences against whiskey community flavor data. |
 | F047 | SMS Consent Text + Twilio Resubmission | Infrastructure | High | v1.0.8 | Low | Low | ✅ Done | TCPA-compliant consent disclosure added. Twilio toll-free verified ✅ May 6, 2026. |
-| F048 | Custom Whiskey Submission Flow Redesign | Tasting | High | v1.1.0 | Medium | Low | 💡 Idea | Remove canonical slug, replace classification fields with taxonomy dropdowns, MVP required fields: Name, Proof, Whiskey Type only. |
+| F048 | Custom Whiskey Submission Flow Redesign | Tasting | High | v1.1.3 | Medium | Low | 🔨 In Progress | Remove canonical slug, replace classification fields with taxonomy dropdowns, MVP required fields: Name, Proof, Whiskey Type only. |
 | F049 | Account Settings — Add / Change Phone Number | Profile | High | v1.0.8 | Low | Low | ✅ Done | Phone management card: add, change, remove linked phone. OTP verification required. profiles.phone write bug fixed. |
 | F050 | Whiskey Card Revamp | Tasting | High | v1.1.0 | Medium | Low | 💡 Idea | Full redesign of whiskey profile card — tasting history, Log Again shortcut (2+ tastings), richer bottle metadata, BHH review integration, premium community flavor data. |
 | F051 | Paywall Analytics Instrumentation | Analytics | High | v1.0.8 | Low | Low | ✅ Done | insights_screen_viewed, purchase_tapped, purchase_completed, restore_completed tracked in analytics_events. Non-premium only. Double-fire fixed via useRef guard. |
 | F052 | Bulletproof Barcode Flow | Infrastructure | High | v1.0.8 | Medium | Low | ✅ Done | UPC pre-population from lookup-upc title, barcode threaded through custom tasting flow, pending_candidate mapping fires after maybeCreateWhiskeyCandidate returns, RPC resolves on promote/merge. Schema: candidate_id added to whiskey_barcodes. |
 | F053 | Go-UPC Fallback + Bottle Images | Infrastructure | High | v1.1.0 | Medium | Low | 💡 Idea | Add Go-UPC as fallback lookup when UPCitemdb returns nothing. Pull bottle images from both services. Add image_url to whiskeys + whiskey_candidates tables. Show bottle image on scan confirmation and whiskey card. UPC Data 4 Spirits: 16,500 whiskey records, $1,750 (Gregg London, gregg@glondon.com). |
-| F054 | User Submit Edits for Whiskey Records | Tasting | High | v1.0.9 | Medium | Low | 💡 Idea | Allow users to suggest corrections to proof, age, distillery, region, whiskey type on canonical whiskey records. Goes through admin review before applying. Crowdsources missing data at scale. |
+| F054 | User Submit Edits for Whiskey Records | Tasting | High | v1.1.3 | Medium | Low | ✅ Done | Allow users to suggest corrections to proof, age, distillery, region, whiskey type on canonical whiskey records. Goes through admin review before applying. Crowdsources missing data at scale. |
 | F055 | Fuzzy/Trigram Search for Whiskey Lookup | Infrastructure | High | v1.0.9 | Low | Low | 💡 Idea | Current search uses ILIKE %substring% — no typo tolerance. A user typing "lagovolin" gets no results and creates a duplicate custom record. Fix: enable pg_trgm extension, add GIN index on whiskeys.display_name, update search query in log.tsx to use similarity() or word_similarity() instead of ILIKE. Directly protects catalog data quality now that we have 12,701 whiskeys. |
 | F056 | Whiskey Catalog Import (UPC Data 4 Spirits) | Infrastructure | High | v1.1.0 | High | Medium | ✅ Done (May 10, 2026) | Bulk import of 11,596 whiskeys and 13,080 UPC barcodes from working-whiskey.xlsx (UPC Data 4 Spirits dataset). Catalog grew from 1,161 to 12,701 active whiskeys. All records classified by whiskey_type, category, region. 95.6% proof coverage. Import pipeline: classification script → staging table → fuzzy dedup against existing catalog → enrich matched records → promote new records → load barcodes. Scripts: whiskey_import_classifier.py, fuzzy_match.py, enrich_matched.py, promote_new.py. |
 | F057 | Search Relevance Ranking | UX | High | v1.0.9 | Low | Low | 💡 Idea | With 12,701 whiskeys in the catalog, alphabetical search ranking is broken — "Sazerac" surfaces obscure barrel selects before standard Sazerac Rye. Fix: replace .order("display_name") with an RPC scoring starts-with +10pts, shorter name ranked higher, has community tastings +5pts, alphabetical as tiebreaker. Also reduce result limit from 10 to 7. |
@@ -131,6 +131,8 @@ Each feature includes:
 | F095 | Notification Tap Navigation | Infrastructure | High | v1.1.2 | Low | Low | 🔍 Scoped | Route notification taps to correct in-app screens based on notification type. Milestone/premium nudge → Insights screen. Scheduled/inactive → Log tab. Requires data payload on each push message and Notifications.addNotificationResponseReceivedListener in _layout.tsx. |
 | F096 | Weekly Palate Clarity Update System | Insights | High | v1.1.2 | Medium | Low | 🔍 Scoped | Whoop-style weekly palate update backend and UI. New view: user_metrics_90d_current (90-day rolling window, Depth 30% + Diversity 20% + Preference Patterns 30% + Confidence 20%). New table: user_metric_weekly_snapshots. New view: user_metric_weekly_trends_current (deltas, biggest driver, weekly_movement_status). pg_cron job: every Sunday 13:00 UTC. App UI card reading from user_metric_weekly_trends_current showing weekly movement and biggest driver. Backend complete — app UI card still needed. |
 | F097 | Whiskey Card Revamp + Related Whiskey Features | Tasting | High | v1.1.2 | High | Low | 🔍 Scoped | Full whiskey feature release: Whiskey Card revamp (F050), Go-UPC fallback + bottle images (F053), user submit edits for whiskey records (F054), whiskey profile page rework (F069). Consolidates all whiskey-surface improvements into one focused release. |
+| F098 | Pending Whiskey Verification System | Tasting | High | v1.1.3 | Medium | Low | ✅ Done | Custom whiskeys inserted directly into whiskeys table with status=pending instead of whiskey_candidates. Redirects to whiskey detail page post-save. Pending Verification badge on detail page. Admin inbox Pending Whiskeys tab. RLS insert policy for authenticated users. |
+| F099 | Venue Menu Management | Venue | High | v1.2.0 | Medium | Medium | 💡 Idea | Self-service menu management for venue owners — add/edit/remove whiskeys, update 1oz/2oz pricing, mark items available or out of stock, without requiring admin intervention. Foundation for B2B venue owner value prop. |
 ---
 
 ## Feature Detail
@@ -837,18 +839,20 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 - F031 — Delete Tasting from Edit Flow ✅ Done
 - F032 — Log Again from Previous Tasting ✅ Done
 - F037 — Bottle Collection Tracker (v1.1.0)
-- F048 — Custom Whiskey Submission Flow Redesign (v1.1.0)
+- F048 — Custom Whiskey Submission Flow Redesign (v1.1.3) 🔨 In Progress
 - F050 — Whiskey Card Revamp (v1.1.0)
-- F054 — User Submit Edits for Whiskey Records (v1.0.9)
+- F054 — User Submit Edits for Whiskey Records (v1.1.3) ✅ Done
 - F097 — Whiskey Card Revamp + Related Whiskey Features (v1.1.2) 🔍 Scoped
+- F098 — Pending Whiskey Verification System (v1.1.3) ✅ Done
 
 ### Venue
 - F005 — Fix hardcoded venue data fallbacks ✅ Done
-- F027 — Venue Check-In Foundation (v1.1.1)
+- F027 — Venue Check-In Foundation (v1.1.3) 🔨 In Progress
 - F028 — Venue Host Analytics Dashboard (v1.1.2)
 - F029 — B2B Venue Owner Access & Monetization (v1.1.2)
-- F044 — Bar / Venue Menu Feature (v1.1.1) 🔍 Scoped
+- F044 — Bar / Venue Menu Feature (v1.1.3) ✅ Done
 - F046 — Palate Match for Venue Menus (v1.1.2)
+- F099 — Venue Menu Management (v1.2.0)
 
 ### Discover
 - F023 — Bars Nearby with Your Whiskey (v1.2.0)
@@ -926,6 +930,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 | v1.1.0 | TBD | "Your palate comes into focus" — shift from journal to palate intelligence platform | 💡 Planning | Whiskey card revamp, Hero Card, Go-UPC fallback + bottle images, shareable flavor profile card, push notifications, custom whiskey submission redesign, whiskey type correlation insights, candidate review duplicate detection panel (F066), candidate review merge target on reject (F067), candidate review pre-promotion validation (F068), whiskey profile page rework (F069), catalog duplicate audit bulk brands (F070), Export Analytics (F071), Home redesign (F084), guided onboarding (F085), What's New modal (F086), Google Sign-In (F087 — code complete, pending build), phone auth analytics (F088), duplicate auth view (F089), Insights teaser + milestone cards on Home (F090), recommendations foundation (F091), Community Pulse modules (F092), phone-first signup flow (F093 ✅ Done) |
 | v1.1.1 | TBD | Venue Foundation & Analytics Revamp | 💡 Planning | Venue check-in infrastructure, tastings mapped to venues, event host analytics revamp, Bar/Venue Menu feature |
 | v1.1.2 | TBD | B2B Monetization | 💡 Planning | F094 Sign in with Apple ✅ Done. Venue owner analytics dashboard, B2B access & subscription model, Palate Match for venue menus |
+| v1.1.3 | TBD | Venue & Whiskey Catalog Quality | 💡 Planning | Venue menu population (F044 ✅), check-in foundation (F027), pending whiskey verification (F098 ✅), user submit edits / Improve this entry (F054 ✅), custom whiskey flow redirect (F048 🔨) |
 | v1.2.0 | TBD | Location Platform | 💡 Planning | Location foundation, nearby whiskey alerts, bar discovery fed by venue data, event discovery by location |
 | Website | TBD | Web Presence | 💡 Planning | Core marketing site + public events finder (events finder depends on v1.2.0 location platform) |
 | Backlog | — | Unscheduled ideas | — | |
@@ -936,6 +941,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 
 | Date | Update |
 |---|---|
+| May 28, 2026 | F098 added and shipped — Pending Whiskey Verification System. Custom whiskeys now insert directly into whiskeys table as pending, redirect to whiskey detail page, show Pending Verification badge. Admin Pending Whiskeys inbox tab added. F044 marked ✅ Done — Hartman's Barrel Room menu fully imported, venue profile complete with live check-in count, share deeplink, dynamic last updated. F054 marked ✅ Done — Improve This Entry section shipped on whiskey detail page. F048 moved to 🔨 In Progress. F027 moved to 🔨 In Progress. F099 added — Venue Menu Management. v1.1.3 milestone added. |
 | May 26, 2026 | F095, F096, F097 added — notification tap navigation, weekly palate clarity update system, and whiskey card revamp scoped as next action items for v1.1.2. |
 | May 26, 2026 | F094 shipped — Sign in with Apple via expo-apple-authentication. Apple Developer capability enabled, Supabase Apple provider configured, signInWithIdToken flow, name capture on first sign-in. F020 shipped — Push notification system complete. user_push_tokens and notification_preferences tables, send-scheduled-notifications and send-behavioral-notifications Edge Functions deployed, pg_cron jobs live (Friday 5pm ET + daily 10am UTC), contextual permission ask after 3rd tasting, notification settings screen in Account Settings. F010 shipped — .maybeSingle() fix eliminates PGRST116 errors for new users. Security: user_metrics_90d_v4 switched to security_invoker — RLS now enforced. Permissions: Android media permissions scoped, expo-image-picker unused plugin removed, locationAlwaysPermission removed. |
 | May 19, 2026 | F084, F085, F090, F091 shipped — Home Screen Redesign, guided onboarding, Insights teaser CTA, and Recommendations Foundation complete. |

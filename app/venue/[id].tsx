@@ -117,11 +117,9 @@ function WhiskeyMenuRow({
   const name = (w.display_name as string | null) ?? "Unknown";
   const isLocal = w.region === "New York";
   const proof = w.proof != null ? `${w.proof} proof` : null;
-  const pourOz = item.pour_size_ml != null ? Math.round(Number(item.pour_size_ml) / 30) : 1;
-  const priceStr =
-    item.price_cents != null
-      ? `$${(Number(item.price_cents) / 100).toFixed(0)} / ${pourOz}oz`
-      : null;
+  const price1oz = item.price_cents_1oz != null ? `$${(Number(item.price_cents_1oz) / 100).toFixed(0)} / 1oz` : null;
+  const price2oz = item.price_cents_2oz != null ? `$${(Number(item.price_cents_2oz) / 100).toFixed(0)} / 2oz` : null;
+  const priceStr = [price1oz, price2oz].filter(Boolean).join("  ·  ");
   const communityAvg =
     stats?.community_avg != null ? Number(stats.community_avg).toFixed(1) : null;
   const communityCount = stats?.community_count ?? 0;
@@ -668,10 +666,9 @@ function VenueSearchModal({
               const name = String(w.display_name ?? "Unknown");
               const isLocal = w.region === "New York";
               const proof = w.proof != null ? `${w.proof} proof` : null;
-              const pourOz = item.pour_size_ml != null ? Math.round(Number(item.pour_size_ml) / 30) : 1;
-              const priceStr = item.price_cents != null
-                ? `$${(Number(item.price_cents) / 100).toFixed(0)} / ${pourOz}oz`
-                : null;
+              const price1oz = item.price_cents_1oz != null ? `$${(Number(item.price_cents_1oz) / 100).toFixed(0)} / 1oz` : null;
+              const price2oz = item.price_cents_2oz != null ? `$${(Number(item.price_cents_2oz) / 100).toFixed(0)} / 2oz` : null;
+              const priceStr = [price1oz, price2oz].filter(Boolean).join("  ·  ");
 
               return (
                 <View key={item.id}>
@@ -724,6 +721,19 @@ function VenueSearchModal({
 
 /* ---------- SCREEN ---------- */
 
+function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return mins <= 1 ? "just now" : `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
 export default function VenueScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const id = (Array.isArray(params.id) ? params.id[0] : params.id) ?? "";
@@ -737,6 +747,7 @@ export default function VenueScreen() {
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkInId, setCheckInId] = useState<string | null>(null);
   const [checkInTime, setCheckInTime] = useState<Date | null>(null);
+  const [checkinCount, setCheckinCount] = useState(0);
   const [filterVisible, setFilterVisible] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<"whiskey" | "full">("whiskey");
@@ -744,6 +755,17 @@ export default function VenueScreen() {
 
   const [isPremium, setIsPremium] = useState(false);
   const [venueData, setVenueData] = useState<any>(null);
+
+  const fetchCheckinCount = async () => {
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    const { count } = await supabase
+      .from("venue_checkins")
+      .select("id", { count: "exact", head: true })
+      .eq("venue_id", id)
+      .is("checked_out_at", null)
+      .gte("checked_in_at", threeHoursAgo);
+    setCheckinCount(count ?? 0);
+  };
 
   useEffect(() => {
     let alive = true;
@@ -754,7 +776,7 @@ export default function VenueScreen() {
 
         const { data: venue, error: venueErr } = await supabase
           .from("venues")
-          .select("id, name, display_name, venue_type, address, city, state, phone, website, is_active")
+          .select("id, name, display_name, venue_type, address, city, state, phone, website, is_active, updated_at")
           .eq("id", id)
           .single();
         if (venueErr) throw new Error(venueErr.message);
@@ -764,7 +786,7 @@ export default function VenueScreen() {
         const { data: items, error: itemsErr } = await supabase
           .from("venue_menu_items")
           .select(
-            "id, whiskey_id, price_cents, pour_size_ml, available, whiskeys(id, display_name, whiskey_type, whiskey_type_id, category, region, sub_region, proof, distillery)"
+            "id, whiskey_id, price_cents_1oz, price_cents_2oz, available, whiskeys(id, display_name, whiskey_type, whiskey_type_id, category, region, sub_region, proof, distillery)"
           )
           .eq("venue_id", id)
           .order("available", { ascending: false });
@@ -831,6 +853,7 @@ export default function VenueScreen() {
               .lt("checked_in_at", threeHoursAgo);
           }
         }
+        await fetchCheckinCount();
       } catch (e: any) {
         if (alive) setStatusError(String(e?.message ?? e));
       } finally {
@@ -891,14 +914,14 @@ export default function VenueScreen() {
     if (appliedFilter.priceMin) {
       const min = Number(appliedFilter.priceMin) * 100;
       if (Number.isFinite(min)) {
-        items = items.filter(item => Number(item.price_cents ?? 0) >= min);
+        items = items.filter(item => Number(item.price_cents_1oz ?? 0) >= min);
       }
     }
     if (appliedFilter.priceMax) {
       const max = Number(appliedFilter.priceMax) * 100;
       if (Number.isFinite(max)) {
         items = items.filter(item => {
-          const cents = item.price_cents;
+          const cents = item.price_cents_1oz;
           return cents != null && Number(cents) <= max;
         });
       }
@@ -971,7 +994,7 @@ export default function VenueScreen() {
   const statRows = [
     { value: String(menuItems.length), label: "whiskeys", color: colors.accent },
     { value: String(totalTastings), label: "tastings logged", color: colors.accent },
-    { value: "2 days ago", label: "last updated", color: colors.accent },
+    { value: formatRelativeTime((venueData as any)?.updated_at), label: "last updated", color: colors.accent },
   ];
 
   return (
@@ -1060,7 +1083,8 @@ export default function VenueScreen() {
                 await hapticTick();
                 try {
                   await Share.share({
-                    message: `Check out ${venueName} on Neat Notes — ${venueName} has ${menuItems.length} whiskeys on their menu. https://www.neatnotesapp.com/venue/${id}`,
+                    message: `Check out ${venueName} on Neat Notes — ${menuItems.length} whiskeys on their menu.\nneatnotes://venue/${id}`,
+                    url: `neatnotes://venue/${id}`,
                   });
                 } catch {}
               }}
@@ -1097,6 +1121,7 @@ export default function VenueScreen() {
                   setCheckedIn(false);
                   setCheckInId(null);
                   setCheckInTime(null);
+                  fetchCheckinCount();
                   Alert.alert(
                     "Before you go",
                     "Would you like to log a tasting while you were here?",
@@ -1118,6 +1143,7 @@ export default function VenueScreen() {
                     setCheckedIn(true);
                     setCheckInId((ci as any).id);
                     setCheckInTime(new Date());
+                    fetchCheckinCount();
                   }
                 }
               }}
@@ -1153,6 +1179,15 @@ export default function VenueScreen() {
               </Text>
             </Pressable>
           </View>
+
+          {checkinCount > 0 && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <PulsingDot color={colors.success} />
+              <Text style={[type.caption, { color: colors.textMuted }]}>
+                {checkinCount === 1 ? "1 person checked in right now" : `${checkinCount} people checked in right now`}
+              </Text>
+            </View>
+          )}
 
           {/* ── Search Trigger ──────────────────────────────────── */}
           <Pressable

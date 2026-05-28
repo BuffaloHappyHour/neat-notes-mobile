@@ -23,10 +23,11 @@ import {
 import { radii } from "../../lib/radii";
 import { shadows } from "../../lib/shadows";
 import { spacing } from "../../lib/spacing";
+import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
-type Filter = "needs_review" | "promoted" | "rejected" | "all";
+type Filter = "needs_review" | "promoted" | "rejected" | "all" | "pending_whiskeys";
 
 function MiniButton({
   label,
@@ -125,6 +126,7 @@ export default function AdminInboxScreen() {
   const [filter, setFilter] = useState<Filter>("needs_review");
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<CandidateRow[]>([]);
+  const [pendingWhiskeys, setPendingWhiskeys] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -133,8 +135,20 @@ export default function AdminInboxScreen() {
     setLoading(true);
     setErr(null);
     try {
-      const data = await fetchCandidates({ q, filter: filter as CandidateFilter });
-      setRows(data);
+      if (filter === "pending_whiskeys") {
+        const { data, error } = await supabase
+          .from("whiskeys")
+          .select("id, display_name, distillery, whiskey_type, proof, age, status, created_at")
+          .eq("status", "pending")
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        setPendingWhiskeys(Array.isArray(data) ? data : []);
+        setRows([]);
+      } else {
+        const data = await fetchCandidates({ q, filter: filter as CandidateFilter });
+        setRows(data);
+        setPendingWhiskeys([]);
+      }
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load");
     } finally {
@@ -270,6 +284,7 @@ export default function AdminInboxScreen() {
         <FilterPill label="Promoted" active={filter === "promoted"} onPress={() => setFilter("promoted")} />
         <FilterPill label="Rejected" active={filter === "rejected"} onPress={() => setFilter("rejected")} />
         <FilterPill label="All" active={filter === "all"} onPress={() => setFilter("all")} />
+        <FilterPill label="Pending Whiskeys" active={filter === "pending_whiskeys"} onPress={() => setFilter("pending_whiskeys")} />
       </View>
 
       {loading ? (
@@ -278,94 +293,100 @@ export default function AdminInboxScreen() {
         </View>
       ) : err ? (
         <Text style={[type.body, { color: colors.textSecondary }]}>{err}</Text>
-      ) : (
-        <FlatList
-          data={rows}
-          keyExtractor={(r) => r.id}
-          contentContainerStyle={{ paddingBottom: spacing.xl }}
-          ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-          renderItem={({ item: r }) => {
-            const nm = (r.name_raw ?? "").trim() || "(no name)";
-            const slug = (r.canonical_slug ?? "").trim();
-            const status = statusLabel(r);
-            const busy = actingId === r.id;
-
-            const actionable = !r.promoted_whiskey_id && !r.rejected_at;
-
-            return (
-              <View
-                style={{
-                  backgroundColor: colors.surface,
+      ) : filter === "pending_whiskeys" ? (
+          <FlatList
+            data={pendingWhiskeys}
+            keyExtractor={(r) => r.id}
+            contentContainerStyle={{ paddingBottom: spacing.xl }}
+            ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+            renderItem={({ item: w }) => (
+              <Pressable
+                onPress={() => router.push(`/whiskey/${w.id}` as any)}
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? colors.highlight : colors.surface,
                   borderRadius: radii.lg,
                   borderWidth: 1,
-                  borderColor: colors.divider,
-                  ...shadows.card,
+                  borderColor: colors.accent,
                   padding: spacing.md,
-                  flexDirection: "row",
-                  gap: spacing.md,
-                }}
+                  gap: 4,
+                })}
               >
-                {/* Left (3 lines max) */}
-                <Pressable
-                  onPress={() => router.push(`/admin/candidate/${r.id}`)}
-                  style={({ pressed }) => ({
-                    flex: 1,
-                    opacity: pressed ? 0.9 : 1,
-                    gap: 4,
-                  })}
+                <Text style={[type.body, { color: colors.textPrimary, fontWeight: "800" }]} numberOfLines={1}>
+                  {w.display_name ?? "(no name)"}
+                </Text>
+                <Text style={[type.microcopyItalic, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {[w.whiskey_type, w.proof ? `${w.proof} proof` : null, w.distillery].filter(Boolean).join(" • ") || "—"}
+                </Text>
+                <Text style={[type.microcopyItalic, { color: colors.accent, opacity: 0.85 }]}>
+                  Pending Verification
+                </Text>
+              </Pressable>
+            )}
+          />
+        ) : (
+          <FlatList
+            data={rows}
+            keyExtractor={(r) => r.id}
+            contentContainerStyle={{ paddingBottom: spacing.xl }}
+            ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+            renderItem={({ item: r }) => {
+              const nm = (r.name_raw ?? "").trim() || "(no name)";
+              const slug = (r.canonical_slug ?? "").trim();
+              const status = statusLabel(r);
+              const busy = actingId === r.id;
+              const actionable = !r.promoted_whiskey_id && !r.rejected_at;
+
+              return (
+                <View
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderRadius: radii.lg,
+                    borderWidth: 1,
+                    borderColor: colors.divider,
+                    ...shadows.card,
+                    padding: spacing.md,
+                    flexDirection: "row",
+                    gap: spacing.md,
+                  }}
                 >
-                  <Text style={[type.body, { color: colors.textPrimary, fontWeight: "800" }]} numberOfLines={1}>
-                    {nm}
-                  </Text>
-
-                  <Text style={[type.microcopyItalic, { color: colors.textPrimary, opacity: 0.85 }]} numberOfLines={1}>
-                    {metaLine(r)}
-                  </Text>
-
-                  <Text style={[type.microcopyItalic, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {status}
-                    {slug ? ` • ${slug}` : ""}
-                  </Text>
-                </Pressable>
-
-                {/* Right (stacked buttons) */}
-                <View style={{ width: 92, gap: 6 }}>
-                  {actionable ? (
-                    <>
-                      <MiniButton
-                        label={busy ? "…" : "Approve"}
-                        variant="primary"
-                        disabled={busy}
-                        onPress={() => approveRow(r.id)}
-                      />
-                      <MiniButton
-                        label={busy ? "…" : "Deny"}
-                        variant="danger"
-                        disabled={busy}
-                        onPress={() => denyRow(r.id)}
-                      />
-                      <MiniButton
-                        label="Edit"
-                        variant="neutral"
-                        onPress={() => router.push(`/admin/candidate/${r.id}`)}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <MiniButton label="Done" variant="neutral" disabled onPress={() => {}} />
-                      <MiniButton
-                        label="Edit"
-                        variant="neutral"
-                        onPress={() => router.push(`/admin/candidate/${r.id}`)}
-                      />
-                    </>
-                  )}
+                  <Pressable
+                    onPress={() => router.push(`/admin/candidate/${r.id}`)}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      opacity: pressed ? 0.9 : 1,
+                      gap: 4,
+                    })}
+                  >
+                    <Text style={[type.body, { color: colors.textPrimary, fontWeight: "800" }]} numberOfLines={1}>
+                      {nm}
+                    </Text>
+                    <Text style={[type.microcopyItalic, { color: colors.textPrimary, opacity: 0.85 }]} numberOfLines={1}>
+                      {metaLine(r)}
+                    </Text>
+                    <Text style={[type.microcopyItalic, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {status}{slug ? ` • ${slug}` : ""}
+                    </Text>
+                  </Pressable>
+                  <View style={{ width: 92, gap: 6 }}>
+                    {actionable ? (
+                      <>
+                        <MiniButton label={busy ? "…" : "Approve"} variant="primary" disabled={busy} onPress={() => approveRow(r.id)} />
+                        <MiniButton label={busy ? "…" : "Deny"} variant="danger" disabled={busy} onPress={() => denyRow(r.id)} />
+                        <MiniButton label="Edit" variant="neutral" onPress={() => router.push(`/admin/candidate/${r.id}`)} />
+                      </>
+                    ) : (
+                      <>
+                        <MiniButton label="Done" variant="neutral" disabled onPress={() => {}} />
+                        <MiniButton label="Edit" variant="neutral" onPress={() => router.push(`/admin/candidate/${r.id}`)} />
+                      </>
+                    )}
+                  </View>
                 </View>
-              </View>
-            );
-          }}
-        />
-      )}
+              );
+            }}
+          />
+        )
+      }
     </View>
   );
 }

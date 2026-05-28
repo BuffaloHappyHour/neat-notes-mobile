@@ -101,3 +101,49 @@ export async function maybeCreateWhiskeyCandidate(input: CreateWhiskeyCandidateI
 
   return inserted.id as string;
 }
+
+export async function createPendingWhiskey(input: CreateWhiskeyCandidateInput): Promise<string> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+
+  const userId = authData?.user?.id;
+  if (!userId) throw new Error("No signed-in user found.");
+
+  const raw = safeText(input.nameRaw);
+  if (raw.length < 2) throw new Error("Whiskey name is too short.");
+
+  const canonical = canonicalSlug(raw);
+  if (!canonical) throw new Error("Could not generate canonical slug.");
+
+  const { data: existing, error: existingErr } = await supabase
+    .from("whiskeys")
+    .select("id")
+    .eq("whiskey_canonical", canonical)
+    .maybeSingle();
+
+  if (existingErr) throw existingErr;
+  if (existing?.id) return existing.id as string;
+
+  const { data: inserted, error: insertErr } = await supabase
+    .from("whiskeys")
+    .insert({
+      display_name: raw,
+      whiskey_canonical: canonical,
+      whiskey_type: safeText(input.whiskeyType ?? "") || null,
+      distillery: safeText(input.distillery ?? "") || null,
+      proof: input.proof ?? null,
+      age: input.age ?? null,
+      category: safeText(input.category ?? "") || null,
+      region: safeText(input.region ?? "") || null,
+      sub_region: safeText(input.subRegion ?? "") || null,
+      status: "pending",
+      is_active: true,
+      age_is_nas: input.age == null,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+
+  if (insertErr) throw insertErr;
+  return inserted.id as string;
+}

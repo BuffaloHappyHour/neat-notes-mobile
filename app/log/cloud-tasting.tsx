@@ -820,38 +820,13 @@ export default function CloudTastingScreen() {
       }
 
       if (result.whiskeyId) {
-        const to = await postSaveMeta.maybeOpenPostSaveMetadata(
-          result.whiskeyId,
-          `/whiskey/${encodeURIComponent(result.whiskeyId)}`
+        router.replace(
+          `/whiskey/${encodeURIComponent(result.whiskeyId)}?toastTitle=${encodeURIComponent("Tasting saved")}&toastMessage=${encodeURIComponent("Your tasting has been saved.")}` as any
         );
-
-        if (to) {
-          const toastUrl =
-            `${to}${String(to).includes("?") ? "&" : "?"}` +
-            `toastTitle=${encodeURIComponent("Saved")}&` +
-            `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
-
-          router.replace(toastUrl as any);
-          return;
-        }
       } else {
-        const to = await postSaveMeta.maybeOpenPostSaveMetadata("CUSTOM", "/log", {
-          isCustom: true,
-          name: name,
-          proof: "",
-          whiskeyTypeId: null,
-          distillery: "",
-        });
-
-        if (to) {
-          const toastUrl =
-            `${to}${String(to).includes("?") ? "&" : "?"}` +
-            `toastTitle=${encodeURIComponent("Saved")}&` +
-            `toastMessage=${encodeURIComponent("Your tasting has been saved.")}`;
-
-          router.replace(toastUrl as any);
-          return;
-        }
+        router.replace(
+          `/log?toastTitle=${encodeURIComponent("Tasting saved")}&toastMessage=${encodeURIComponent("Your tasting has been saved.")}` as any
+        );
       }
     } catch (e: any) {
       const msg = String(e?.message ?? e ?? "Save failed");
