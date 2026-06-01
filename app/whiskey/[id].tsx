@@ -400,6 +400,7 @@ export default function WhiskeyDetailScreen() {
   name?: string | string[];
   toastTitle?: string | string[];
   toastMessage?: string | string[];
+  newEntry?: string | string[];
 }>();
 
   const routeId = (asString(params.id) ?? "").trim();
@@ -407,6 +408,7 @@ export default function WhiskeyDetailScreen() {
 
   const routeToastTitle = (asString(params.toastTitle) ?? "").trim();
   const routeToastMessage = (asString(params.toastMessage) ?? "").trim();
+  const newEntry = (asString(params.newEntry) ?? "") === "true";
 
   const [loading, setLoading] = useState(true);
   const [statusError, setStatusError] = useState<string>("");
@@ -500,6 +502,11 @@ useEffect(() => {
   const [taxRegions, setTaxRegions] = useState<string[]>([]);
   const [taxSubRegions, setTaxSubRegions] = useState<string[]>([]);
   const [taxDropdownOpen, setTaxDropdownOpen] = useState<string | null>(null);
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editNameError, setEditNameError] = useState("");
+  const [editTypeError, setEditTypeError] = useState("");
+  const [editProofError, setEditProofError] = useState("");
+  const autoOpenedRef = useRef(false);
 
   const { axes: whiskeyAxes } = useWhiskeyRadarData(whiskeyId, community.total);
   const { axes: personalAxes } = useInsightsData();
@@ -739,6 +746,10 @@ useEffect(() => {
   };
 
   const openEditMode = async () => {
+    setEditDisplayName(headerNameRaw);
+    setEditNameError("");
+    setEditTypeError("");
+    setEditProofError("");
     setEditDistillery(details.distillery ?? "");
     setEditProof(details.proofLabel ? String(details.proofLabel).replace(/[^0-9.]/g, "") : "");
     setEditAge(details.ageLabel ? String(details.ageLabel).replace(/[^0-9.]/g, "") : "");
@@ -758,6 +769,9 @@ useEffect(() => {
   const cancelEditMode = () => {
     setEditMode(false);
     setEditDropdownOpen(null);
+    setEditNameError("");
+    setEditTypeError("");
+    setEditProofError("");
   };
 
   const submitEdits = async () => {
@@ -827,6 +841,71 @@ useEffect(() => {
       whiskeyProfileCache.delete(routeId);
       setEditMode(false);
       showToast("Thanks!", `${suggestions.length} edit${suggestions.length > 1 ? "s" : ""} submitted for review.`);
+      await hapticTick();
+    } catch (e: any) {
+      Alert.alert("Submission failed", e?.message ?? "Please try again.");
+      await hapticError();
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const submitNewEntryDetails = async () => {
+    let hasError = false;
+    if (!editDisplayName.trim()) { setEditNameError("Required"); hasError = true; }
+    if (!editTypeId) { setEditTypeError("Required"); hasError = true; }
+    if (!editProof.trim()) { setEditProofError("Required"); hasError = true; }
+    if (hasError) return;
+
+    if (editSaving) return;
+    setEditSaving(true);
+    try {
+      const { data: authData } = await supabase.auth.getSession();
+      const userId = authData.session?.user?.id;
+      if (!userId) throw new Error("Not signed in.");
+
+      const origProof = details.proofLabel ? parseFloat(details.proofLabel.replace(/[^0-9.]/g, "")) : null;
+      const origAge = details.ageLabel ? parseFloat(details.ageLabel.replace(/[^0-9.]/g, "")) : null;
+      const newProof = editProof.trim() ? Number(editProof.trim()) : null;
+      const newAge = editAge.trim() ? Number(editAge.trim()) : null;
+
+      const suggestedFields: Record<string, any> = {};
+      if (editDisplayName.trim() !== (headerNameRaw ?? "")) suggestedFields.display_name = editDisplayName.trim();
+      if (editTypeId) suggestedFields.whiskey_type_id = editTypeId;
+      if (editTypeName) suggestedFields.whiskey_type = editTypeName;
+      if (newProof !== null && newProof !== origProof) suggestedFields.proof = newProof;
+      if (newAge !== null && newAge !== origAge) suggestedFields.age = newAge;
+      if (editDistillery.trim() && editDistillery.trim() !== (details.distillery ?? "")) suggestedFields.distillery = editDistillery.trim();
+      if (editMashBill.trim() && editMashBill.trim() !== (details.mashBill ?? "")) suggestedFields.mash_bill = editMashBill.trim();
+      if (editCategory && editCategory !== details.category) suggestedFields.category = editCategory;
+      if (editRegion && editRegion !== details.region) suggestedFields.region = editRegion;
+      if (editSubRegion && editSubRegion !== details.subRegion) suggestedFields.sub_region = editSubRegion;
+
+      const nameRaw = editDisplayName.trim();
+      const nameNormalized = nameRaw.toLowerCase().trim();
+      const canonicalSlug = nameNormalized.replace(/\s+/g, "-");
+
+      const { error: candidateErr } = await supabase
+        .from("whiskey_candidates")
+        .insert({
+          whiskey_id: whiskeyId,
+          created_by: userId,
+          name_raw: nameRaw,
+          name_normalized: nameNormalized,
+          canonical_slug: canonicalSlug,
+          status: "pending",
+          approved: false,
+          suggested_fields: suggestedFields,
+        });
+
+      if (candidateErr) throw new Error(candidateErr.message);
+
+      await supabase.from("whiskeys").update({ status: "unverified" }).eq("id", whiskeyId);
+      setWhiskeyStatus("unverified");
+
+      whiskeyProfileCache.delete(routeId);
+      setEditMode(false);
+      showToast("Submitted!", "Your details are pending review.");
       await hapticTick();
     } catch (e: any) {
       Alert.alert("Submission failed", e?.message ?? "Please try again.");
@@ -1051,6 +1130,15 @@ useEffect(() => {
       void loadTaxonomy(improveCategory, improveRegion);
     }
   }, [improveOpen]);
+
+  useEffect(() => {
+    if (!newEntry) return;
+    if (loading) return;
+    if (!whiskeyId) return;
+    if (autoOpenedRef.current) return;
+    autoOpenedRef.current = true;
+    void openEditMode();
+  }, [newEntry, loading, whiskeyId]);
 
   function TaxDropdown({
     label,
@@ -1285,6 +1373,26 @@ useEffect(() => {
             </View>
           )}
 
+          {whiskeyStatus === "unverified" && (
+            <View style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              marginTop: 8,
+              paddingVertical: 6,
+              paddingHorizontal: 14,
+              borderRadius: 999,
+              backgroundColor: colors.accentFaint,
+              borderWidth: 1,
+              borderColor: colors.accent,
+            }}>
+              <Ionicons name="hourglass-outline" size={14} color={colors.accent} />
+              <Text style={[type.labelCaps, { fontSize: 11, color: colors.accent }]}>
+                Pending Review
+              </Text>
+            </View>
+          )}
+
           {metaLine ? (
             <Text
               style={[
@@ -1342,6 +1450,37 @@ useEffect(() => {
           </View>
 
           <SectionDivider />
+
+          {/* Display Name — only in edit mode */}
+          {editMode && (
+            <View style={{ gap: spacing.xs, paddingVertical: 4 }}>
+              <Text style={[type.caption, { opacity: 0.7 }]}>
+                Whiskey Name{" "}
+                <Text style={{ color: colors.accent }}>*</Text>
+              </Text>
+              <TextInput
+                value={editDisplayName}
+                onChangeText={t => {
+                  setEditDisplayName(t);
+                  if (t.trim()) setEditNameError("");
+                }}
+                autoCapitalize="words"
+                placeholder="Enter whiskey name…"
+                placeholderTextColor={colors.textMuted}
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: type.body.fontFamily,
+                  fontSize: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: editNameError ? colors.danger : colors.accent,
+                  paddingVertical: 2,
+                }}
+              />
+              {editNameError ? (
+                <Text style={[type.caption, { color: colors.danger, fontSize: 11 }]}>{editNameError}</Text>
+              ) : null}
+            </View>
+          )}
 
           {/* Distillery */}
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, gap: spacing.lg }}>
@@ -1420,37 +1559,56 @@ useEffect(() => {
           </View>
 
           {/* Style */}
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, gap: spacing.lg }}>
-            <Text style={[type.caption, { opacity: 0.7, flexShrink: 0 }]}>Style</Text>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: editMode ? "flex-start" : "center", paddingVertical: 4, gap: spacing.lg }}>
+            <Text style={[type.caption, { opacity: 0.7, flexShrink: 0, paddingTop: editMode ? 8 : 0 }]}>
+              Style{editMode ? <Text style={{ color: colors.accent }}> *</Text> : null}
+            </Text>
             {editMode ? (
-              <EditDropdown
-                label="Style"
-                value={editTypeName}
-                options={taxWhiskeyTypes.map(t => t.name)}
-                dropdownKey="edit-type"
-                onSelect={name => {
-                  const hit = taxWhiskeyTypes.find(t => t.name === name);
-                  setEditTypeId(hit?.id ?? null);
-                  setEditTypeName(name);
-                }}
-              />
+              <View style={{ flex: 1, gap: 2 }}>
+                <EditDropdown
+                  label="Style"
+                  value={editTypeName}
+                  options={taxWhiskeyTypes.map(t => t.name)}
+                  dropdownKey="edit-type"
+                  onSelect={name => {
+                    const hit = taxWhiskeyTypes.find(t => t.name === name);
+                    setEditTypeId(hit?.id ?? null);
+                    setEditTypeName(name);
+                    setEditTypeError("");
+                  }}
+                />
+                {editTypeError ? (
+                  <Text style={[type.caption, { color: colors.danger, fontSize: 11, textAlign: "right" }]}>{editTypeError}</Text>
+                ) : null}
+              </View>
             ) : (
               <Text style={[type.body, { fontWeight: "900", opacity: 0.96 }]} numberOfLines={1}>{details.style ?? "—"}</Text>
             )}
           </View>
 
           {/* Proof */}
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, gap: spacing.lg }}>
-            <Text style={[type.caption, { opacity: 0.7, flexShrink: 0 }]}>Proof</Text>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: editMode ? "flex-start" : "center", paddingVertical: 4, gap: spacing.lg }}>
+            <Text style={[type.caption, { opacity: 0.7, flexShrink: 0, paddingTop: editMode ? 2 : 0 }]}>
+              Proof{editMode ? <Text style={{ color: colors.accent }}> *</Text> : null}
+            </Text>
             {editMode ? (
-              <TextInput
-                value={editProof}
-                onChangeText={t => setEditProof(t.replace(/[^0-9.]/g, ""))}
-                keyboardType="decimal-pad"
-                placeholder="e.g. 90"
-                placeholderTextColor={colors.textMuted}
-                style={{ flex: 1, textAlign: "right", color: colors.textPrimary, fontFamily: type.body.fontFamily, fontSize: 14, borderBottomWidth: 1, borderBottomColor: colors.accent, paddingVertical: 2 }}
-              />
+              <View style={{ flex: 1, gap: 2 }}>
+                <TextInput
+                  value={editProof}
+                  onChangeText={t => {
+                    const v = t.replace(/[^0-9.]/g, "");
+                    setEditProof(v);
+                    if (v.trim()) setEditProofError("");
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder="e.g. 90"
+                  placeholderTextColor={colors.textMuted}
+                  style={{ textAlign: "right", color: colors.textPrimary, fontFamily: type.body.fontFamily, fontSize: 14, borderBottomWidth: 1, borderBottomColor: editProofError ? colors.danger : colors.accent, paddingVertical: 2 }}
+                />
+                {editProofError ? (
+                  <Text style={[type.caption, { color: colors.danger, fontSize: 11, textAlign: "right" }]}>{editProofError}</Text>
+                ) : null}
+              </View>
             ) : (
               <Text style={[type.body, { fontWeight: "900", opacity: 0.96 }]} numberOfLines={1}>{details.proofLabel ?? "—"}</Text>
             )}
@@ -1500,7 +1658,7 @@ useEffect(() => {
                 </View>
               )}
               <Pressable
-                onPress={submitEdits}
+                onPress={newEntry ? submitNewEntryDetails : submitEdits}
                 disabled={editSaving}
                 style={({ pressed }) => ({
                   paddingVertical: 12,
@@ -1511,7 +1669,7 @@ useEffect(() => {
                 })}
               >
                 <Text style={[type.button, { color: colors.background }]}>
-                  {editSaving ? "Submitting…" : "Submit edits"}
+                  {editSaving ? "Submitting…" : "Submit"}
                 </Text>
               </Pressable>
               <Text style={[type.caption, { color: colors.textMuted, textAlign: "center", opacity: 0.7 }]}>

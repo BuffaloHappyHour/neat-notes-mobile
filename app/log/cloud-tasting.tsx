@@ -242,6 +242,9 @@ export default function CloudTastingScreen() {
     lockName?: string | string[];
     templateTastingId?: string | string[];
     barcode?: string | string[];
+    isBlind?: string | string[];
+    blindPosition?: string | string[];
+    eventId?: string | string[];
   }>();
 
   const tastingId = (asString(params.tastingId) ?? "").trim();
@@ -251,6 +254,10 @@ export default function CloudTastingScreen() {
   const lockNameParam = (asString(params.lockName) ?? "0").trim();
   const lockName = lockNameParam === "1";
   const routeBarcode = (asString(params.barcode) ?? "").trim();
+
+  const isBlind = (asString(params.isBlind) ?? "") === "true";
+  const blindPosition = parseInt(asString(params.blindPosition) ?? "", 10) || null;
+  const routeEventId = (asString(params.eventId) ?? "").trim() || null;
 
   const templateTastingIdRaw = (asString(params.templateTastingId) ?? "").trim();
   const templateTastingId = isUuid(templateTastingIdRaw) ? templateTastingIdRaw : "";
@@ -805,6 +812,10 @@ export default function CloudTastingScreen() {
 
         lockName,
 
+        isBlind,
+        blindPosition,
+        eventId: routeEventId,
+
         replaceTastingFlavorNodes,
         replaceTastingFlavorNodesWithSentiment,
       });
@@ -820,10 +831,35 @@ export default function CloudTastingScreen() {
         router.replace(
           `/whiskey/${encodeURIComponent(result.whiskeyId)}?toastTitle=${encodeURIComponent("Tasting saved")}&toastMessage=${encodeURIComponent("Your tasting has been saved.")}` as any
         );
-      } else {
+      } else if (isBlind) {
         router.replace(
           `/log?toastTitle=${encodeURIComponent("Tasting saved")}&toastMessage=${encodeURIComponent("Your tasting has been saved.")}` as any
         );
+      } else {
+        const { data: newWhiskey, error: whiskeyInsertErr } = await supabase
+          .from("whiskeys")
+          .insert({
+            display_name: name,
+            whiskey_canonical: name.toLowerCase().replace(/\s+/g, "-"),
+            whiskey_type_id: "3cde1227-e497-4a47-ba53-cb21d5d7b506",
+            status: "custom",
+            source: "user",
+          })
+          .select("id")
+          .single();
+
+        if (whiskeyInsertErr) throw new Error(whiskeyInsertErr.message);
+
+        const newWhiskeyId = (newWhiskey as any).id as string;
+
+        const { error: tastingUpdateErr } = await supabase
+          .from("tastings")
+          .update({ whiskey_id: newWhiskeyId })
+          .eq("id", result.tastingId);
+
+        if (tastingUpdateErr) throw new Error(tastingUpdateErr.message);
+
+        router.replace(`/whiskey/${encodeURIComponent(newWhiskeyId)}?newEntry=true` as any);
       }
     } catch (e: any) {
       const msg = String(e?.message ?? e ?? "Save failed");

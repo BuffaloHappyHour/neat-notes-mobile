@@ -69,6 +69,10 @@ export async function saveCloudTasting(params: {
 
   lockName: boolean;
 
+  isBlind?: boolean;
+  blindPosition?: number | null;
+  eventId?: string | null;
+
   replaceTastingFlavorNodes: (
     tastingId: string,
     selectedNodeIds: string[]
@@ -113,6 +117,10 @@ export async function saveCloudTasting(params: {
 
     lockName,
 
+    isBlind,
+    blindPosition,
+    eventId,
+
     replaceTastingFlavorNodes,
     replaceTastingFlavorNodesWithSentiment,
   } = params;
@@ -130,7 +138,7 @@ export async function saveCloudTasting(params: {
     throw new Error("Please enter the bar name for a Bar Pour.");
   }
 
-  const safeWhiskeyId = whiskeyId && isUuid(whiskeyId) ? whiskeyId : null;
+  const safeWhiskeyId = isBlind ? null : (whiskeyId && isUuid(whiskeyId) ? whiskeyId : null);
 
   const cleanedPersonal = String(personalNotes ?? "").trim();
   const personalOrNull = cleanedPersonal.length ? cleanedPersonal : null;
@@ -252,7 +260,8 @@ const activeEventId = await getActiveEventId();
     bar_name: sourceType === "bar" ? String(barName ?? "").trim() : null,
     personal_notes: finalPersonalNotes,
     venue_id: venueId,
-    event_id: activeEventId,
+    event_id: eventId ?? activeEventId,
+    blind_position: isBlind ? (blindPosition ?? null) : null,
 
     source_name_snapshot:
       sourceType === "bar"

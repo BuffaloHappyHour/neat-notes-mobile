@@ -461,6 +461,11 @@ export default function CreateEventScreen() {
 
       if (insertErr) throw insertErr;
 
+      const { error: hostErr } = await supabase
+        .from("event_hosts")
+        .insert({ event_id: data.id, user_id: user?.id, role: "primary" });
+      if (hostErr) throw hostErr;
+
       if (hasLineup && lineupItems.length > 0) {
         await saveEventLineup(data.id, lineupItems);
       }

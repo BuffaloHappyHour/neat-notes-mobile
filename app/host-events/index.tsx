@@ -20,6 +20,7 @@ type HostEventRow = {
   id: string;
   name: string;
   starts_at: string | null;
+  ends_at: string | null;
   max_attendees: number | null;
   is_blind: boolean;
   is_active: boolean;
@@ -35,13 +36,13 @@ function fmtDate(iso: string | null): string {
   });
 }
 
-function getStatusStyle(isActive: boolean, startsAt: string | null): {
+function getStatusStyle(isActive: boolean, startsAt: string | null, endsAt: string | null): {
   label: string;
   textColor: string;
   borderColor: string;
   backgroundColor: string;
 } {
-  if (!isActive) {
+  if (!isActive || (endsAt != null && new Date(endsAt) < new Date())) {
     return {
       label: "Ended",
       textColor: colors.textMuted,
@@ -95,7 +96,7 @@ function Badge({
 }
 
 function EventCard({ event }: { event: HostEventRow }) {
-  const status = getStatusStyle(event.is_active, event.starts_at);
+  const status = getStatusStyle(event.is_active, event.starts_at, event.ends_at);
 
   return (
     <Pressable
@@ -212,7 +213,7 @@ export default function HostEventsScreen() {
 
       const { data, error: qErr } = await supabase
         .from("event_hosts")
-        .select("events(id, name, starts_at, max_attendees, is_blind, is_active, status)")
+        .select("events(id, name, starts_at, ends_at, max_attendees, is_blind, is_active, status)")
         .eq("user_id", user.id)
         .order("events(starts_at)", { ascending: false });
 

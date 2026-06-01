@@ -48,6 +48,7 @@ type EventRow = {
   venue_name_free: string | null;
   venue_city: string | null;
   venue_state: string | null;
+  is_active: boolean;
   is_public: boolean;
   max_attendees: number | null;
   join_code: string | null;
@@ -87,7 +88,8 @@ function EventsTab() {
   }, []);
 
   const isPast = useCallback((event: EventRow): boolean => {
-    return event.starts_at != null && new Date(event.starts_at) < new Date();
+    return !event.is_active ||
+      (event.ends_at != null && new Date(event.ends_at) < new Date());
   }, []);
 
   const allStates = useMemo(() => {

@@ -1040,28 +1040,32 @@ export default function EventPage() {
                       </Text>
                     ) : null}
                   </View>
-                  {!hidden ? (
-                    <Pressable
-                      onPress={() =>
-                        router.push(
-                          `/log/cloud-tasting?whiskeyName=${encodeURIComponent(
-                            item.display_name
-                          )}&whiskeyId=${encodeURIComponent(item.whiskey_id)}&lockName=1` as any
-                        )
-                      }
-                      style={({ pressed }) => ({
-                        paddingHorizontal: 10,
-                        paddingVertical: 5,
-                        borderRadius: 999,
-                        borderWidth: 1,
-                        borderColor: colors.glassBorderStrong,
-                        backgroundColor: pressed ? colors.accentSoft : colors.accentFaint,
-                        opacity: pressed ? 0.9 : 1,
-                      })}
-                    >
-                      <Text style={[type.caption, { color: colors.accent }]}>Log →</Text>
-                    </Pressable>
-                  ) : null}
+                  <Pressable
+                    onPress={() =>
+                      hidden
+                        ? router.push(
+                            `/log/cloud-tasting?whiskeyName=${encodeURIComponent(
+                              `Blind Tasting ${index + 1}`
+                            )}&isBlind=true&blindPosition=${index + 1}&eventId=${encodeURIComponent(eventId)}` as any
+                          )
+                        : router.push(
+                            `/log/cloud-tasting?whiskeyName=${encodeURIComponent(
+                              item.display_name
+                            )}&whiskeyId=${encodeURIComponent(item.whiskey_id)}&lockName=1` as any
+                          )
+                    }
+                    style={({ pressed }) => ({
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: colors.glassBorderStrong,
+                      backgroundColor: pressed ? colors.accentSoft : colors.accentFaint,
+                      opacity: pressed ? 0.9 : 1,
+                    })}
+                  >
+                    <Text style={[type.caption, { color: colors.accent }]}>Log →</Text>
+                  </Pressable>
                 </View>
               );
             })}
