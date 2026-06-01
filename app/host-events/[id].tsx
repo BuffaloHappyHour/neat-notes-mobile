@@ -455,7 +455,7 @@ export default function HostEventDetailScreen() {
   }
 
   const isRevealed = !!event.revealed_at;
-  const isEnded = event.status === "ended";
+  const isEnded = !event.is_active || (event.ends_at != null && new Date(event.ends_at) < new Date());
 
   return (
     <>

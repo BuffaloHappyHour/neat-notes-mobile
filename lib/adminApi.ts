@@ -119,6 +119,7 @@ export async function adminRejectCandidate(id: string, note: string) {
   const { error } = await supabase.rpc("admin_reject_candidate", {
     p_id: id,
     p_note: note,
+    p_merge_into_whiskey_id: null,
   });
   if (error) throw error;
 }

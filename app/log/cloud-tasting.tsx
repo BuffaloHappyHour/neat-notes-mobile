@@ -272,7 +272,9 @@ export default function CloudTastingScreen() {
     Record<string, "LIKE" | "NEUTRAL" | "DISLIKE">
   >({});
 
-  const [name, setName] = useState(routeWhiskeyName || "");
+  const [name, setName] = useState(
+    isBlind && blindPosition ? `Blind Tasting ${blindPosition}` : routeWhiskeyName || ""
+  );
   const [rating, setRating] = useState<number | null>(null);
 
   const [textureLevel, setTextureLevel] = useState<number | null>(null);
@@ -814,6 +816,7 @@ export default function CloudTastingScreen() {
 
         isBlind,
         blindPosition,
+        blindWhiskeyName: isBlind ? routeWhiskeyName : undefined,
         eventId: routeEventId,
 
         replaceTastingFlavorNodes,
@@ -827,7 +830,11 @@ export default function CloudTastingScreen() {
         return;
       }
 
-      if (result.whiskeyId) {
+      if (isBlind && routeEventId) {
+        router.replace(
+          `/event/${encodeURIComponent(routeEventId)}?toastTitle=${encodeURIComponent("Tasting saved")}&toastMessage=${encodeURIComponent("Your tasting has been saved.")}` as any
+        );
+      } else if (result.whiskeyId) {
         router.replace(
           `/whiskey/${encodeURIComponent(result.whiskeyId)}?toastTitle=${encodeURIComponent("Tasting saved")}&toastMessage=${encodeURIComponent("Your tasting has been saved.")}` as any
         );
@@ -836,30 +843,26 @@ export default function CloudTastingScreen() {
           `/log?toastTitle=${encodeURIComponent("Tasting saved")}&toastMessage=${encodeURIComponent("Your tasting has been saved.")}` as any
         );
       } else {
-        const { data: newWhiskey, error: whiskeyInsertErr } = await supabase
-          .from("whiskeys")
-          .insert({
-            display_name: name,
-            whiskey_canonical: name.toLowerCase().replace(/\s+/g, "-"),
-            whiskey_type_id: "3cde1227-e497-4a47-ba53-cb21d5d7b506",
-            status: "custom",
-            source: "user",
-          })
-          .select("id")
-          .single();
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData.session?.user;
+        if (!user) throw new Error("Not signed in.");
 
-        if (whiskeyInsertErr) throw new Error(whiskeyInsertErr.message);
-
-        const newWhiskeyId = (newWhiskey as any).id as string;
+        const { data: rpcData, error: rpcError } = await supabase.rpc("create_custom_whiskey", {
+          p_display_name: name,
+          p_whiskey_canonical: name.toLowerCase().replace(/\s+/g, "-"),
+          p_user_id: user.id,
+        });
+        if (rpcError) throw rpcError;
+        const newId = rpcData;
 
         const { error: tastingUpdateErr } = await supabase
           .from("tastings")
-          .update({ whiskey_id: newWhiskeyId })
+          .update({ whiskey_id: newId })
           .eq("id", result.tastingId);
 
         if (tastingUpdateErr) throw new Error(tastingUpdateErr.message);
 
-        router.replace(`/whiskey/${encodeURIComponent(newWhiskeyId)}?newEntry=true` as any);
+        router.replace(`/whiskey/${encodeURIComponent(newId)}?newEntry=true` as any);
       }
     } catch (e: any) {
       const msg = String(e?.message ?? e ?? "Save failed");

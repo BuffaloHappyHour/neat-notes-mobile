@@ -1,12 +1,14 @@
 // app/whiskey/[id].tsx
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams, useNavigation } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Image,
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -364,6 +366,7 @@ type WhiskeySupabaseRow = {
   mash_bill: string | null;
   whiskey_canonical: string | null;
   status: string | null;
+  source: string | null;
 };
 
 type WhiskeyPhoto = {
@@ -473,6 +476,8 @@ useEffect(() => {
   const [photos, setPhotos] = useState<WhiskeyPhoto[]>([]);
   const [isPremium, setIsPremium] = useState(false);
   const [whiskeyStatus, setWhiskeyStatus] = useState<string | null>(null);
+  const [whiskeySource, setWhiskeySource] = useState<string | null>(null);
+  const [welcomeSheetOpen, setWelcomeSheetOpen] = useState(false);
   const [improveOpen, setImproveOpen] = useState(false);
   const [improveProof, setImproveProof] = useState("");
   const [improveDistillery, setImproveDistillery] = useState("");
@@ -507,6 +512,7 @@ useEffect(() => {
   const [editTypeError, setEditTypeError] = useState("");
   const [editProofError, setEditProofError] = useState("");
   const autoOpenedRef = useRef(false);
+  const navigation = useNavigation();
 
   const { axes: whiskeyAxes } = useWhiskeyRadarData(whiskeyId, community.total);
   const { axes: personalAxes } = useInsightsData();
@@ -757,8 +763,8 @@ useEffect(() => {
     setEditTypeName(details.style ?? null);
     setEditTypeId(null);
     setEditCategory(details.category ?? null);
-    setEditRegion(details.region ?? null);
-    setEditSubRegion(details.subRegion ?? null);
+    setEditRegion(details.region || null);
+    setEditSubRegion(details.subRegion || null);
     setEditMode(true);
     setEditDropdownOpen(null);
     if (taxWhiskeyTypes.length === 0) {
@@ -767,6 +773,24 @@ useEffect(() => {
   };
 
   const cancelEditMode = () => {
+    if (newEntry) {
+      Alert.alert(
+        "Are you sure?",
+        "This will delete your custom whiskey entry.",
+        [
+          { text: "Keep Editing", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              await supabase.from("whiskeys").delete().eq("id", whiskeyId);
+              router.replace("/(tabs)/log" as any);
+            },
+          },
+        ]
+      );
+      return;
+    }
     setEditMode(false);
     setEditDropdownOpen(null);
     setEditNameError("");
@@ -885,20 +909,51 @@ useEffect(() => {
       const nameNormalized = nameRaw.toLowerCase().trim();
       const canonicalSlug = nameNormalized.replace(/\s+/g, "-");
 
-      const { error: candidateErr } = await supabase
+      const { data: existing, error: lookupErr } = await supabase
         .from("whiskey_candidates")
-        .insert({
-          whiskey_id: whiskeyId,
-          created_by: userId,
-          name_raw: nameRaw,
-          name_normalized: nameNormalized,
-          canonical_slug: canonicalSlug,
-          status: "pending",
-          approved: false,
-          suggested_fields: suggestedFields,
-        });
+        .select("id")
+        .eq("name_normalized", nameNormalized)
+        .eq("status", "pending")
+        .maybeSingle();
 
-      if (candidateErr) throw new Error(candidateErr.message);
+      if (lookupErr) throw new Error(lookupErr.message);
+
+      if (existing !== null) {
+        const { error: candidateErr } = await supabase
+          .from("whiskey_candidates")
+          .update({
+            created_by: userId,
+            name_raw: nameRaw,
+            name_normalized: nameNormalized,
+            canonical_slug: canonicalSlug,
+            suggested_fields: suggestedFields,
+            whiskey_type: editTypeName ?? null,
+            distillery: editDistillery.trim() || null,
+            proof: editProof.trim() ? Number(editProof.trim()) : null,
+            age: editAge.trim() ? Number(editAge.trim()) : null,
+            category: editCategory ?? null,
+            region: editRegion ?? null,
+            sub_region: editSubRegion ?? null,
+          })
+          .eq("id", existing.id);
+
+        if (candidateErr) throw new Error(candidateErr.message);
+      } else {
+        const { error: candidateErr } = await supabase
+          .from("whiskey_candidates")
+          .insert({
+            whiskey_id: whiskeyId,
+            created_by: userId,
+            name_raw: nameRaw,
+            name_normalized: nameNormalized,
+            canonical_slug: canonicalSlug,
+            status: "pending",
+            approved: false,
+            suggested_fields: suggestedFields,
+          });
+
+        if (candidateErr) throw new Error(candidateErr.message);
+      }
 
       await supabase.from("whiskeys").update({ status: "unverified" }).eq("id", whiskeyId);
       setWhiskeyStatus("unverified");
@@ -959,7 +1014,7 @@ useEffect(() => {
         let w: WhiskeySupabaseRow | null = null;
 
         const whiskeySelect =
-          "id, display_name, distillery, whiskey_type, category, region, sub_region, proof, age, mash_bill, whiskey_canonical, status";
+          "id, display_name, distillery, whiskey_type, category, region, sub_region, proof, age, mash_bill, whiskey_canonical, status, source";
 
         if (isUuidLike(routeId)) {
           const { data, error } = await supabase
@@ -999,11 +1054,13 @@ useEffect(() => {
         };
 
         const nextWhiskeyStatus = cleanText(w.status);
+        const nextWhiskeySource = cleanText(w.source);
 
         setWhiskeyId(nextWhiskeyId);
         setHeaderNameRaw(nextHeaderNameRaw);
         setDetails(nextDetails);
         setWhiskeyStatus(nextWhiskeyStatus);
+        setWhiskeySource(nextWhiskeySource);
 
         const { data: bhhRows, error: bhhErr } = await supabase
           .from("bhh_reviews")
@@ -1137,8 +1194,62 @@ useEffect(() => {
     if (!whiskeyId) return;
     if (autoOpenedRef.current) return;
     autoOpenedRef.current = true;
+    setWelcomeSheetOpen(true);
     void openEditMode();
   }, [newEntry, loading, whiskeyId]);
+
+  // Block navigation away while newEntry edit is incomplete
+  useEffect(() => {
+    if (!newEntry || !editMode) return;
+
+    const unsubscribe = navigation.addListener("beforeRemove" as any, (e: any) => {
+      e.preventDefault();
+      Alert.alert(
+        "Are you sure?",
+        "This will delete your custom whiskey entry.",
+        [
+          { text: "Keep Editing", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              await supabase.from("whiskeys").delete().eq("id", whiskeyId);
+              navigation.removeListener("beforeRemove" as any, () => {});
+              router.replace("/(tabs)/log" as any);
+            },
+          },
+        ]
+      );
+    });
+
+    return unsubscribe;
+  }, [newEntry, editMode, whiskeyId, navigation]);
+
+  useEffect(() => {
+    if (!newEntry || !editMode) return;
+
+    const onHardwareBack = () => {
+      Alert.alert(
+        "Are you sure?",
+        "This will delete your custom whiskey entry.",
+        [
+          { text: "Keep Editing", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              await supabase.from("whiskeys").delete().eq("id", whiskeyId);
+              router.replace("/(tabs)/log" as any);
+            },
+          },
+        ]
+      );
+      return true; // consumed — do not bubble to default back behavior
+    };
+
+    const subscription = BackHandler.addEventListener("hardwareBackPress", onHardwareBack);
+    return () => subscription.remove();
+  }, [newEntry, editMode, whiskeyId]);
 
   function TaxDropdown({
     label,
@@ -1299,7 +1410,7 @@ useEffect(() => {
   return (
   <>
     <ScrollView style={{ flex: 1, backgroundColor: "transparent" }}>
-      <Stack.Screen options={{ title: "Whiskey Profile" }} />
+      <Stack.Screen options={{ title: "Whiskey Profile", gestureEnabled: !(newEntry && editMode) }} />
 
       <View
         style={{
@@ -1406,12 +1517,14 @@ useEffect(() => {
         </View>
 
         {/* CTA */}
-        <View style={{ marginTop: 6 }}>
-          <PrimaryButton
-            label="Log a Tasting"
-            onPress={withSuccess(logThisWhiskey)}
-          />
-        </View>
+        {!editMode && (
+          <View style={{ marginTop: 6 }}>
+            <PrimaryButton
+              label="Log a Tasting"
+              onPress={withSuccess(logThisWhiskey)}
+            />
+          </View>
+        )}
 
         {/* Bottle details */}
         <View style={{ gap: 4, marginTop: 4 }}>
@@ -1673,7 +1786,9 @@ useEffect(() => {
                 </Text>
               </Pressable>
               <Text style={[type.caption, { color: colors.textMuted, textAlign: "center", opacity: 0.7 }]}>
-                Edits are reviewed before going live. Only changed fields are submitted.
+                {whiskeyStatus === "pending" && whiskeySource === "user"
+                  ? "Your submission will be reviewed before going live."
+                  : "Edits are reviewed before going live. Only changed fields are submitted."}
               </Text>
             </View>
           )}
@@ -2071,6 +2186,70 @@ useEffect(() => {
         ) : null}
       </View>
        </ScrollView>
+
+    {/* Welcome sheet — shown on new custom entry */}
+    <Modal
+      visible={welcomeSheetOpen}
+      transparent
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      animationType="slide"
+      onRequestClose={() => {}}
+    >
+      <View style={{
+        flex: 1,
+        backgroundColor: (colors as any).overlay ?? "rgba(0,0,0,0.55)",
+        justifyContent: "flex-end",
+      }}>
+        <View style={{
+          backgroundColor: (colors as any).glassSurface ?? colors.surface,
+          borderTopLeftRadius: 22,
+          borderTopRightRadius: 22,
+          padding: spacing.lg,
+          paddingBottom: spacing.xl * 2,
+          borderWidth: 1,
+          borderColor: (colors as any).glassBorder ?? colors.divider,
+          ...shadows.card,
+          gap: spacing.lg,
+        }}>
+          <Text style={[
+            type.screenTitle,
+            { textAlign: "center", fontSize: 26, lineHeight: 32 },
+          ]}>
+            A new pour, uncatalogued.
+          </Text>
+
+          <Text style={[
+            type.body,
+            { textAlign: "center", color: colors.textMuted, fontSize: 14 },
+          ]}>
+            —◆—
+          </Text>
+
+          <Text style={[
+            type.body,
+            { textAlign: "center", color: colors.textSecondary, fontSize: 14, lineHeight: 21 },
+          ]}>
+            {"You just logged something we haven't seen before. Help us keep Neat Notes accurate by filling in what you know.\n\nOnly Whiskey Name, Style, and Proof are required — but every detail you add helps the whole community. We review every submission before it goes live.\n\nCheers — and thanks for contributing."}
+          </Text>
+
+          <Pressable
+            onPress={() => setWelcomeSheetOpen(false)}
+            style={({ pressed }) => ({
+              paddingVertical: 14,
+              borderRadius: radii.md,
+              alignItems: "center" as const,
+              backgroundColor: colors.accent,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={[type.button, { color: colors.background }]}>
+              Let's fill it in
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
 
     <AppToast
       visible={toastVisible}

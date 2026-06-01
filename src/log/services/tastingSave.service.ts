@@ -71,6 +71,7 @@ export async function saveCloudTasting(params: {
 
   isBlind?: boolean;
   blindPosition?: number | null;
+  blindWhiskeyName?: string | null;
   eventId?: string | null;
 
   replaceTastingFlavorNodes: (
@@ -119,6 +120,7 @@ export async function saveCloudTasting(params: {
 
     isBlind,
     blindPosition,
+    blindWhiskeyName,
     eventId,
 
     replaceTastingFlavorNodes,
@@ -138,7 +140,7 @@ export async function saveCloudTasting(params: {
     throw new Error("Please enter the bar name for a Bar Pour.");
   }
 
-  const safeWhiskeyId = isBlind ? null : (whiskeyId && isUuid(whiskeyId) ? whiskeyId : null);
+  const safeWhiskeyId = whiskeyId && isUuid(whiskeyId) ? whiskeyId : null;
 
   const cleanedPersonal = String(personalNotes ?? "").trim();
   const personalOrNull = cleanedPersonal.length ? cleanedPersonal : null;
@@ -246,7 +248,7 @@ const activeEventId = await getActiveEventId();
   }
 
   const payload: any = {
-    whiskey_name: safeName,
+    whiskey_name: isBlind && blindWhiskeyName ? String(blindWhiskeyName).trim() : safeName,
     whiskey_id: safeWhiskeyId,
     rating: clamp100(Number(rating)),
     texture_level: textureLevel,

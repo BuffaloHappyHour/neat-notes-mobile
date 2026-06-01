@@ -388,6 +388,7 @@ type EventFlags = {
   event_type: string | null;
   description: string | null;
   status: string | null;
+  is_active: boolean;
   starts_at: string | null;
   ends_at: string | null;
   venues: {
@@ -435,7 +436,7 @@ export default function EventPage() {
     supabase
       .from("events")
       .select(
-        "is_blind, has_lineup, has_pairing, pairing_notes, revealed_at, venue_id, venue_name_free, venue_city, venue_state, event_type, description, status, starts_at, ends_at, venues(display_name, venue_type, address, city, state, logo_url, website, phone)"
+        "is_blind, has_lineup, has_pairing, pairing_notes, revealed_at, venue_id, venue_name_free, venue_city, venue_state, event_type, description, status, is_active, starts_at, ends_at, venues(display_name, venue_type, address, city, state, logo_url, website, phone)"
       )
       .eq("id", eventId)
       .maybeSingle()
@@ -855,7 +856,9 @@ export default function EventPage() {
                 },
               ]}
             >
-              {recent[0].whiskey_name?.trim() || "A whiskey"} just got poured
+              {flags?.is_blind && !flags?.revealed_at
+                ? "Blind Tasting in Progress"
+                : `${recent[0].whiskey_name?.trim() || "A whiskey"} just got poured`}
             </Text>
             <Text
               style={[
@@ -924,7 +927,7 @@ export default function EventPage() {
           >
             <Text style={[type.caption, { color: colors.accent }]}>✓ Checked In</Text>
           </View>
-        ) : flags?.status === "ended" ? (
+        ) : (!flags?.is_active || (flags?.ends_at != null && new Date(flags.ends_at) < new Date())) ? (
           <View
             style={{
               alignItems: "center",
@@ -1045,8 +1048,8 @@ export default function EventPage() {
                       hidden
                         ? router.push(
                             `/log/cloud-tasting?whiskeyName=${encodeURIComponent(
-                              `Blind Tasting ${index + 1}`
-                            )}&isBlind=true&blindPosition=${index + 1}&eventId=${encodeURIComponent(eventId)}` as any
+                              item.display_name
+                            )}&whiskeyId=${encodeURIComponent(item.whiskey_id)}&isBlind=true&blindPosition=${index + 1}&eventId=${encodeURIComponent(eventId)}` as any
                           )
                         : router.push(
                             `/log/cloud-tasting?whiskeyName=${encodeURIComponent(
