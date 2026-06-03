@@ -58,6 +58,14 @@ export async function registerForPushNotifications(): Promise<string | null> {
     return token.data;
   } catch (error) {
     console.error('Push token registration failed:', error);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      await supabase.from('analytics_events').insert({
+        user_id: userData?.user?.id ?? '00000000-0000-0000-0000-000000000000',
+        event_name: 'push_token_registration_failed',
+        properties: { message: String(error), platform: Platform.OS }
+      });
+    } catch {}
     return null;
   }
 }
