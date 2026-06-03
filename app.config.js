@@ -44,7 +44,7 @@ module.exports = {
     },
 
     web: {
-      output: "static",
+      output: "single",
       favicon: "./assets/images/favicon.png",
     },
 
