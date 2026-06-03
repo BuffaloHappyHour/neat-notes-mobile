@@ -17,6 +17,7 @@ import { Alert, ImageBackground, Linking, Platform, StyleSheet, View } from "rea
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Purchases from "react-native-purchases";
 import { bootstrapApp } from "../lib/bootstrapApp";
+import { registerForPushNotifications } from '../lib/notifications';
 import { supabase } from "../lib/supabase";
 import { colors } from "../lib/theme";
 import OnboardingModal from "../src/onboarding/OnboardingModal";
@@ -38,7 +39,7 @@ export default function RootLayout() {
 
     supabase.auth.getSession().then(({ data }) => {
       const user = data.session?.user;
-      if (user) void checkOnboarding(user.id);
+      if (user) { void checkOnboarding(user.id); void registerForPushNotifications(); }
     });
 
     const {
@@ -46,6 +47,7 @@ export default function RootLayout() {
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session?.user) {
         void checkOnboarding(session.user.id);
+        void registerForPushNotifications();
       }
     });
 

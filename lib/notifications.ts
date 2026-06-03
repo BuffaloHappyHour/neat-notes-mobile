@@ -37,7 +37,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
     const userId = userData.user?.id;
     if (!userId) return null;
 
-    await supabase.from("user_push_tokens").upsert(
+    const { error: upsertError } = await supabase.from("user_push_tokens").upsert(
       {
         user_id: userId,
         token: token.data,
@@ -46,9 +46,11 @@ export async function registerForPushNotifications(): Promise<string | null> {
       },
       { onConflict: "user_id" }
     );
+    if (upsertError) console.error('Failed to save push token:', upsertError);
 
     return token.data;
-  } catch {
+  } catch (error) {
+    console.error('Push token registration failed:', error);
     return null;
   }
 }
