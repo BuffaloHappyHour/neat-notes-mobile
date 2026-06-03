@@ -113,11 +113,7 @@ export function RecentEntriesCard({
             return (
               <Pressable
                 key={r.id}
-                onPress={withTick(() =>
-                  router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(r.id)}` as any)
-                )}
-                onLongPress={() => onLongPressRow({ id: r.id, whiskey_name: r.whiskey_name ?? null })}
-                delayLongPress={260}
+                onPress={withTick(() => onLongPressRow({ id: r.id, whiskey_name: r.whiskey_name ?? null }))}
                 hitSlop={6}
                 style={({ pressed }) => ({
                   flexDirection: "row",
@@ -142,11 +138,6 @@ export function RecentEntriesCard({
         )}
       </View>
 
-      {recent.length > 0 ? (
-        <Text style={[type.caption, { marginTop: spacing.sm, color: colors.textSecondary }]}>
-          Tip: press and hold a tasting to edit or delete.
-        </Text>
-      ) : null}
     </>
   );
 

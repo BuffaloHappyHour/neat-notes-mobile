@@ -68,3 +68,5 @@ neatnotes-web/node_modules/
 neatnotes-web/.next/
 neatnotes-web/.env.local
 neatnotes-web/git
+.claude/settings.local.json
+supabase/.temp/

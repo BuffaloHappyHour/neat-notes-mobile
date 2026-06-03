@@ -1,12 +1,12 @@
-// app/(tabs)/log.tsx
-import { router } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Modal,
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 
@@ -18,13 +18,10 @@ import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
+import { withTick } from "../../lib/hapticsPress";
 import { SearchSection } from "../../src/logTab/components/SearchSection";
+import { WhiskeySearchModal } from "../../src/logTab/components/WhiskeySearchModal";
 import { useRecentTastings } from "../../src/logTab/hooks/useRecentTastings";
-
-// ✅ HAPTICS
-import { withSuccess, withTick } from "../../lib/hapticsPress";
-
-/* ------------------- Helpers ------------------- */
 
 function isUuid(v: string) {
   const s = String(v ?? "").trim();
@@ -40,16 +37,6 @@ function formatWhen(v: string | null | undefined) {
   const d = new Date(t);
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
-
-/* ------------------- Types ------------------- */
-
-type Suggestion = {
-  whiskeyId: string;
-  whiskeyName: string;
-  bhhScore: number | null;
-};
-
-/* ------------------- UI ------------------- */
 
 function SoftDivider() {
   return (
@@ -216,47 +203,140 @@ function RecentRow({
   );
 }
 
-/* ------------------- Screen ------------------- */
-
 export default function LogTab() {
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Suggestion | null>(null);
+  const { barcode } = useLocalSearchParams<{ barcode?: string }>();
 
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [barcodeLookupStatus, setBarcodeLookupStatus] = useState<
+    "idle" | "loading" | "not_found" | "found"
+  >("idle");
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [barcodeTitle, setBarcodeTitle] = useState<string | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionsRow, setActionsRow] = useState<{ id: string; whiskeyName: string } | null>(null);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inputRef = useRef<TextInput | null>(null);
+  const autoHandledBarcodeRef = useRef<string | null>(null);
 
-  // ✅ Recent tastings: cached + no refresh on every tab switch
   const recent = useRecentTastings({ staleMs: 60_000 });
 
-  const qTrim = query.trim();
-  const hasEnoughQuery = qTrim.length >= 2;
+  useEffect(() => {
+    if (!barcode) return;
+    console.log("[log] barcode param:", barcode);
+  }, [barcode]);
 
-  const helperLine = useMemo(() => {
-    if (!hasEnoughQuery) return "Start typing a bottle name to search.";
-    if (selected) return "Tap Continue to open the whiskey profile.";
-    if (suggestions.length > 0) return "Tap a result, or press Continue to open the top match.";
-    return "No matches. Tap Add custom entry to log it anyway.";
-  }, [hasEnoughQuery, selected, suggestions.length]);
+  useEffect(() => {
+    if (!barcode) {
+      setBarcodeLookupStatus("idle");
+      autoHandledBarcodeRef.current = null;
+      return;
+    }
 
-  const canContinue = useMemo(() => {
-    if (!hasEnoughQuery) return false;
-    return !!selected || suggestions.length > 0;
-  }, [hasEnoughQuery, selected, suggestions.length]);
+    const code = String(barcode).trim();
+    if (!code) {
+      setBarcodeLookupStatus("idle");
+      autoHandledBarcodeRef.current = null;
+      return;
+    }
 
-  function onType(text: string) {
-    setQuery(text);
-    setSelected(null);
-  }
+    setBarcodeLookupStatus("loading");
 
-  const clearQuery = withTick(() => {
-    setQuery("");
-    setSelected(null);
-    setSuggestions([]);
-    setTimeout(() => inputRef.current?.focus?.(), 50);
-  });
+    const runLookup = async () => {
+      console.log("[log] VERSION: barcode-db-check");
+
+      try {
+        const exact = String(code).trim();
+        const padded = exact.padStart(12, "0");
+        const trimmed = exact.replace(/^0+/, "") || exact;
+        const variants = [...new Set([exact, padded, trimmed])];
+
+        const { data: barcodeMatch, error: barcodeErr } = await supabase
+          .from("whiskey_barcodes")
+          .select(
+            `
+            whiskey_id,
+            confidence,
+            verified,
+            whiskeys!inner (
+              id,
+              display_name,
+              is_active
+            )
+          `
+          )
+          .in("barcode", variants)
+          .order("verified", { ascending: false })
+          .order("confidence", { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (barcodeErr) {
+          console.log("[log] whiskey_barcodes lookup error:", JSON.stringify(barcodeErr));
+        }
+        console.log("[log] barcodeMatch raw:", JSON.stringify(barcodeMatch));
+        console.log("[log] variants searched:", variants);
+
+        const matchedWhiskey = (barcodeMatch as any)?.whiskeys;
+        const matchedWhiskeyId = matchedWhiskey?.id ? String(matchedWhiskey.id) : "";
+        const matchedWhiskeyName = matchedWhiskey?.display_name
+          ? String(matchedWhiskey.display_name)
+          : "";
+
+        if (
+          barcodeMatch &&
+          matchedWhiskey &&
+          matchedWhiskeyId &&
+          matchedWhiskeyName &&
+          matchedWhiskey?.is_active !== false
+        ) {
+          console.log("[log] barcode mapping found:", barcodeMatch);
+
+          setBarcodeLookupStatus("found");
+
+          if (autoHandledBarcodeRef.current !== code) {
+            autoHandledBarcodeRef.current = code;
+            router.replace(`/whiskey/${encodeURIComponent(matchedWhiskeyId)}?intent=log`);
+          }
+
+          return;
+        }
+
+        const res = await fetch(
+          "https://vfqbioksbylatydjqdhg.supabase.co/functions/v1/lookup-upc",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "",
+              Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ""}`,
+            },
+            body: JSON.stringify({ barcode: code }),
+          }
+        );
+
+        const data = await res.json();
+        console.log("[log] lookup-upc response:", data);
+
+        if (data?.found && data?.source === "database" && data?.whiskey_id) {
+          router.replace(
+            `/log/cloud-tasting?whiskeyId=${encodeURIComponent(data.whiskey_id)}&whiskeyName=${encodeURIComponent(data.display_name ?? "")}&lockName=1` as any
+          );
+          return;
+        }
+
+        if (data?.found && data?.title) {
+          setBarcodeTitle(data.title);
+          setSearchModalOpen(true);
+          setBarcodeLookupStatus("not_found");
+        } else {
+          setBarcodeLookupStatus("not_found");
+        }
+      } catch (err) {
+        console.log("[log] barcode lookup flow failed:", err);
+        setBarcodeLookupStatus("not_found");
+      }
+    };
+
+    runLookup();
+  }, [barcode]);
 
   function goToWhiskeyProfile(id: string) {
     const safeId = String(id ?? "").trim();
@@ -270,153 +350,46 @@ export default function LogTab() {
   function goToCustomTasting(name: string) {
     const n = String(name ?? "").trim();
     if (n.length < 2) return;
-
-    router.push(`/log/cloud-tasting?whiskeyName=${encodeURIComponent(n)}&lockName=0` as any);
+    const barcodeParam = barcode ? `&barcode=${encodeURIComponent(String(barcode))}` : "";
+    router.push(`/log/cloud-tasting?whiskeyName=${encodeURIComponent(n)}&lockName=0${barcodeParam}` as any);
   }
 
-  const onPickSuggestion = withTick((s: Suggestion) => {
-    setQuery(s.whiskeyName);
-    setSelected(s);
-    goToWhiskeyProfile(s.whiskeyId);
-  });
-
-  const onUseCustom = withTick(() => {
-    if (!hasEnoughQuery) return;
-    if (selected) return;
-    goToCustomTasting(query.trim());
-  });
-
-  const onContinue = withSuccess(() => {
-    if (!canContinue) return;
-
-    if (selected) {
-      goToWhiskeyProfile(selected.whiskeyId);
-      return;
-    }
-
-    if (suggestions.length > 0) {
-      goToWhiskeyProfile(suggestions[0].whiskeyId);
-      return;
-    }
-  });
-
-  async function fetchSuggestions(term: string) {
-    const t = term.trim();
-    if (t.length < 2) {
-      setSuggestions([]);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const safe = t.replace(/[%_]/g, "\\$&");
-
-      if (isUuid(t)) {
-        const { data: byId, error: byIdErr } = await supabase
-          .from("whiskeys")
-          .select("id, display_name")
-          .eq("id", t)
-          .limit(1);
-
-        if (byIdErr) throw new Error(byIdErr.message);
-
-        if (byId && byId.length > 0) {
-          const row = byId[0] as any;
-          setSuggestions([
-            {
-              whiskeyId: String(row.id),
-              whiskeyName: String(row.display_name ?? "Whiskey"),
-              bhhScore: null,
-            },
-          ]);
-          setLoading(false);
-          return;
-        }
-      }
-
-      const { data: wData, error: wErr } = await supabase
-        .from("whiskeys")
-        .select("id, display_name")
-        .ilike("display_name", `%${safe}%`)
-        .order("display_name", { ascending: true })
-        .limit(20);
-
-      if (wErr) throw new Error(wErr.message);
-
-      const base: Suggestion[] = (wData as any[]).map((w) => ({
-        whiskeyId: String(w.id),
-        whiskeyName: String(w.display_name ?? "Whiskey"),
-        bhhScore: null,
-      }));
-
-      const ids = base.map((b) => b.whiskeyId).filter(isUuid);
-      if (ids.length > 0) {
-        const { data: bData, error: bErr } = await supabase
-          .from("bhh_reviews")
-          .select("whiskey_id, rating_100")
-          .in("whiskey_id", ids)
-          .limit(2000);
-
-        if (!bErr && bData) {
-          const best = new Map<string, number>();
-          (bData as any[]).forEach((r) => {
-            const id = r.whiskey_id ? String(r.whiskey_id) : "";
-            if (!isUuid(id)) return;
-            const score =
-              r.rating_100 == null || !Number.isFinite(Number(r.rating_100))
-                ? null
-                : Number(r.rating_100);
-            if (score == null) return;
-            const ex = best.get(id);
-            if (ex == null || score > ex) best.set(id, score);
+  async function handleSearchSelect(whiskeyId: string) {
+    if (barcode) {
+      try {
+        const code = String(barcode).trim();
+        if (code) {
+          const { data, error } = await supabase.rpc("save_barcode_mapping", {
+            p_barcode: code,
+            p_whiskey_id: whiskeyId,
+            p_source: "user_confirmed",
+            p_confidence: 0.7,
+            p_verified: false,
+            p_barcode_format: null,
           });
 
-          base.forEach((s) => {
-            const v = best.get(s.whiskeyId);
-            if (v != null) s.bhhScore = v;
-          });
+          if (error) {
+            console.log("[log] save_barcode_mapping error:", error);
+          } else {
+            console.log("[log] save_barcode_mapping success:", data);
+          }
         }
+      } catch (err) {
+        console.log("[log] save_barcode_mapping failed:", err);
       }
-
-      const list = base
-        .sort((a, b) => {
-          const as = a.bhhScore ?? -Infinity;
-          const bs = b.bhhScore ?? -Infinity;
-          if (bs !== as) return bs - as;
-          return a.whiskeyName.localeCompare(b.whiskeyName);
-        })
-        .slice(0, 10);
-
-      setSuggestions(list);
-    } catch (e: any) {
-      console.log("Log suggestion search failed:", e?.message ?? e);
-      setSuggestions([]);
-    } finally {
-      setLoading(false);
     }
+
+    goToWhiskeyProfile(whiskeyId);
   }
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      inputRef.current?.focus?.();
-    }, 250);
-    return () => clearTimeout(t);
-  }, []);
+  function openActions(row: { id: string; whiskeyName: string }) {
+    setActionsRow(row);
+    setActionsOpen(true);
+  }
 
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchSuggestions(query), 220);
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query]);
-
-  function goTasting(tastingId: string) {
-    const id = String(tastingId ?? "").trim();
-    if (!id) return;
-
-    router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(id)}&mode=edit&readonly=0` as any);
+  function closeActions() {
+    setActionsOpen(false);
+    setActionsRow(null);
   }
 
   return (
@@ -433,7 +406,6 @@ export default function LogTab() {
         keyboardDismissMode="on-drag"
         nestedScrollEnabled
       >
-        {/* Header */}
         <View style={{ gap: spacing.xs }}>
           <Text style={[type.screenTitle, { fontSize: 34, lineHeight: 40 }]}>
             What are you drinking?
@@ -447,17 +419,11 @@ export default function LogTab() {
         </View>
 
         <SearchSection
-          query={query}
-          onChangeQuery={onType}
-          onClear={clearQuery}
-          suggestions={suggestions}
-          loading={loading}
-          helperLine={helperLine}
-          hasEnoughQuery={hasEnoughQuery}
-          canContinue={canContinue}
-          onPick={onPickSuggestion}
-          onCustom={onUseCustom}
-          onContinue={onContinue}
+          onOpenSearch={() => {
+            setBarcodeTitle(null);
+            setSearchModalOpen(true);
+          }}
+          onScanPress={() => router.push("/scan" as any)}
         />
 
         <SoftDivider />
@@ -494,13 +460,132 @@ export default function LogTab() {
                 <RecentRow
                   key={r.id}
                   row={{ id: r.id, whiskeyName: r.whiskeyName, rating: r.rating, createdAt: r.createdAt }}
-                  onPress={withTick(() => goTasting(r.id))}
+                  onPress={withTick(() => openActions({ id: r.id, whiskeyName: r.whiskeyName }))}
                 />
               ))}
             </View>
           )}
         </Card>
       </ScrollView>
+
+      <WhiskeySearchModal
+        visible={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        initialQuery={barcodeTitle ?? undefined}
+        onSelect={(whiskeyId) => {
+          setSearchModalOpen(false);
+          handleSearchSelect(whiskeyId);
+        }}
+        onCustomEntry={(name) => {
+          setSearchModalOpen(false);
+          goToCustomTasting(name);
+        }}
+      />
+
+      <Modal
+        visible={actionsOpen}
+        transparent
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        animationType="fade"
+        onRequestClose={closeActions}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <Pressable
+            onPress={closeActions}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+
+          <Pressable
+            onPress={() => {}}
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: radii.lg,
+              borderWidth: 1,
+              borderColor: colors.divider,
+              padding: spacing.lg,
+              gap: spacing.md,
+              ...shadows.card,
+            }}
+          >
+            <View style={{ gap: 6 }}>
+              <Text style={[type.sectionHeader, { fontSize: 16 }]}>Tasting options</Text>
+              <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
+                {actionsRow?.whiskeyName}
+              </Text>
+            </View>
+
+            <View style={{ gap: spacing.sm }}>
+              <Pressable
+                onPress={() => {
+                  if (!actionsRow) return;
+                  const id = actionsRow.id;
+                  closeActions();
+                  router.push(
+                    `/log/cloud-tasting?tastingId=${encodeURIComponent(id)}&mode=edit&readonly=0` as any
+                  );
+                }}
+                style={({ pressed }) => ({
+                  borderRadius: radii.md,
+                  paddingVertical: spacing.lg,
+                  alignItems: "center",
+                  backgroundColor: colors.accent,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text style={[type.button, { color: colors.background }]}>Edit</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  if (!actionsRow) return;
+                  const row = actionsRow;
+                  Alert.alert("Delete tasting?", "This cannot be undone.", [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Delete",
+                      style: "destructive",
+                      onPress: async () => {
+                        await supabase.from("tastings").delete().eq("id", row.id);
+                        closeActions();
+                        recent.refresh();
+                      },
+                    },
+                  ]);
+                }}
+                style={({ pressed }) => ({
+                  borderRadius: radii.md,
+                  paddingVertical: spacing.lg,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: colors.divider,
+                  backgroundColor: colors.surface,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text style={[type.button, { color: colors.accent }]}>Delete</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={closeActions}
+                style={({ pressed }) => ({
+                  paddingVertical: spacing.sm,
+                  alignItems: "center",
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Cancel</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </View>
+      </Modal>
     </View>
   );
 }

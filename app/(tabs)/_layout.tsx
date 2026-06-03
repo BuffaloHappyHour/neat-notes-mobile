@@ -6,7 +6,6 @@ import { Platform, Pressable } from "react-native";
 
 import { logClientEvent } from "../../lib/clientLog";
 import { colors } from "../../lib/theme";
-import { type } from "../../lib/typography";
 
 function LoggedTabBarButton(props: any) {
   const { onPress, accessibilityState, ...rest } = props;
@@ -76,6 +75,10 @@ function LoggedTabBarButton(props: any) {
   return <Pressable {...rest} onPress={handlePress} />;
 }
 
+export const unstable_settings = {
+  initialRouteName: "home",
+};
+
 export default function TabsLayout() {
   const screenOptions = useMemo(
     () => ({
@@ -85,8 +88,12 @@ export default function TabsLayout() {
       tabBarInactiveTintColor: colors.textMuted ?? "rgba(255,255,255,0.55)",
 
       tabBarLabelStyle: {
-        fontSize: 11,
-        fontFamily: type?.body?.fontFamily,
+        fontSize: 10,
+        textAlign: "center" as const,
+      },
+
+      tabBarItemStyle: {
+        minWidth: 0,
       },
 
       tabBarStyle: {
@@ -98,6 +105,7 @@ export default function TabsLayout() {
           elevation: 9999,
       },
 
+      // ✅ this is the key: make every tab button loggable
       tabBarButton: (props: any) => <LoggedTabBarButton {...props} />,
     }),
     []
@@ -116,21 +124,21 @@ export default function TabsLayout() {
       />
 
       <Tabs.Screen
-        name="discover"
-        options={{
-          title: "Discover",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search-outline" size={size} color={color} />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
         name="log"
         options={{
           title: "Log",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="create-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="discover"
+        options={{
+          title: "Discover",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="search-outline" size={size} color={color} />
           ),
         }}
       />

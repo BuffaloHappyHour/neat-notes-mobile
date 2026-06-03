@@ -21,17 +21,13 @@ function Card({
   return (
     <View
       style={{
-        backgroundColor: (colors as any).glassSurface ?? colors.surface,
+        backgroundColor: colors.glassSurface ?? colors.surface,
         borderRadius: radii.lg,
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.lg,
-
         borderWidth: 1,
-        borderColor: (colors as any).glassBorder ?? colors.divider,
-
-        // keep your existing elevation but make it feel warmer / softer
+        borderColor: colors.glassBorder ?? colors.divider,
         ...shadows.card,
-
         gap: spacing.sm,
       }}
     >
@@ -43,21 +39,18 @@ function Card({
           gap: spacing.md,
         }}
       >
-        <Text style={[type.sectionHeader, { fontSize: 18 }]}>
-          {title}
-        </Text>
+        <Text style={[type.sectionHeader, { fontSize: 18 }]}>{title}</Text>
         {rightHeader ? rightHeader : null}
       </View>
 
-      {/* subtle “premium” accent bar */}
       <View
         style={{
-          width: 120,
+          width: 24,
           height: 2,
           backgroundColor: colors.accent,
-          marginTop: 0,
-          marginBottom: 4,
-          opacity: 0.5,
+          marginTop: 6,
+          marginBottom: 2,
+          opacity: 0.55,
           borderRadius: 999,
         }}
       />
@@ -83,23 +76,18 @@ function IconButton({
         flexDirection: "row",
         alignItems: "center",
         borderWidth: 1,
-        borderColor: (colors as any).glassBorder ?? colors.divider,
+        borderColor: pressed
+          ? colors.glassBorderStrong ?? colors.borderStrong ?? colors.divider
+          : colors.glassBorder ?? colors.divider,
         borderRadius: 999,
         paddingVertical: 8,
         paddingHorizontal: 10,
-        backgroundColor: pressed
-          ? ((colors as any).glassSunken ?? colors.highlight)
-          : "transparent",
-        opacity: pressed ? 0.94 : 1,
+        backgroundColor: pressed ? (colors.highlight ?? "rgba(255,255,255,0.06)") : "transparent",
+        opacity: pressed ? 0.92 : 1,
         gap: 8,
       })}
     >
-      <Ionicons
-        name={icon}
-        size={16}
-        color={colors.textPrimary}
-        style={{ opacity: 0.9 }}
-      />
+      <Ionicons name={icon} size={16} color={colors.textPrimary} style={{ opacity: 0.9 }} />
       {badgeText ? (
         <Text style={[type.caption, { fontWeight: "800", opacity: 0.9 }]}>
           {badgeText}
@@ -117,9 +105,9 @@ function SmallPill({ label }: { label: string }) {
         paddingVertical: 6,
         paddingHorizontal: 10,
         borderRadius: 999,
-        backgroundColor: (colors as any).glassSunken ?? colors.accentFaint,
+        backgroundColor: colors.glassSunken ?? colors.accentFaint,
         borderWidth: 1,
-        borderColor: (colors as any).glassBorder ?? colors.borderSubtle,
+        borderColor: colors.glassBorder ?? colors.borderSubtle ?? colors.divider,
       }}
     >
       <Text style={[type.caption, { opacity: 0.9 }]}>{label}</Text>
@@ -157,14 +145,7 @@ export function DiscoverHeaderCard({
         Trending updates even when you’re not logging.
       </Text>
 
-      <View
-        style={{
-          flexDirection: "row",
-          flexWrap: "wrap",
-          gap: 8,
-          marginTop: 2,
-        }}
-      >
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 2 }}>
         {hasFilters ? <SmallPill label={`Filters: ${filterBadgeText}`} /> : null}
         {loading ? <SmallPill label="Updating…" /> : null}
         {statusError ? <SmallPill label="Issue loading data" /> : null}

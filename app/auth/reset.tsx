@@ -62,7 +62,7 @@ function SecondaryButton({
 
 export default function ResetPasswordScreen() {
   // 🔁 Pattern B web reset page (replace with your real domain)
-  const WEB_RESET_URL = "https://YOUR_VERCEL_DOMAIN/auth/reset";
+  const WEB_RESET_URL = "https://neatnotesapp.com/auth/reset";
 
   const openWebReset = async () => {
     try {

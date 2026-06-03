@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 export type MyProfile = {
   display_name: string | null;
   first_name: string | null; // “Private name” (journal vibe)
+  is_premium: boolean;
 };
 
 async function requireSession() {
@@ -18,6 +19,7 @@ async function requireSession() {
 export async function upsertMyProfile(input: {
   display_name?: string;
   first_name?: string;
+  is_premium?: boolean;
 }) {
   const session = await requireSession();
 
@@ -33,6 +35,10 @@ export async function upsertMyProfile(input: {
     payload.first_name = v.length ? v : null;
   }
 
+  if (typeof input.is_premium === "boolean") {
+    payload.is_premium = input.is_premium;
+  }
+
   // If they passed nothing meaningful, don’t write.
   if (Object.keys(payload).length === 1) return;
 
@@ -45,7 +51,7 @@ export async function fetchMyProfile(): Promise<MyProfile | null> {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("display_name, first_name")
+    .select("display_name, first_name, is_premium")
     .eq("id", session.user.id)
     .maybeSingle();
 

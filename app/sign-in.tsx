@@ -15,21 +15,24 @@ import {
   View,
 } from "react-native";
 
-import { fetchMyProfile, upsertMyProfile } from "../lib/cloudProfile";
-import { supabase } from "../lib/supabase";
-
+import * as AppleAuthentication from "expo-apple-authentication";
+import Purchases from "react-native-purchases";
+import * as WebBrowser from "expo-web-browser";
+import { makeRedirectUri } from "expo-auth-session";
+import { useAppleAuth } from "../hooks/useAppleAuth";
+import { fetchMyProfile } from "../lib/cloudProfile";
+import { syncPremiumStatusFromRevenueCat } from "../lib/premiumSync";
 import { radii } from "../lib/radii";
 import { shadows } from "../lib/shadows";
 import { spacing } from "../lib/spacing";
+import { supabase } from "../lib/supabase";
 import { colors } from "../lib/theme";
 import { type } from "../lib/typography";
 
 /* ---------- URLs (store compliance) ---------- */
-
 const PRIVACY_URL = "https://buffalohappyhour.org/neat-notes-privacy/";
 
 /* ---------- Stable UI helpers ---------- */
-
 type InputProps = React.ComponentProps<typeof TextInput>;
 
 function ThemedInput(props: InputProps) {
@@ -173,21 +176,61 @@ function PasswordRow({
   );
 }
 
-/* -------------------- Deep link helpers (kept for non-reset auth flows) -------------------- */
+/* -------------------- Google Sign-In helpers -------------------- */
+function GoogleSignInButton({
+  onPress,
+  disabled,
+}: {
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: spacing.sm,
+        borderRadius: radii.md,
+        paddingVertical: spacing.lg,
+        backgroundColor: colors.textPrimary,
+        borderWidth: 1,
+        borderColor: colors.accent,
+        opacity: disabled ? 0.65 : pressed ? 0.92 : 1,
+      })}
+    >
+      <Ionicons name="logo-google" size={20} color={colors.background} />
+      <Text style={[type.button, { color: colors.background }]}>Continue with Google</Text>
+    </Pressable>
+  );
+}
 
+function OrDivider() {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+      <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
+      <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.8 }]}>
+        or
+      </Text>
+      <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
+    </View>
+  );
+}
+
+/* -------------------- Deep link helpers -------------------- */
 function getAppScheme(): string | null {
   const scheme =
     (Constants.expoConfig as any)?.scheme ||
     (Constants.manifest as any)?.scheme ||
     null;
-
   if (typeof scheme === "string" && scheme.trim()) return scheme.trim();
   return null;
 }
 
 function buildAuthCallbackUrl(): string {
   const scheme = getAppScheme();
-
   try {
     const url = Linking.createURL("auth/callback", scheme ? { scheme } : undefined);
     return url;
@@ -197,14 +240,31 @@ function buildAuthCallbackUrl(): string {
   }
 }
 
-/* -------------------- Screen -------------------- */
+/* -------------------- Phone helpers -------------------- */
+function formatPhoneForSupabase(raw: string): string {
+  // Strip everything except digits
+  const digits = raw.replace(/\D/g, "");
+  // Add +1 if US number without country code
+  if (digits.length === 10) return `+1${digits}`;
+  // Already has country code
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  // Return as-is with + prefix if longer
+  return `+${digits}`;
+}
 
-type Mode = "signin" | "signup" | "signupName" | "signedIn";
+/* -------------------- Screen -------------------- */
+type Mode =
+  | "signin"
+  | "signup"
+  | "signedIn"
+  | "phoneSignin"
+  | "otpEntry"
+  | "signupOtpEntry"
+  | "signupName";
 
 export default function SignInScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-
   const [mode, setMode] = useState<Mode>("signin");
 
   const [authedEmail, setAuthedEmail] = useState<string>("");
@@ -212,16 +272,30 @@ export default function SignInScreen() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  const [nameInput, setNameInput] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
-  const [justSignedUpEmail, setJustSignedUpEmail] = useState<string>("");
   const [signupEmail, setSignupEmail] = useState<string>("");
 
+  // Phone auth state
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [pendingPhone, setPendingPhone] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // Signup phone-first state
+  const [signupPhone, setSignupPhone] = useState("");
+  const [signupOtp, setSignupOtp] = useState("");
+  const [signupPendingPhone, setSignupPendingPhone] = useState("");
+  const [signupDisplayName, setSignupDisplayName] = useState("");
+
+  const { isAvailable: isAppleAvailable, signIn: appleSignIn } = useAppleAuth();
+
   const titleText = useMemo(() => {
-    if (mode === "signup" || mode === "signupName") return "Create Account";
+    if (mode === "signup") return "Create Account";
     if (mode === "signedIn") return "Account";
+    if (mode === "phoneSignin") return "Sign In";
+    if (mode === "otpEntry") return "Enter Code";
+    if (mode === "signupOtpEntry") return "Verify Phone";
+    if (mode === "signupName") return "Almost done!";
     return "Sign In";
   }, [mode]);
 
@@ -233,7 +307,13 @@ export default function SignInScreen() {
     }
   };
 
-  async function refreshScreenStateFromSession() {
+  async function finishSignIn() {
+    await syncPremiumStatusFromRevenueCat();
+    router.replace("/(tabs)/home");
+  }
+
+  async function loadSessionOnce() {
+    setLoading(true);
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
 
@@ -245,7 +325,7 @@ export default function SignInScreen() {
     }
 
     setMode("signedIn");
-    setAuthedEmail(user.email ?? "");
+    setAuthedEmail(user.email ?? user.phone ?? "");
 
     try {
       const profile = await fetchMyProfile();
@@ -283,25 +363,71 @@ export default function SignInScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const goToCreateAccount = () => {
-    setJustSignedUpEmail("");
-    setSignupEmail("");
-    setNameInput("");
-    setShowPassword(false);
-    setMode("signup");
+  /* ---- Phone sign-in: check profile, then send OTP ---- */
+  const sendSignInOtp = async () => {
+    if (busy) return;
+    const formatted = formatPhoneForSupabase(phone);
+
+    if (formatted.length < 10) {
+      return Alert.alert("Invalid number", "Please enter a valid US phone number.");
+    }
+
+    setBusy(true);
+
+    const { data: phoneExists } = await supabase.rpc("check_phone_exists", { p_phone: formatted });
+
+    if (!phoneExists) {
+      setBusy(false);
+      return Alert.alert(
+        "No account found",
+        "No account found with this number. Please sign in with email first."
+      );
+    }
+
+    const { error } = await supabase.auth.signInWithOtp({ phone: formatted });
+
+    setBusy(false);
+
+    if (error) {
+      return Alert.alert("Error", error.message);
+    }
+
+    setPendingPhone(formatted);
+    setOtp("");
+    setMode("otpEntry");
   };
 
-  const goToSignIn = () => {
-    setJustSignedUpEmail("");
-    setSignupEmail("");
-    setNameInput("");
-    setShowPassword(false);
-    setMode("signin");
-  };
-
-  const signIn = async () => {
+  /* ---- Phone OTP: Verify ---- */
+  const verifyOtp = async () => {
     if (busy) return;
 
+    if (otp.length !== 6) {
+      return Alert.alert("Invalid code", "Please enter the 6-digit code we sent you.");
+    }
+
+    setBusy(true);
+
+    const { error } = await supabase.auth.verifyOtp({
+      phone: pendingPhone,
+      token: otp,
+      type: "sms",
+    });
+
+    setBusy(false);
+
+    if (error) {
+      return Alert.alert(
+        "Incorrect code",
+        "That code didn't match. Please check and try again, or go back to resend."
+      );
+    }
+
+    await finishSignIn();
+  };
+
+  /* ---- Email sign in ---- */
+  const signIn = async () => {
+    if (busy) return;
     const em = email.trim();
     const pw = password;
 
@@ -324,14 +450,14 @@ export default function SignInScreen() {
       if (msg.includes("email") && (msg.includes("confirm") || msg.includes("verified"))) {
         return Alert.alert(
           "Verify your email",
-          "Please verify your email address, then try signing in again.\n\nIf you don’t see the email, check spam."
+          "Please verify your email address, then try signing in again.\n\nIf you don't see the email, check spam."
         );
       }
 
       if (msg.includes("invalid login credentials")) {
         return Alert.alert(
           "Sign in failed",
-          "That email/password combo didn’t work.\n\nIf you don’t have an account yet, tap Create Account.\nIf you forgot your password, tap Reset Password.",
+          "That email/password combo didn't work.\n\nIf you don't have an account yet, tap Create Account.\nIf you forgot your password, tap Reset Password.",
           [
             { text: "Reset Password", onPress: () => onForgotPassword() },
             { text: "Create Account", onPress: goToCreateAccount },
@@ -345,110 +471,310 @@ export default function SignInScreen() {
 
     // Clear local form state; RootLayout will route to tabs.
     setPassword("");
-    setJustSignedUpEmail("");
+    setSignupEmail("");
 
-    // Optional: apply name if they entered one (best-effort)
-    const nm = nameInput.trim();
-    if (nm) {
-      try {
-        await upsertMyProfile({ first_name: nm });
-        setNameSaved(nm);
-      } catch {}
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.id) {
+      await finishSignIn();
     }
-
-    // Bring this screen into "signedIn" mode immediately (before RootLayout redirects)
-    await refreshScreenStateFromSession();
   };
 
-  const createAccountOneTap = async () => {
+  /* ---- Sign up ---- */
+  const createAccount = async () => {
     if (busy) return;
-
     const em = email.trim();
     const pw = password;
+    const rawPhone = signupPhone.trim();
 
     if (!em || !pw) {
       return Alert.alert("Missing info", "Please enter an email and password.");
     }
 
+    if (pw !== confirmPassword) {
+      return Alert.alert("Passwords don't match", "Please make sure both password fields match.");
+    }
+
+    // Phone-first path
+    if (rawPhone) {
+      const formattedPhone = formatPhoneForSupabase(rawPhone);
+      if (formattedPhone.length < 10) {
+        return Alert.alert("Invalid number", "Please enter a valid US phone number.");
+      }
+
+      setBusy(true);
+
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: formattedPhone,
+        options: { shouldCreateUser: true },
+      });
+
+      setBusy(false);
+
+      if (error) {
+        return Alert.alert("Error", error.message);
+      }
+
+      setSignupPendingPhone(formattedPhone);
+      setSignupOtp("");
+      setMode("signupOtpEntry");
+      return;
+    }
+
+    // Email-only path
     setBusy(true);
 
-    // Force Supabase email confirmation links to return to the APP
-    const emailRedirectTo = buildAuthCallbackUrl();
-    console.log("SIGNUP emailRedirectTo =", emailRedirectTo);
-
-    const { data, error } = await supabase.auth.signUp({
-      email: em,
-      password: pw,
-      options: { emailRedirectTo },
-    });
+    const { data, error } = await supabase.auth.signUp({ email: em, password: pw });
 
     setBusy(false);
 
     if (error) {
       const msg = error.message.toLowerCase();
-
       if (msg.includes("already") || msg.includes("registered") || msg.includes("user already")) {
         return Alert.alert(
-          "Account already exists",
-          "That email is already registered.\n\nPlease sign in with that email, or reset your password if you forgot it.",
+          "An account with this email already exists. Please sign in.",
+          undefined,
           [
-            { text: "Reset Password", onPress: () => onForgotPassword() },
             { text: "Go to Sign In", onPress: goToSignIn },
             { text: "OK", style: "cancel" },
           ]
         );
       }
-
       return Alert.alert("Create account failed", error.message);
     }
 
-    setJustSignedUpEmail(em);
-    setSignupEmail(em);
+    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      return Alert.alert(
+        "Account already exists",
+        "An account with this email already exists. Please sign in.",
+        [
+          { text: "Go to Sign In", onPress: goToSignIn },
+          { text: "OK", style: "cancel" },
+        ]
+      );
+    }
 
     Alert.alert(
       "Check your email",
-      "We sent a confirmation email. Verify your address, then return and sign in."
+      "We sent a confirmation link to " + em + ". Once confirmed, sign in here.",
+      [{ text: "Got it", onPress: goToSignIn }]
     );
-
-    setMode("signupName");
-
-    const user = data.session?.user;
-    if (user) {
-      // fine
-    }
-  };
-
-  const continueAfterName = async () => {
-    setMode("signin");
-    Alert.alert("Almost there", "Once you confirm your email, sign in and we’ll apply your name.");
+    return;
   };
 
   const onForgotPassword = async () => {
     if (busy) return;
-
     const em = email.trim();
     if (!em) {
       return Alert.alert("Reset password", "Enter your email first, then tap Reset Password.");
     }
 
     setBusy(true);
-
-    // Pattern B web reset page (must be in Supabase Redirect URLs allowlist)
-    const redirectTo = "https://neatnotes-web.vercel.app/auth/reset";
-    console.log("RESET redirectTo =", redirectTo);
-
+    const redirectTo = "https://neatnotesapp.com/auth/reset";
     const { error } = await supabase.auth.resetPasswordForEmail(em, { redirectTo });
-
     setBusy(false);
 
-    if (error) {
-      return Alert.alert("Reset failed", error.message);
-    }
+    if (error) return Alert.alert("Reset failed", error.message);
 
     Alert.alert(
       "Reset email sent",
-      "Open the reset email and tap the button. You’ll land on a secure Neat Notes reset page to set a new password."
+      "Open the reset email and tap the button. You'll land on a secure Neat Notes reset page to set a new password."
     );
+  };
+
+  const goToCreateAccount = () => {
+    setSignupEmail("");
+    setShowPassword(false);
+    setSignupPhone("");
+    setMode("signup");
+  };
+
+  const goToSignIn = () => {
+    setSignupEmail("");
+    setShowPassword(false);
+    setMode("signin");
+  };
+
+  /* ---- Signup OTP: verify phone, link email, set password, write profile ---- */
+  const verifySignUpOtp = async () => {
+    if (busy) return;
+
+    if (signupOtp.length !== 6) {
+      return Alert.alert("Invalid code", "Please enter the 6-digit code we sent you.");
+    }
+
+    setBusy(true);
+
+    const { error } = await supabase.auth.verifyOtp({
+      phone: signupPendingPhone,
+      token: signupOtp,
+      type: "sms",
+    });
+
+    if (error) {
+      setBusy(false);
+      return Alert.alert(
+        "Incorrect code",
+        "That code didn't match. Please check and try again, or go back to resend."
+      );
+    }
+
+    // Link email identity — non-fatal
+    try {
+      await (supabase.auth as any).linkIdentity({
+        provider: "email",
+        options: { email: email.trim(), redirectTo: buildAuthCallbackUrl() },
+      });
+    } catch (linkErr) {
+      console.error("linkIdentity email failed (non-fatal):", linkErr);
+    }
+
+    // Set password — non-fatal
+    try {
+      await supabase.auth.updateUser({ password });
+    } catch (pwErr) {
+      console.error("updateUser password failed (non-fatal):", pwErr);
+    }
+
+    // Write profile row
+    const { data: sessionData } = await supabase.auth.getSession();
+    const uid = sessionData.session?.user?.id;
+    if (uid) {
+      try {
+        await supabase.from("profiles").upsert({
+          id: uid,
+          display_name: email.trim().split("@")[0],
+          phone: signupPendingPhone,
+        });
+      } catch (profileErr) {
+        console.error("profiles upsert failed (non-fatal):", profileErr);
+      }
+    }
+
+    setBusy(false);
+    setSignupDisplayName("");
+    setMode("signupName");
+  };
+
+  /* ---- Signup name collection ---- */
+  const submitSignupName = async () => {
+    if (busy) return;
+    const name = signupDisplayName.trim();
+    setBusy(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const uid = sessionData.session?.user?.id;
+      if (uid && name) {
+        await supabase.from("profiles").update({ display_name: name }).eq("id", uid);
+      }
+    } catch (err) {
+      console.error("display_name update failed (non-fatal):", err);
+    } finally {
+      setBusy(false);
+    }
+    await finishSignIn();
+  };
+
+  const skipSignupName = async () => {
+    await finishSignIn();
+  };
+
+  /* ---- Apple Sign-In ---- */
+  const handleAppleSignIn = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await appleSignIn();
+      await finishSignIn();
+    } catch (err: any) {
+      if (!err?.cancelled) {
+        Alert.alert("Sign in failed", err?.message ?? "An error occurred. Please try again.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /* ---- Google Sign-In ---- */
+  const signInWithGoogle = async () => {
+    if (busy) return;
+    setBusy(true);
+
+    try {
+      const scheme = getAppScheme() ?? "neatnotes";
+      const redirectUri = makeRedirectUri({ scheme, path: "auth/callback" });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: redirectUri, skipBrowserRedirect: true },
+      });
+
+      if (error || !data.url) throw error ?? new Error("No OAuth URL returned.");
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+
+      if (result.type !== "success") {
+        return;
+      }
+
+      // Implicit flow: tokens arrive in URL fragment
+      const fragment = result.url.split("#")[1] ?? "";
+      const fragmentParams: Record<string, string> = {};
+      fragment.split("&").filter(Boolean).forEach((pair) => {
+        const idx = pair.indexOf("=");
+        if (idx !== -1) {
+          fragmentParams[decodeURIComponent(pair.slice(0, idx))] =
+            decodeURIComponent(pair.slice(idx + 1));
+        }
+      });
+
+      if (fragmentParams.access_token) {
+        await supabase.auth.setSession({
+          access_token: fragmentParams.access_token,
+          refresh_token: fragmentParams.refresh_token ?? "",
+        });
+      } else {
+        // PKCE flow: extract code and exchange
+        const codeMatch = result.url.match(/[?&]code=([^&#]+)/);
+        if (codeMatch?.[1]) {
+          await supabase.auth.exchangeCodeForSession(decodeURIComponent(codeMatch[1]));
+        }
+      }
+
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.user) {
+        throw sessionError ?? new Error("Sign-in did not complete. Please try again.");
+      }
+
+      const user = session.user;
+
+      if (!user.email) {
+        await supabase.auth.signOut();
+        throw new Error(
+          "This Google account has no email address. Please use an account with a verified email."
+        );
+      }
+
+      // Create profile row for new users
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .single();
+
+      if (!existingProfile) {
+        const displayName =
+          String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? "").trim() ||
+          user.email.split("@")[0];
+        await supabase.from("profiles").upsert({ id: user.id, display_name: displayName });
+      }
+
+      await finishSignIn();
+    } catch (err: any) {
+      Alert.alert("Sign in failed", err?.message ?? "An error occurred. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (loading) {
@@ -484,15 +810,16 @@ export default function SignInScreen() {
       >
         <Text style={type.screenTitle}>{titleText}</Text>
 
+        {/* ── Signed In ── */}
         {mode === "signedIn" ? (
           <Card
-            title={nameSaved ? `Welcome, ${nameSaved}.` : "You’re signed in."}
+            title={nameSaved ? `Welcome, ${nameSaved}.` : "You're signed in."}
             subtitle="Your tastings are synced to the cloud."
           >
             <Text style={[type.body, { opacity: 0.85 }]}>
               Signed in as{" "}
               <Text style={{ fontWeight: "800", color: colors.textPrimary }}>
-                {authedEmail || "(no email)"}
+                {authedEmail || "(no account info)"}
               </Text>
             </Text>
 
@@ -501,6 +828,7 @@ export default function SignInScreen() {
               onPress={async () => {
                 if (busy) return;
                 setBusy(true);
+                await Purchases.logOut();
                 const { error } = await supabase.auth.signOut();
                 setBusy(false);
                 if (error) return Alert.alert("Sign out failed", error.message);
@@ -512,39 +840,141 @@ export default function SignInScreen() {
               tone="secondary"
             />
           </Card>
-        ) : mode === "signupName" ? (
+
+        /* ── OTP Entry (phone sign-in / sign-up) ── */
+        ) : mode === "otpEntry" ? (
           <Card
-            title="Optional"
-            subtitle={
-              signupEmail
-                ? `Add a name for personalization (email: ${signupEmail}).`
-                : "Add a name for personalization."
-            }
+            title="Check your texts"
+            subtitle={`We sent a 6-digit code to ${pendingPhone}. Enter it below.`}
           >
             <ThemedInput
-              placeholder="Name (optional)"
-              value={nameInput}
-              onChangeText={setNameInput}
+              placeholder="6-digit code"
+              value={otp}
+              onChangeText={(v) => setOtp(v.replace(/\D/g, "").slice(0, 6))}
+              keyboardType="number-pad"
+              returnKeyType="done"
+              onSubmitEditing={verifyOtp}
+              autoFocus
+            />
+
+            <ThemedButton
+              label={busy ? "Verifying…" : "Verify Code"}
+              onPress={verifyOtp}
+              disabled={busy || otp.length !== 6}
+              tone="primary"
+            />
+
+            <Pressable
+              onPress={() => {
+                setOtp("");
+                setMode("phoneSignin");
+              }}
+              style={({ pressed }) => ({
+                alignSelf: "center",
+                opacity: pressed ? 0.7 : 1,
+                paddingVertical: 6,
+              })}
+            >
+              <Text style={[type.microcopyItalic, { color: colors.accent }]}>
+                Go back / resend code
+              </Text>
+            </Pressable>
+          </Card>
+
+        /* ── Signup OTP Entry ── */
+        ) : mode === "signupOtpEntry" ? (
+          <Card
+            title="Check your texts"
+            subtitle={`We sent a 6-digit code to ${signupPendingPhone}. Enter it below.`}
+          >
+            <ThemedInput
+              placeholder="6-digit code"
+              value={signupOtp}
+              onChangeText={(v) => setSignupOtp(v.replace(/\D/g, "").slice(0, 6))}
+              keyboardType="number-pad"
+              returnKeyType="done"
+              onSubmitEditing={verifySignUpOtp}
+              autoFocus
+            />
+
+            <ThemedButton
+              label={busy ? "Verifying…" : "Verify Code"}
+              onPress={verifySignUpOtp}
+              disabled={busy || signupOtp.length !== 6}
+              tone="primary"
+            />
+
+            <Pressable
+              onPress={() => {
+                setSignupOtp("");
+                setMode("signup");
+              }}
+              style={({ pressed }) => ({
+                alignSelf: "center",
+                opacity: pressed ? 0.7 : 1,
+                paddingVertical: 6,
+              })}
+            >
+              <Text style={[type.microcopyItalic, { color: colors.accent }]}>
+                Go back / resend code
+              </Text>
+            </Pressable>
+          </Card>
+
+        /* ── Signup Name Collection ── */
+        ) : mode === "signupName" ? (
+          <Card
+            title="Almost done!"
+            subtitle="What should we call you? You can change this anytime in settings."
+          >
+            <ThemedInput
+              placeholder="Your name or nickname"
+              value={signupDisplayName}
+              onChangeText={setSignupDisplayName}
               autoCapitalize="words"
               returnKeyType="done"
+              onSubmitEditing={submitSignupName}
+              autoFocus
             />
 
             <ThemedButton
               label={busy ? "Working…" : "Continue"}
-              onPress={continueAfterName}
+              onPress={submitSignupName}
               disabled={busy}
               tone="primary"
             />
 
-            <ThemedButton
-              label="Skip"
-              onPress={() => setMode("signin")}
-              disabled={busy}
-              tone="secondary"
-            />
+            <Pressable
+              onPress={skipSignupName}
+              style={({ pressed }) => ({
+                alignSelf: "center",
+                opacity: pressed ? 0.7 : 1,
+                paddingVertical: 6,
+              })}
+            >
+              <Text style={[type.microcopyItalic, { color: colors.accent }]}>
+                Skip for now
+              </Text>
+            </Pressable>
           </Card>
+
+        /* ── Sign Up (phone-first) ── */
         ) : mode === "signup" ? (
-          <Card title="Create Account" subtitle="One tap. Then confirm your email.">
+          <Card title="Create Account" subtitle="Start your whiskey journey.">
+            <GoogleSignInButton onPress={signInWithGoogle} disabled={busy} />
+            {isAppleAvailable && (
+              <>
+                <OrDivider />
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                  cornerRadius={8}
+                  style={{ width: "100%", height: 50 }}
+                  onPress={handleAppleSignIn}
+                />
+              </>
+            )}
+            <OrDivider />
             <ThemedInput
               placeholder="Email"
               value={email}
@@ -554,37 +984,121 @@ export default function SignInScreen() {
               returnKeyType="next"
             />
 
+            <View style={{ gap: spacing.xs }}>
+              <ThemedInput
+                placeholder="Phone (optional)"
+                value={signupPhone}
+                onChangeText={setSignupPhone}
+                keyboardType="phone-pad"
+                returnKeyType="next"
+              />
+              <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.85 }]}>
+                Recommended — sign in faster with just a text code
+              </Text>
+            </View>
+
             <PasswordRow
               value={password}
               onChangeText={setPassword}
               show={showPassword}
               onToggleShow={() => setShowPassword((v) => !v)}
-              returnKeyType="done"
-              onSubmitEditing={createAccountOneTap}
+              returnKeyType="next"
             />
+
+            <PasswordRow
+              placeholder="Confirm password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              show={showConfirmPassword}
+              onToggleShow={() => setShowConfirmPassword((v) => !v)}
+              returnKeyType="done"
+              onSubmitEditing={createAccount}
+            />
+
+            <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.8, textAlign: "center" }]}>
+              By tapping Create Account you agree to receive a one-time SMS if you provide a phone number. Message and data rates may apply.
+            </Text>
 
             <ThemedButton
               label={busy ? "Working…" : "Create Account"}
-              onPress={createAccountOneTap}
+              onPress={createAccount}
               disabled={busy}
               tone="primary"
             />
 
-            <ThemedButton
-              label={busy ? "Working…" : "I already have an account"}
+            <Pressable
               onPress={goToSignIn}
               disabled={busy}
-              tone="secondary"
+              style={({ pressed }) => ({
+                alignSelf: "center",
+                opacity: busy ? 0.6 : pressed ? 0.7 : 1,
+                paddingVertical: 6,
+              })}
+            >
+              <Text style={[type.microcopyItalic, { color: colors.accent }]}>
+                Already have an account? Sign in
+              </Text>
+            </Pressable>
+          </Card>
+
+        /* ── Phone Sign In ── */
+        ) : mode === "phoneSignin" ? (
+          <Card
+            title="Sign In"
+            subtitle="Enter your phone number to receive a sign-in code."
+          >
+            <ThemedInput
+              placeholder="Phone number"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              returnKeyType="done"
+              onSubmitEditing={sendSignInOtp}
+              autoFocus
             />
 
-            {justSignedUpEmail ? (
-              <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
-                Confirmation sent to {justSignedUpEmail}.
+            <Text style={{ fontSize: 12, color: '#888', textAlign: 'center', marginTop: 8, paddingHorizontal: 24 }}>
+              By continuing, you agree to receive a one-time verification code via SMS. Message and data rates may apply. Reply STOP to opt out.
+            </Text>
+
+            <ThemedButton
+              label={busy ? "Sending…" : "Send Code"}
+              onPress={sendSignInOtp}
+              disabled={busy}
+              tone="primary"
+            />
+
+            <Pressable
+              onPress={goToSignIn}
+              style={({ pressed }) => ({
+                alignSelf: "center",
+                opacity: pressed ? 0.7 : 1,
+                paddingVertical: 6,
+              })}
+            >
+              <Text style={[type.microcopyItalic, { color: colors.accent }]}>
+                Sign in with email instead
               </Text>
-            ) : null}
+            </Pressable>
           </Card>
+
+        /* ── Email Sign In (default) ── */
         ) : (
           <Card title="Sign In" subtitle="Sign in to keep a record of your tastings">
+            <GoogleSignInButton onPress={signInWithGoogle} disabled={busy} />
+            {isAppleAvailable && (
+              <>
+                <OrDivider />
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                  cornerRadius={8}
+                  style={{ width: "100%", height: 50 }}
+                  onPress={handleAppleSignIn}
+                />
+              </>
+            )}
+            <OrDivider />
             <ThemedInput
               placeholder="Email"
               value={email}
@@ -602,6 +1116,12 @@ export default function SignInScreen() {
               returnKeyType="done"
               onSubmitEditing={signIn}
             />
+
+            {signupEmail ? (
+              <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.9 }]}>
+                Check your email to confirm your account before signing in.
+              </Text>
+            ) : null}
 
             <ThemedButton
               label={busy ? "Working…" : "Sign In"}
@@ -630,6 +1150,19 @@ export default function SignInScreen() {
               disabled={busy}
               tone="secondary"
             />
+
+            <Pressable
+              onPress={() => setMode("phoneSignin")}
+              style={({ pressed }) => ({
+                alignSelf: "center",
+                opacity: pressed ? 0.7 : 1,
+                paddingVertical: 6,
+              })}
+            >
+              <Text style={[type.microcopyItalic, { color: colors.accent }]}>
+                Use phone number instead
+              </Text>
+            </Pressable>
           </Card>
         )}
 

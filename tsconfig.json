@@ -12,6 +12,7 @@
     "legacy",
     "components/ui",
     "hooks/use-theme-color.ts",
-    "lib/catalog"
+    "lib/catalog",
+    "supabase/functions"
   ]
 }

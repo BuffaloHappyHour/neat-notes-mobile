@@ -1,5 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React from "react";
+import React, { useMemo } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
 import { radii } from "../../lib/radii";
@@ -16,7 +17,6 @@ import { RecentEntriesCard } from "../../src/profile/components/RecentEntriesCar
 import { SignInCard } from "../../src/profile/components/SignInCard";
 import { TastingActionsSheet } from "../../src/profile/components/TastingActionsSheet";
 import { YourStatsCard } from "../../src/profile/components/YourStatsCard";
-import { usePalateClarity } from "../../src/profile/hooks/usePalateClarity";
 import { useProfileData } from "../../src/profile/hooks/useProfileData";
 
 function GlassCard({
@@ -125,16 +125,89 @@ function CTAButton({
   );
 }
 
+function HostEventCTA({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        backgroundColor: colors.glassSurface,
+        overflow: "hidden",
+        ...shadows.card,
+        flexDirection: "row",
+        alignItems: "center",
+        opacity: pressed ? 0.88 : 1,
+      })}
+    >
+      {/* Left amber accent bar */}
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 2,
+          backgroundColor: colors.accent,
+        }}
+      />
+
+      {/* Icon */}
+      <View
+        style={{
+          marginLeft: spacing.md,
+          marginVertical: spacing.md,
+          marginRight: spacing.md,
+          width: 36,
+          height: 36,
+          borderRadius: radii.md,
+          backgroundColor: colors.accentSoft,
+          borderWidth: 1,
+          borderColor: colors.borderSubtle,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name="calendar-outline" size={18} color={colors.accent} />
+      </View>
+
+      {/* Text */}
+      <View style={{ flex: 1, gap: 3, paddingVertical: spacing.md }}>
+        <Text
+          style={[
+            type.sectionHeader,
+            { color: colors.textPrimary, fontSize: 20, lineHeight: 26 },
+          ]}
+        >
+          Host an Event
+        </Text>
+        <Text style={[type.caption, { color: colors.textSecondary }]}>
+          Create and manage your whiskey tastings
+        </Text>
+      </View>
+
+      {/* Chevron */}
+      <View style={{ paddingRight: spacing.md, paddingLeft: spacing.sm }}>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </View>
+    </Pressable>
+  );
+}
+
 export default function ProfileTab() {
   const {
     loading,
     refreshing,
     isAuthed,
     isAdmin,
+    isPremium,
 
     welcomeTitle,
     tastingsText,
     avgText,
+
+    tastingCount,
 
     top5,
     recent,
@@ -157,7 +230,32 @@ export default function ProfileTab() {
     deleteFromActions,
   } = useProfileData();
 
-  const clarity = usePalateClarity(clarityInput);
+  const isEarlyUser = (tastingCount ?? 0) < 3;
+  const hasAnyTastings = (tastingCount ?? 0) > 0;
+
+  const lifetimeClarity = clarityInput?.[0] ?? null;
+
+  const confidenceLevel: "high" | "medium" | "low" =
+    ((lifetimeClarity as any)?.confidence_0_100 ?? 0) > 70
+      ? "high"
+      : ((lifetimeClarity as any)?.confidence_0_100 ?? 0) > 40
+      ? "medium"
+      : "low";
+
+  // ✅ NEW — backend-driven freshness
+  const lifetimeLastTastingAt = (lifetimeClarity as any)?.last_tasting_at ?? null;
+
+  const lifetimeDaysSinceLastTasting = useMemo(() => {
+    if (!lifetimeLastTastingAt) return null;
+
+    return Math.max(
+      0,
+      Math.floor(
+        (Date.now() - new Date(lifetimeLastTastingAt).getTime()) /
+          (1000 * 60 * 60 * 24)
+      )
+    );
+  }, [lifetimeLastTastingAt]);
 
   if (loading) {
     return (
@@ -191,7 +289,7 @@ export default function ProfileTab() {
           paddingHorizontal: spacing.lg,
           paddingTop: spacing.xl + spacing.lg,
           paddingBottom: spacing.xl * 2,
-          gap: spacing.lg,
+          gap: spacing.xl,
         }}
       >
         <ProfileHeader
@@ -210,39 +308,70 @@ export default function ProfileTab() {
           </GlassCard>
         ) : (
           <>
-            {clarity ? (
-              <View style={{ marginTop: spacing.sm }}>
+            <View style={{ marginTop: spacing.sm }}>
+              {isEarlyUser ? (
                 <PalateClarityCard
-                  clarityIndex={clarity.clarityIndex}
-                  tierLabel={clarity.meta.tierLabel}
-                  confidenceLevel={clarity.meta.confidenceLevel}
-                  totalTastings={clarity.meta.totalTastings}
-                  daysSinceLastTasting={clarity.meta.daysSinceLastTasting}
+                  pending
+                  totalTastings={tastingCount ?? 0}
+                  tastingGoal={3}
                 />
-              </View>
-            ) : null}
-
-            {/* Quick stats (tastings + avg rating) */}
-            <GlassCard>
-              <SectionHeader title="Quick stats" subtitle="A snapshot of your journal so far." />
-              <Divider tight />
-              <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
-                <YourStatsCard
-                  embedded
-                  tastingsText={tastingsText}
-                  avgText={avgText}
-                  top5={[]} // hides Top 5 for now
-                  onLongPressRow={openActionsForRow}
+              ) : lifetimeClarity ? (
+                <PalateClarityCard
+                  clarityIndex={Number(
+                    (lifetimeClarity as any)?.palate_clarity_0_100 ?? 0
+                  )}
+                  tierLabel="Lifetime"
+                  confidenceLevel={confidenceLevel}
+                  totalTastings={Number(
+                    (lifetimeClarity as any)?.tasting_count ?? 0
+                  )}
+                  daysSinceLastTasting={lifetimeDaysSinceLastTasting} // ✅ FIXED
                 />
+              ) : null}
+            </View>
+
+            <View style={{ gap: spacing.sm }}>
+              {isEarlyUser ? (
+                <InsightsCTA
+                  compact
+                  isPremium={isPremium}
+                  onPress={() => router.push("/insights" as any)}
+                />
+              ) : (
+                <InsightsCTA
+                  isPremium={isPremium}
+                  onPress={() => router.push("/insights" as any)}
+                />
+              )}
+
+              <HostEventCTA onPress={() => router.push("/host-events" as any)} />
+            </View>
+
+            <View style={{ gap: spacing.sm }}>
+              <View style={{ gap: 8 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing.sm,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 3,
+                      backgroundColor: colors.accent,
+                      opacity: 0.85,
+                    }}
+                  />
+                  <Text style={[type.sectionHeader, { fontSize: 26 }]}>
+                    Journal Snapshot
+                  </Text>
+                </View>
               </View>
-            </GlassCard>
 
-            <InsightsCTA isPremium={false} onPress={() => router.push("/insights" as any)} />
-
-            <GlassCard>
-              <SectionHeader title="Journal snapshot" subtitle="A quick pulse of your journal so far." />
-              <Divider />
-              <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
+              <View style={{ paddingHorizontal: spacing.xs }}>
                 <YourStatsCard
                   embedded
                   tastingsText={tastingsText}
@@ -251,24 +380,61 @@ export default function ProfileTab() {
                   onLongPressRow={openActionsForRow}
                 />
               </View>
-            </GlassCard>
+            </View>
 
-            <GlassCard>
-              <SectionHeader title="What you drink most" subtitle="Your category mix, based on logged pours." />
-              <Divider />
-              <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
-                <CategoryMixCard embedded mixError={mixError} mix={mix} mixTotal={mixTotal} />
+            {hasAnyTastings ? (
+              <View style={{ gap: spacing.sm }}>
+                <View style={{ gap: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: spacing.sm,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 2,
+                        backgroundColor: colors.accent,
+                        opacity: 0.82,
+                      }}
+                    />
+                    <Text style={[type.sectionHeader, { fontSize: 28 }]}>
+                      What you drink most
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={[
+                      type.caption,
+                      { color: colors.textSecondary, opacity: 0.9 },
+                    ]}
+                  >
+                    Your category mix, based on logged pours.
+                  </Text>
+                </View>
+
+                <View style={{ paddingHorizontal: spacing.xs }}>
+                  <CategoryMixCard
+                    embedded
+                    mixError={mixError}
+                    mix={mix}
+                    mixTotal={mixTotal}
+                  />
+                </View>
               </View>
-            </GlassCard>
+            ) : null}
 
             <GlassCard>
-              <SectionHeader
-                title="Recent entries"
-                subtitle="A look back at your latest pours."
-                right={<CTAButton label="Insights" onPress={() => router.push("/insights" as any)} />}
-              />
-              <Divider />
-              <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
+              <View
+                style={{
+                  paddingHorizontal: spacing.md,
+                  paddingTop: spacing.md,
+                  paddingBottom: spacing.md,
+                }}
+              >
                 <RecentEntriesCard
                   embedded
                   recentError={recentError}
@@ -276,20 +442,6 @@ export default function ProfileTab() {
                   onLongPressRow={openActionsForRow}
                 />
               </View>
-
-              <Text
-                style={[
-                  type.caption,
-                  {
-                    color: colors.textMuted ?? colors.textTertiary,
-                    paddingHorizontal: spacing.md,
-                    paddingBottom: spacing.md,
-                    marginTop: -6,
-                  },
-                ]}
-              >
-                Tip: press and hold a tasting to edit or delete.
-              </Text>
             </GlassCard>
           </>
         )}

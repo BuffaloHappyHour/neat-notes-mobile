@@ -3,10 +3,10 @@ import { router, Stack } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  AppState,
-  FlatList,
+  Alert,
   Modal,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -24,8 +24,7 @@ type Row = {
   whiskey_name: string | null;
   rating: number | null;
   created_at: string | null;
-
-  // Optional future fields (won’t break if missing)
+  whiskey_type?: string | null;
   distillery?: string | null;
   bar_name?: string | null;
   brand?: string | null;
@@ -34,28 +33,6 @@ type Row = {
 };
 
 type SortMode = "newest" | "high" | "low";
-
-type ListItem =
-  | { kind: "header"; key: string }
-  | { kind: "results"; key: string };
-
-function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <View
-      style={{
-        backgroundColor: colors.surface,
-        borderRadius: radii.lg,
-        padding: spacing.lg,
-        borderWidth: 1,
-        borderColor: colors.divider,
-        ...shadows.card,
-        gap: spacing.md,
-      }}
-    >
-      {children}
-    </View>
-  );
-}
 
 function safeNumber(v: any): number | null {
   const n = Number(v);
@@ -85,16 +62,22 @@ export default function AllTastingsScreen() {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState("");
 
-
-  // Sticky header controls
   const [search, setSearch] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
   const [sortOpen, setSortOpen] = useState(false);
 
-  // ✅ Long-press actions
   const [actionsOpen, setActionsOpen] = useState(false);
   const [activeRow, setActiveRow] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [logAgainExpanded, setLogAgainExpanded] = useState(false);
+
+  const sameWhiskeyCount = useMemo(() => {
+    if (!activeRow?.whiskey_name) return 0;
+    const needle = activeRow.whiskey_name.trim().toLowerCase();
+    return rows.filter(
+      (r) => (r.whiskey_name ?? "").trim().toLowerCase() === needle
+    ).length;
+  }, [activeRow, rows]);
 
     useEffect(() => {
   const sub = AppState.addEventListener("change", (s) => {
@@ -122,13 +105,17 @@ export default function AllTastingsScreen() {
 
       const { data, error } = await supabase
         .from("tastings")
-        .select("id, whiskey_name, rating, created_at")
+        .select("id, whiskey_name, rating, created_at, whiskey_id, whiskeys(whiskey_type)")
         .order("created_at", { ascending: false })
         .limit(5000);
 
       if (error) throw new Error(error.message);
 
-      setRows(Array.isArray(data) ? (data as any) : []);
+      const mapped = (Array.isArray(data) ? data : []).map((r: any) => ({
+        ...r,
+        whiskey_type: r.whiskeys?.whiskey_type ?? null,
+      }));
+      setRows(mapped);
     } catch (e: any) {
       setRows([]);
       setErr(String(e?.message ?? e));
@@ -212,13 +199,6 @@ export default function AllTastingsScreen() {
     return out;
   }, [rows, search, sortMode]);
 
-  const stitchedData: ListItem[] = useMemo(() => {
-    return [
-      { kind: "header", key: "sticky-header" },
-      { kind: "results", key: "results-card" },
-    ];
-  }, []);
-
   function openActionsForRow(r: Row) {
     setActiveRow(r);
     setActionsOpen(true);
@@ -228,6 +208,7 @@ export default function AllTastingsScreen() {
     if (deleting) return;
     setActionsOpen(false);
     setActiveRow(null);
+    setLogAgainExpanded(false);
   }
 
   async function deleteActiveRow() {
@@ -235,7 +216,6 @@ export default function AllTastingsScreen() {
 
     setDeleting(true);
     try {
-      // Optional: ensure session exists (gives nicer errors)
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session?.user) {
         throw new Error("You must be signed in to delete a tasting.");
@@ -247,10 +227,8 @@ export default function AllTastingsScreen() {
         .eq("id", activeRow.id);
       if (error) throw new Error(error.message);
 
-      // Optimistic remove locally for instant UI response
       setRows((prev) => prev.filter((x) => x.id !== activeRow.id));
 
-      // Close modal + silent refresh to keep everything consistent
       setActionsOpen(false);
       setActiveRow(null);
       await load({ silent: true });
@@ -263,41 +241,140 @@ export default function AllTastingsScreen() {
     }
   }
 
-  function renderHeader() {
-    return (
-      <View
-        style={{
-          padding: spacing.xl,
-          paddingBottom: spacing.lg,
-          backgroundColor: colors.background,
-          gap: spacing.lg,
-        }}
-      >
-        <Card>
-          <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>
-            Your Tastings
-          </Text>
-          <Text
-            style={[
-              type.microcopyItalic,
-              { opacity: 0.85, color: colors.textPrimary },
-            ]}
-          >
-            Search, sort, then tap an entry to view, edit, or delete it.
-          </Text>
+  function RowItem({ r }: { r: Row }) {
+    const nm = (r.whiskey_name ?? "Whiskey").trim() || "Whiskey";
+    const ratingNum = safeNumber(r.rating);
+    const ratingText = ratingNum == null ? "—" : String(Math.round(ratingNum));
+    const dateText = formatDate(r.created_at);
+    const meta = r.whiskey_type ?? null;
 
-          {/* Search */}
+    return (
+      <Pressable
+        onPress={() => openActionsForRow(r)}
+        style={({ pressed }) => ({
+          backgroundColor: pressed
+            ? "rgba(190, 150, 99, 0.08)"
+            : ((colors as any).glassSurface ?? colors.surface),
+          borderRadius: radii.lg,
+          borderWidth: 1,
+          borderColor: pressed
+            ? "rgba(190, 150, 99, 0.42)"
+            : ((colors as any).glassBorder ?? colors.divider),
+          paddingVertical: 14,
+          paddingHorizontal: spacing.lg,
+          ...shadows.card,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: spacing.md,
+          opacity: pressed ? 0.96 : 1,
+        })}
+      >
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text
+            style={[type.body, { fontWeight: "900", color: colors.textPrimary }]}
+            numberOfLines={1}
+          >
+            {nm}
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+            {dateText ? (
+              <Text style={[type.microcopyItalic, { opacity: 0.6, fontSize: 12 }]}>
+                {dateText}
+              </Text>
+            ) : null}
+            {meta && dateText ? (
+              <Text style={[type.microcopyItalic, { opacity: 0.4, fontSize: 12 }]}>·</Text>
+            ) : null}
+            {meta ? (
+              <Text style={[type.microcopyItalic, { opacity: 0.6, fontSize: 12, color: colors.accent }]}>
+                {meta}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        <View
+          style={{
+            minWidth: 44,
+            height: 44,
+            borderRadius: radii.md,
+            backgroundColor: "rgba(190, 150, 99, 0.10)",
+            borderWidth: 1,
+            borderColor: "rgba(190, 150, 99, 0.30)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={[type.body, { fontWeight: "900", color: colors.accent, fontSize: 18 }]}>
+            {ratingText}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Stack.Screen
+        options={{
+          title: "All Tastings",
+          headerStyle: { backgroundColor: colors.background as any },
+          headerTintColor: colors.textPrimary as any,
+          headerShadowVisible: false,
+          headerLeft: () => (
+            <Pressable
+              onPress={() => router.back()}
+              style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}
+            >
+              <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+            </Pressable>
+          ),
+          headerRight: () => (
+            <Pressable
+              onPress={() => load({ silent: true })}
+              disabled={refreshing}
+              style={({ pressed }) => ({
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              {refreshing ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <Ionicons name="refresh" size={20} color={colors.textPrimary} />
+              )}
+            </Pressable>
+          ),
+        }}
+      />
+
+      <View style={{ flex: 1 }}>
+        {/* Sticky header */}
+        <View
+          style={{
+            backgroundColor: colors.background,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.divider,
+            zIndex: 10,
+            paddingHorizontal: spacing.lg,
+            paddingTop: spacing.md,
+            paddingBottom: spacing.md,
+            gap: spacing.md,
+          }}
+        >
           <View
             style={{
-              marginTop: spacing.md,
               borderWidth: 1,
-              borderColor: colors.divider,
+              borderColor: (colors as any).glassBorder ?? colors.divider,
               borderRadius: radii.md,
               paddingHorizontal: spacing.md,
               paddingVertical: 10,
               flexDirection: "row",
               alignItems: "center",
               gap: 10,
+              backgroundColor: (colors as any).glassSurface ?? colors.surface,
             }}
           >
             <Ionicons name="search" size={18} color={colors.textPrimary as any} />
@@ -321,19 +398,13 @@ export default function AllTastingsScreen() {
                 onPress={() => setSearch("")}
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
               >
-                <Ionicons
-                  name="close-circle"
-                  size={18}
-                  color={colors.textPrimary as any}
-                />
+                <Ionicons name="close-circle" size={18} color={colors.textPrimary as any} />
               </Pressable>
             ) : null}
           </View>
 
-          {/* Sort dropdown trigger + count */}
           <View
             style={{
-              marginTop: spacing.md,
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
@@ -355,28 +426,16 @@ export default function AllTastingsScreen() {
                 opacity: pressed ? 0.85 : 1,
               })}
             >
-              <Ionicons
-                name="swap-vertical"
-                size={16}
-                color={colors.textPrimary as any}
-              />
+              <Ionicons name="swap-vertical" size={16} color={colors.textPrimary as any} />
               <Text
                 style={[
                   type.body,
-                  {
-                    fontWeight: "900",
-                    color: colors.textPrimary,
-                    fontSize: 13,
-                  },
+                  { fontWeight: "900", color: colors.textPrimary, fontSize: 13 },
                 ]}
               >
                 {sortLabel(sortMode)}
               </Text>
-              <Ionicons
-                name="chevron-down"
-                size={16}
-                color={colors.textPrimary as any}
-              />
+              <Ionicons name="chevron-down" size={16} color={colors.textPrimary as any} />
             </Pressable>
 
             {!loading && !err ? (
@@ -386,36 +445,45 @@ export default function AllTastingsScreen() {
                   { opacity: 0.65, color: colors.textPrimary, fontSize: 12 },
                 ]}
               >
-                {filteredAndSorted.length} / {rows.length}
+                {filteredAndSorted.length < rows.length
+                  ? `${filteredAndSorted.length} of ${rows.length}`
+                  : `${rows.length} tastings`}
               </Text>
             ) : null}
           </View>
-        </Card>
 
-        {loading ? (
-          <Card>
-            <View
-              style={{
-                alignItems: "center",
-                paddingVertical: spacing.sm,
-                gap: spacing.sm,
-              }}
-            >
-              <ActivityIndicator />
+          {loading ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              <ActivityIndicator size="small" />
               <Text style={[type.body, { opacity: 0.7, color: colors.textPrimary }]}>
                 Loading…
               </Text>
             </View>
-          </Card>
-        ) : null}
+          ) : null}
 
-        {err ? (
-          <Card>
-            <Text style={[type.body, { color: colors.accent, opacity: 0.9 }]}>
-              {err}
+          {err ? (
+            <Text style={[type.body, { color: colors.accent, opacity: 0.9 }]}>{err}</Text>
+          ) : null}
+        </View>
+
+        {/* Scrollable results */}
+        <ScrollView
+          contentContainerStyle={{
+            padding: spacing.lg,
+            gap: spacing.sm,
+            paddingBottom: spacing.xl * 2,
+          }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {filteredAndSorted.length === 0 && !loading ? (
+            <Text style={[type.body, { opacity: 0.7, color: colors.textPrimary }]}>
+              {search.trim().length ? "No results for that search." : "No tastings yet."}
             </Text>
-          </Card>
-        ) : null}
+          ) : (
+            filteredAndSorted.map((r) => <RowItem key={r.id} r={r} />)
+          )}
+        </ScrollView>
 
         {/* Sort modal */}
 {sortOpen ? (
@@ -480,9 +548,7 @@ export default function AllTastingsScreen() {
                 justifyContent: "space-between",
               })}
             >
-              <Text style={[type.body, { fontWeight: "900", color: colors.textPrimary }]}>
-                {opt.label}
-              </Text>
+              <Text style={[type.sectionHeader, { fontSize: 16 }]}>Sort tastings</Text>
 
               {active ? (
                 <Ionicons name="checkmark-circle" size={18} color={colors.textPrimary as any} />
@@ -508,54 +574,21 @@ export default function AllTastingsScreen() {
   </Modal>
 ) : null}
 
-        {/* Long-press actions modal */}
-{actionsOpen ? (
-  <Modal
-    visible={actionsOpen}
-    transparent
-    presentationStyle="overFullScreen"
-    statusBarTranslucent
-    animationType="fade"
-    onRequestClose={closeActions}
-  >
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: "rgba(160,32,240,0.85)",
-        padding: spacing.xl,
-        justifyContent: "flex-end",
-      }}
-    >
-      <Pressable
-        onPress={closeActions}
-        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-      />
-
-      <Pressable
-        onPress={() => {}}
-        style={{
-          backgroundColor: colors.surface,
-          borderRadius: radii.lg,
-          borderWidth: 1,
-          borderColor: colors.divider,
-          padding: spacing.lg,
-          gap: spacing.md,
-          ...shadows.card,
-        }}
-      >
-        <View style={{ gap: 6 }}>
-          <Text style={[type.sectionHeader, { fontSize: 16 }]}>Tasting options</Text>
-          <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>
-            {(activeRow?.whiskey_name ?? "Whiskey").trim() || "Whiskey"}
-          </Text>
-        </View>
-
-        <View style={{ gap: spacing.sm }}>
-          <Pressable
-            onPress={() => {
-              if (!activeRow) return;
-              closeActions();
-              router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(activeRow.id)}`);
+        {/* Actions modal */}
+        <Modal
+          visible={actionsOpen}
+          transparent
+          presentationStyle="overFullScreen"
+          statusBarTranslucent
+          animationType="fade"
+          onRequestClose={closeActions}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.55)",
+              padding: spacing.xl,
+              justifyContent: "flex-end",
             }}
             style={({ pressed }) => ({
               borderRadius: radii.md,
@@ -586,163 +619,129 @@ export default function AllTastingsScreen() {
             </Text>
           </Pressable>
 
-          <Pressable
-            onPress={closeActions}
-            disabled={deleting}
-            style={({ pressed }) => ({
-              paddingVertical: spacing.sm,
-              alignItems: "center",
-              opacity: deleting ? 0.6 : pressed ? 0.7 : 1,
-            })}
-          >
-            <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Cancel</Text>
-          </Pressable>
-        </View>
-      </Pressable>
-    </View>
-  </Modal>
-) : null}
-      </View>
-    );
-  }
+              <View style={{ gap: spacing.sm }}>
+                <Pressable
+                  onPress={() => {
+                    if (!activeRow) return;
+                    closeActions();
+                    router.push(
+                      `/log/cloud-tasting?tastingId=${encodeURIComponent(activeRow.id)}`
+                    );
+                  }}
+                  style={({ pressed }) => ({
+                    borderRadius: radii.md,
+                    paddingVertical: spacing.lg,
+                    alignItems: "center",
+                    backgroundColor: colors.accent,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text style={[type.button, { color: colors.background }]}>Edit</Text>
+                </Pressable>
 
-  function RowItem({ r, isFirst }: { r: Row; isFirst: boolean }) {
-    const nm = (r.whiskey_name ?? "Whiskey").trim() || "Whiskey";
-    const ratingNum = safeNumber(r.rating);
-    const ratingText = ratingNum == null ? "—" : String(Math.round(ratingNum));
-    const dateText = formatDate(r.created_at);
+                <Pressable
+                  onPress={deleteActiveRow}
+                  disabled={deleting}
+                  style={({ pressed }) => ({
+                    borderRadius: radii.md,
+                    paddingVertical: spacing.lg,
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: colors.divider,
+                    backgroundColor: colors.surface,
+                    opacity: deleting ? 0.6 : pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text style={[type.button, { color: colors.accent }]}>
+                    {deleting ? "Deleting…" : "Delete"}
+                  </Text>
+                </Pressable>
 
-    return (
-      <View>
-        {!isFirst ? <View style={{ height: 1, backgroundColor: colors.divider }} /> : null}
+                {sameWhiskeyCount >= 2 ? (
+                  logAgainExpanded ? (
+                    <View style={{ gap: spacing.sm }}>
+                      <Text style={[type.microcopyItalic, { opacity: 0.75, textAlign: "center" }]}>
+                        Start a new tasting for {(activeRow?.whiskey_name ?? "this whiskey").trim() || "this whiskey"}?
+                      </Text>
+                      <Pressable
+                        onPress={() => {
+                          if (!activeRow) return;
+                          closeActions();
+                          router.push(
+                            `/log/cloud-tasting?templateTastingId=${encodeURIComponent(activeRow.id)}&lockName=1`
+                          );
+                        }}
+                        style={({ pressed }) => ({
+                          borderRadius: radii.md,
+                          paddingVertical: spacing.lg,
+                          alignItems: "center",
+                          backgroundColor: colors.accent,
+                          opacity: pressed ? 0.9 : 1,
+                        })}
+                      >
+                        <Text style={[type.button, { color: colors.background }]}>Use Previous Ratings</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          if (!activeRow) return;
+                          closeActions();
+                          router.push(
+                            `/log/cloud-tasting?whiskeyName=${encodeURIComponent(activeRow.whiskey_name ?? "")}&lockName=1`
+                          );
+                        }}
+                        style={({ pressed }) => ({
+                          borderRadius: radii.md,
+                          paddingVertical: spacing.lg,
+                          alignItems: "center",
+                          borderWidth: 1,
+                          borderColor: colors.divider,
+                          backgroundColor: colors.surface,
+                          opacity: pressed ? 0.9 : 1,
+                        })}
+                      >
+                        <Text style={[type.button, { color: colors.accent }]}>Start Fresh</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setLogAgainExpanded(false)}
+                        style={({ pressed }) => ({ paddingVertical: spacing.sm, alignItems: "center", opacity: pressed ? 0.7 : 1 })}
+                      >
+                        <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Back</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={() => setLogAgainExpanded(true)}
+                      style={({ pressed }) => ({
+                        borderRadius: radii.md,
+                        paddingVertical: spacing.lg,
+                        alignItems: "center",
+                        borderWidth: 1,
+                        borderColor: colors.divider,
+                        backgroundColor: colors.surface,
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text style={[type.button, { color: colors.accent }]}>Log Again</Text>
+                    </Pressable>
+                  )
+                ) : null}
 
-        <Pressable
-          onPress={() =>
-            router.push(`/log/cloud-tasting?tastingId=${encodeURIComponent(r.id)}`)
-          }
-          onLongPress={() => openActionsForRow(r)}
-          delayLongPress={250}
-          style={({ pressed }) => ({
-            opacity: pressed ? 0.88 : 1,
-            paddingVertical: spacing.md,
-            paddingHorizontal: spacing.lg,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: spacing.md,
-          })}
-        >
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text
-              style={[type.body, { fontWeight: "900", color: colors.textPrimary }]}
-              numberOfLines={2}
-            >
-              {nm}
-            </Text>
-
-            <Text
-              style={[
-                type.body,
-                { opacity: 0.7, color: colors.textPrimary, fontSize: 12 },
-              ]}
-            >
-              Rating: <Text style={{ fontWeight: "900" }}>{ratingText}</Text>
-              {dateText ? `  •  ${dateText}` : ""}
-            </Text>
+                <Pressable
+                  onPress={closeActions}
+                  disabled={deleting}
+                  style={({ pressed }) => ({
+                    paddingVertical: spacing.sm,
+                    alignItems: "center",
+                    opacity: deleting ? 0.6 : pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text style={[type.microcopyItalic, { opacity: 0.8 }]}>Cancel</Text>
+                </Pressable>
+              </View>
+            </Pressable>
           </View>
-
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={colors.textPrimary as any}
-          />
-        </Pressable>
+        </Modal>
       </View>
-    );
-  }
-
-  const ResultsCard = useMemo(() => {
-    if (loading || err) return null;
-
-    if (filteredAndSorted.length === 0) {
-      return (
-        <View style={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.xl }}>
-          <Card>
-            <Text style={[type.body, { opacity: 0.7, color: colors.textPrimary }]}>
-              {search.trim().length ? "No results for that search." : "No tastings yet."}
-            </Text>
-          </Card>
-        </View>
-      );
-    }
-
-    return (
-      <View style={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.xl }}>
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: radii.lg,
-            borderWidth: 1,
-            borderColor: colors.divider,
-            ...shadows.card,
-            overflow: "hidden",
-          }}
-        >
-          {filteredAndSorted.map((r, idx) => (
-            <RowItem key={r.id} r={r} isFirst={idx === 0} />
-          ))}
-        </View>
-      </View>
-    );
-  }, [loading, err, filteredAndSorted, search]);
-
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <Stack.Screen
-        options={{
-          title: "All Tastings",
-          headerStyle: { backgroundColor: colors.background as any },
-          headerTintColor: colors.textPrimary as any,
-          headerShadowVisible: false,
-          headerLeft: () => (
-            <Pressable
-              onPress={() => router.back()}
-              style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}
-            >
-              <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-            </Pressable>
-          ),
-          headerRight: () => (
-            <Pressable
-              onPress={() => load({ silent: true })}
-              disabled={refreshing}
-              style={({ pressed }) => ({
-                paddingHorizontal: spacing.md,
-                paddingVertical: spacing.sm,
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              {refreshing ? (
-                <ActivityIndicator size="small" />
-              ) : (
-                <Ionicons name="refresh" size={20} color={colors.textPrimary} />
-              )}
-            </Pressable>
-          ),
-        }}
-      />
-
-      <FlatList
-        data={stitchedData}
-        keyExtractor={(it) => it.key}
-        stickyHeaderIndices={[0]}
-        renderItem={({ item }) => {
-          if (item.kind === "header") return renderHeader();
-          return <>{ResultsCard}</>;
-        }}
-        contentContainerStyle={{ paddingBottom: spacing.xl }}
-        showsVerticalScrollIndicator={false}
-      />
     </View>
   );
 }

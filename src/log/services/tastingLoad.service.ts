@@ -8,6 +8,9 @@ export type LoadedTasting = {
   whiskeyName: string;
   whiskeyId: string | null;
   rating: number | null;
+  textureLevel: number | null;
+  proofIntensity: number | null;
+  flavorIntensity: number | null;
   noseReaction: string | null;
   tasteReaction: string | null;
   flavorTags: string[];
@@ -16,6 +19,17 @@ export type LoadedTasting = {
   sourceType: "purchased" | "bar";
   barName: string;
 };
+
+function normalizeReaction(v: any): string | null {
+  const s = safeText(v).toLowerCase();
+
+  if (!s) return null;
+  if (s === "enjoyed") return "ENJOYED";
+  if (s === "neutral") return "NEUTRAL";
+  if (s === "not for me") return "NOT_FOR_ME";
+
+  return null;
+}
 
 export async function loadTastingById(tastingId: string): Promise<LoadedTasting | null> {
   if (!isUuid(tastingId)) return null;
@@ -27,6 +41,9 @@ export async function loadTastingById(tastingId: string): Promise<LoadedTasting 
       whiskey_name,
       whiskey_id,
       rating,
+      texture_level,
+      proof_intensity,
+      flavor_intensity,
       nose_reaction,
       taste_reaction,
       flavor_tags,
@@ -52,13 +69,24 @@ export async function loadTastingById(tastingId: string): Promise<LoadedTasting 
       data.rating == null || !Number.isFinite(Number(data.rating))
         ? null
         : Number(data.rating),
-    noseReaction: safeText(data.nose_reaction) || null,
-    tasteReaction: safeText(data.taste_reaction) || null,
+    textureLevel:
+      data.texture_level == null || !Number.isFinite(Number(data.texture_level))
+        ? null
+        : Number(data.texture_level),
+    proofIntensity:
+      data.proof_intensity == null || !Number.isFinite(Number(data.proof_intensity))
+        ? null
+        : Number(data.proof_intensity),
+    flavorIntensity:
+      data.flavor_intensity == null || !Number.isFinite(Number(data.flavor_intensity))
+        ? null
+        : Number(data.flavor_intensity),
+    noseReaction: normalizeReaction(data.nose_reaction),
+    tasteReaction: normalizeReaction(data.taste_reaction),
     flavorTags: Array.isArray(data.flavor_tags) ? data.flavor_tags : [],
     dislikeTags: Array.isArray(data.dislike_tags) ? data.dislike_tags : [],
     personalNotes: safeText(data.personal_notes),
-    sourceType:
-      data.source_type === "bar" ? "bar" : "purchased",
+    sourceType: data.source_type === "bar" ? "bar" : "purchased",
     barName: safeText(data.bar_name),
   };
 }

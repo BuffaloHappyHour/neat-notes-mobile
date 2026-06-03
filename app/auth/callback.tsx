@@ -50,15 +50,13 @@ export default function AuthCallback() {
     let cancelled = false;
 
     // 🔁 Pattern B web reset page (replace with your real domain)
-    const WEB_RESET_URL = "https://YOUR_VERCEL_DOMAIN/auth/reset";
+    const WEB_RESET_URL = "https://neatnotesapp.com/auth/reset";
 
     async function handleUrl(url: string | null) {
       if (!url) {
         router.replace("/sign-in");
         return;
       }
-
-      console.log("AUTH CALLBACK URL =", url);
 
       try {
         const params = parseParamsFromUrl(url);

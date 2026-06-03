@@ -1,20 +1,24 @@
-// src/log/services/tastingSave.service.ts
 import { trackTastingSaved, trackTastingSaveFailed } from "../../../lib/analytics";
+import { getActiveEventId } from "../../../lib/eventStorage";
 import { hapticError, hapticSuccess } from "../../../lib/haptics";
 import { supabase } from "../../../lib/supabase";
 
-import { clamp100, isUuid, normalizeKey, safeText, uniqStringsKeepOrder } from "../utils/text";
+
+import {
+  clamp100,
+  isUuid,
+  normalizeKey,
+  safeText,
+  uniqStringsKeepOrder,
+} from "../utils/text";
 
 import {
   deletePublicMirrorBySourceTastingId,
   getMyShareSetting,
   upsertPublicMirror,
 } from "./publicMirror.service";
-import { maybeCreateWhiskeyCandidate } from "./whiskeyCandidates.service";
 
 export type Reaction = "ENJOYED" | "NEUTRAL" | "NOT_FOR_ME" | null;
-
-// ✅ sentiment for refined notes (stored on tasting_flavor_selections_v2.sentiment)
 export type ReviewSentiment = "LIKE" | "NEUTRAL" | "DISLIKE";
 
 function reactionLabel(v: Reaction) {
@@ -26,43 +30,55 @@ function reactionLabel(v: Reaction) {
 
 function normalizeSentiment(v: any): ReviewSentiment {
   const s = String(v ?? "").trim().toUpperCase();
-  if (s === "LIKE" || s === "DISLIKE" || s === "NEUTRAL") return s as ReviewSentiment;
+  if (s === "LIKE" || s === "DISLIKE" || s === "NEUTRAL") {
+    return s as ReviewSentiment;
+  }
   return "NEUTRAL";
 }
 
 export async function saveCloudTasting(params: {
-  // identity / mode
   isExisting: boolean;
   tastingId: string;
 
-  // form values
   name: string;
   rating: number | null;
+  textureLevel: number | null;
+  proofIntensity: number | null;
+  flavorIntensity: number | null;
   nose: Reaction;
   taste: Reaction;
   personalNotes: string;
 
-  // whiskey + tags
   whiskeyId: string | null;
   flavorTags: string[];
   selectedNodeIds: string[];
   getTopLevelLabelForNode: (nodeId: string) => string | null | undefined;
   isFinishLabel: (label: string) => boolean;
 
-  // refined-note sentiment map (optional)
   sentimentById?: Record<string, ReviewSentiment>;
 
-  // source
   sourceType: "purchased" | "bar";
   barName: string;
+  storeName: string;
+  sourceCity: string;
+  sourceState: string;
+  pricePerOz: string;
+  pricePerBottle: string;
+  pourSizeOz: string;
+  bottleSizeMl: string;
 
-  // misc
   lockName: boolean;
 
-  // refined nodes writer (legacy)
-  replaceTastingFlavorNodes: (tastingId: string, selectedNodeIds: string[]) => Promise<void>;
+  isBlind?: boolean;
+  blindPosition?: number | null;
+  blindWhiskeyName?: string | null;
+  eventId?: string | null;
 
-  // refined nodes writer (new): writes sentiment column too
+  replaceTastingFlavorNodes: (
+    tastingId: string,
+    selectedNodeIds: string[]
+  ) => Promise<void>;
+
   replaceTastingFlavorNodesWithSentiment?: (
     tastingId: string,
     selectedNodeIds: string[],
@@ -75,6 +91,9 @@ export async function saveCloudTasting(params: {
 
     name,
     rating,
+    textureLevel,
+    proofIntensity,
+    flavorIntensity,
     nose,
     taste,
     personalNotes,
@@ -89,8 +108,20 @@ export async function saveCloudTasting(params: {
 
     sourceType,
     barName,
+    storeName,
+    sourceCity,
+    sourceState,
+    pricePerOz,
+    pricePerBottle,
+    pourSizeOz,
+    bottleSizeMl,
 
     lockName,
+
+    isBlind,
+    blindPosition,
+    blindWhiskeyName,
+    eventId,
 
     replaceTastingFlavorNodes,
     replaceTastingFlavorNodesWithSentiment,
@@ -114,30 +145,151 @@ export async function saveCloudTasting(params: {
   const cleanedPersonal = String(personalNotes ?? "").trim();
   const personalOrNull = cleanedPersonal.length ? cleanedPersonal : null;
 
+  const safeCity = String(sourceCity ?? "").trim();
+  const safeState = String(sourceState ?? "").trim();
+  const safePricePerOz = String(pricePerOz ?? "").trim();
+  const safePricePerBottle = String(pricePerBottle ?? "").trim();
+  const safePourSizeOz = String(pourSizeOz ?? "").trim();
+  const safeBottleSizeMl = String(bottleSizeMl ?? "").trim();
+
+  const sourceDetails: string[] = [];
+
+  if (sourceType === "bar") {
+    const safeBarName = String(barName ?? "").trim();
+    if (safeBarName) sourceDetails.push(`Venue: ${safeBarName}`);
+    if (safeCity) sourceDetails.push(`City: ${safeCity}`);
+    if (safeState) sourceDetails.push(`State/Region: ${safeState}`);
+    if (safePricePerOz) sourceDetails.push(`Price/oz: $${safePricePerOz}`);
+    if (safePourSizeOz) sourceDetails.push(`Pour size: ${safePourSizeOz} oz`);
+  } else {
+    const safeStoreName = String(storeName ?? "").trim();
+    if (safeStoreName) sourceDetails.push(`Store: ${safeStoreName}`);
+    if (safeCity) sourceDetails.push(`City: ${safeCity}`);
+    if (safeState) sourceDetails.push(`State/Region: ${safeState}`);
+    if (safePricePerBottle) {
+      sourceDetails.push(`Price/bottle: $${safePricePerBottle}`);
+    }
+    if (safeBottleSizeMl) {
+      sourceDetails.push(`Bottle size: ${safeBottleSizeMl} ml`);
+    }
+  }
+
+  const sourceDetailsBlock = sourceDetails.length
+    ? sourceDetails.join(" • ")
+    : null;
+
+  const notesWithSourceContext = [personalOrNull, sourceDetailsBlock]
+    .filter(Boolean)
+    .join("\n\n");
+  const finalPersonalNotes = notesWithSourceContext.length
+    ? notesWithSourceContext
+    : null;
+
   const topFromRefine = uniqStringsKeepOrder(
     selectedNodeIds
       .map((id) => getTopLevelLabelForNode(id))
       .filter(Boolean) as string[]
   );
 
-  const mergedFlavorTags = uniqStringsKeepOrder([...flavorTags, ...topFromRefine]).filter(
-    (t) => !isFinishLabel(t) && normalizeKey(t) !== "dislikes"
-  );
+  const mergedFlavorTags = uniqStringsKeepOrder([
+    ...flavorTags,
+    ...topFromRefine,
+  ]).filter((t) => !isFinishLabel(t) && normalizeKey(t) !== "dislikes");
 
-  // ✅ dislikes removed entirely from writes
+  let venueId: string | null = null;
+
+  const sourceName =
+    sourceType === "bar" ? barName?.trim() : storeName?.trim();
+
+  if (sourceName) {
+    const { data, error } = await supabase.rpc("get_or_create_venue", {
+      p_name: sourceName,
+      p_city: sourceCity || null,
+      p_region: sourceState || null,
+      p_country: "USA",
+    });
+
+    if (!error && data) {
+      venueId = data;
+    }
+  }
+const activeEventId = await getActiveEventId();
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const recordedBy = sessionData.session?.user?.id ?? null;
+
+  if (
+    venueId &&
+    safeWhiskeyId &&
+    ((sourceType === "bar" && (Number(safePricePerOz || 0) > 0 || Number(safePourSizeOz || 0) > 0)) ||
+      (sourceType === "purchased" &&
+        (Number(safePricePerBottle || 0) > 0 || Number(safeBottleSizeMl || 0) > 0)))
+  ) {
+    await supabase.rpc("upsert_venue_whiskey_offering", {
+      p_venue_id: venueId,
+      p_whiskey_id: safeWhiskeyId,
+      p_offering_type: sourceType === "bar" ? "pour" : "bottle",
+      p_price:
+        sourceType === "bar"
+          ? Number(safePricePerOz || 0) || null
+          : Number(safePricePerBottle || 0) || null,
+      p_currency: "USD",
+      p_pour_size_oz:
+        sourceType === "bar"
+          ? (Number(safePourSizeOz) || null)
+          : null,
+      p_bottle_size_ml:
+        sourceType === "purchased"
+          ? (Number(safeBottleSizeMl) || null)
+          : null,
+      p_notes: null,
+      p_recorded_by: recordedBy,
+    });
+  }
+
   const payload: any = {
-    whiskey_name: safeName,
+    whiskey_name: isBlind && blindWhiskeyName ? String(blindWhiskeyName).trim() : safeName,
     whiskey_id: safeWhiskeyId,
     rating: clamp100(Number(rating)),
+    texture_level: textureLevel,
+    proof_intensity: proofIntensity,
+    flavor_intensity: flavorIntensity,
     nose_reaction: reactionLabel(nose) || null,
     taste_reaction: reactionLabel(taste) || null,
     flavor_tags: mergedFlavorTags.length ? mergedFlavorTags : null,
+
     source_type: sourceType,
     bar_name: sourceType === "bar" ? String(barName ?? "").trim() : null,
-    personal_notes: personalOrNull,
+    personal_notes: finalPersonalNotes,
+    venue_id: venueId,
+    event_id: eventId ?? activeEventId,
+    blind_position: isBlind ? (blindPosition ?? null) : null,
+
+    source_name_snapshot:
+      sourceType === "bar"
+        ? String(barName ?? "").trim()
+        : String(storeName ?? "").trim(),
+
+    source_city: safeCity || null,
+    source_region: safeState || null,
+    source_country: "USA",
+
+    source_price:
+      sourceType === "bar"
+        ? Number(safePricePerOz || 0) || null
+        : Number(safePricePerBottle || 0) || null,
+
+    source_pour_size_oz:
+      sourceType === "bar"
+        ? (Number(safePourSizeOz) || null)
+        : null,
+
+    source_bottle_size_ml:
+      sourceType === "purchased"
+        ? (Number(safeBottleSizeMl) || null)
+        : null,
   };
 
-  // Normalize sentiments defensively
   const safeSentimentById: Record<string, ReviewSentiment> = {};
   if (sentimentById && typeof sentimentById === "object") {
     for (const [k, v] of Object.entries(sentimentById)) {
@@ -145,25 +297,27 @@ export async function saveCloudTasting(params: {
     }
   }
 
-  // Helper: write refined selections (with sentiment if available)
   const writeRefinedSelections = async (tid: string) => {
     if (replaceTastingFlavorNodesWithSentiment) {
-      await replaceTastingFlavorNodesWithSentiment(tid, selectedNodeIds, safeSentimentById);
+      await replaceTastingFlavorNodesWithSentiment(
+        tid,
+        selectedNodeIds,
+        safeSentimentById
+      );
       return;
     }
     await replaceTastingFlavorNodes(tid, selectedNodeIds);
   };
 
-  // ✅ Helper: mirror safely (NEVER fail the save because of mirror rules)
-  const syncPublicMirrorSafely = async (sourceTastingId: string, shareOk: boolean) => {
-    // If user turned sharing off: ensure mirror row is removed
+  const syncPublicMirrorSafely = async (
+    sourceTastingId: string,
+    shareOk: boolean
+  ) => {
     if (!shareOk) {
       await deletePublicMirrorBySourceTastingId(sourceTastingId);
       return;
     }
 
-    // public_tastings requires whiskey_id (NOT NULL).
-    // If we don't have a whiskeyId, skip mirror + delete any previous mirror row.
     if (!safeWhiskeyId) {
       await deletePublicMirrorBySourceTastingId(sourceTastingId);
       return;
@@ -173,15 +327,15 @@ export async function saveCloudTasting(params: {
       sourceTastingId,
       whiskeyId: safeWhiskeyId,
       rating: Number(rating),
+      textureLevel,
+      proofIntensity,
+      flavorIntensity,
       flavorTags: mergedFlavorTags.length ? mergedFlavorTags : null,
-      // dislikes removed from mirror payload
       dislikeTags: null,
-      personalNotes: personalOrNull,
       selectedNodeIds,
     });
   };
 
-  // We track offline errors cleanly
   const trackFail = async (message: string) => {
     const lower = String(message ?? "").toLowerCase();
     const isOffline =
@@ -211,14 +365,15 @@ export async function saveCloudTasting(params: {
     const user = data.session?.user;
 
     if (isExisting) {
-      const { error } = await supabase.from("tastings").update(payload).eq("id", tastingId);
+      const { error } = await supabase
+        .from("tastings")
+        .update(payload)
+        .eq("id", tastingId);
+
       if (error) throw new Error(error.message);
 
       await writeRefinedSelections(tastingId);
-
-      // ✅ mirror should never be able to break saving
       await syncPublicMirrorSafely(tastingId, shareOk);
-
       await hapticSuccess();
 
       trackTastingSaved({
@@ -226,10 +381,9 @@ export async function saveCloudTasting(params: {
         whiskey_id: safeWhiskeyId,
         existing: true,
         rating: Number(rating),
-        has_notes: !!personalOrNull,
-        notes_len: personalOrNull ? personalOrNull.length : 0,
+        has_notes: !!finalPersonalNotes,
+        notes_len: finalPersonalNotes ? finalPersonalNotes.length : 0,
         has_flavor_tags: mergedFlavorTags.length > 0,
-        // dislikes removed
         source_type: sourceType,
       });
 
@@ -240,7 +394,6 @@ export async function saveCloudTasting(params: {
       };
     }
 
-    // new tasting
     if (!user) throw new Error("Not signed in");
 
     const { data: inserted, error } = await supabase
@@ -255,27 +408,22 @@ export async function saveCloudTasting(params: {
     if (!isUuid(newId)) throw new Error("Saved, but missing tasting id.");
 
     await writeRefinedSelections(newId);
-
-    // ✅ mirror should never be able to break saving
     await syncPublicMirrorSafely(newId, shareOk);
-
-    if (!lockName) {
-      await maybeCreateWhiskeyCandidate(safeName);
-    }
 
     trackTastingSaved({
       screen: "cloud-tasting",
       whiskey_id: safeWhiskeyId,
       existing: false,
       rating: Number(rating),
-      has_notes: !!personalOrNull,
-      notes_len: personalOrNull ? personalOrNull.length : 0,
+      has_notes: !!finalPersonalNotes,
+      notes_len: finalPersonalNotes ? finalPersonalNotes.length : 0,
       has_flavor_tags: mergedFlavorTags.length > 0,
-      // dislikes removed
       source_type: sourceType,
     });
 
     await hapticSuccess();
+
+    void checkAndRequestPushPermission(user.id);
 
     return {
       tastingId: newId,
@@ -291,5 +439,21 @@ export async function saveCloudTasting(params: {
     const err: any = new Error(msg);
     err.isOffline = isOffline;
     throw err;
+  }
+}
+
+async function checkAndRequestPushPermission(userId: string) {
+  try {
+    const { count } = await supabase
+      .from("tastings")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId);
+
+    if (count === 3) {
+      const { registerForPushNotifications } = await import("../../../lib/notifications");
+      await registerForPushNotifications();
+    }
+  } catch {
+    // never throw, never block
   }
 }

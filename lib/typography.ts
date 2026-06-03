@@ -88,7 +88,7 @@ export const type: TypeScale = {
    */
   microcopyItalic: {
     fontFamily: fontFamilies.headingItalic,
-    fontSize: 15,
+    fontSize: 16,
     lineHeight: 22,
     letterSpacing: 0.35,
     color: colors.textPrimary,

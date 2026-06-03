@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { hapticError, hapticSuccess } from "../../../lib/haptics";
 import { supabase } from "../../../lib/supabase";
+import { createPendingWhiskey, maybeCreateWhiskeyCandidate } from "../services/whiskeyCandidates.service";
 
 import {
   cleanText,
@@ -203,7 +204,7 @@ export function usePostSaveMetadata() {
         setMetaIsCustom(true);
 
         // For custom we want to show at minimum these three required blocks
-        setMetaMissingKeys(["whiskey_type", "proof"]); // Name is handled via fName + isCustom in modal
+        setMetaMissingKeys(["whiskey_type", "proof", "distillery", "age"]); // Name is handled via fName + isCustom in modal
 
         setPostSaveTargetWhiskeyId(null); // no uuid
         setPendingNavigateTo(navigateTo);
@@ -298,16 +299,33 @@ export function usePostSaveMetadata() {
     return to ?? null;
   }, [pendingNavigateTo]);
 
-  const saveMetadataFromModal = useCallback(async (): Promise<Href | null> => {
+  const saveMetadataFromModal = useCallback(async (pendingBarcode?: string): Promise<Href | null> => {
     if (metaSaving) return null;
 
     // ✅ Custom: no whiskey_id to update — just close after validation (modal enforces required)
     if (metaIsCustom) {
+      const dist = cleanText(fDistillery);
+      const proof = parseNumericOrNull(fProof);
+      const age = parseNumericOrNull(fAge);
+
+      const whiskeyTypeName =
+        (whiskeyTypeOptions || []).find((x) => safeText(x.id) === safeText(fTypeId))?.name ?? null;
+
       setMetaSaving(true);
       try {
-        // TODO (optional): submit a “catalog suggestion” record here.
-        // Example:
-        // await supabase.from("whiskey_suggestions").insert({ name: fName, whiskey_type_id: fTypeId, proof: parseNumericOrNull(fProof), distillery: fDistillery, ... })
+        const newWhiskeyId = await createPendingWhiskey({
+          nameRaw: fName,
+          whiskeyType: whiskeyTypeName,
+          distillery: dist,
+          proof,
+          age,
+          category: fCategory,
+          region: fRegion,
+          subRegion: fSubRegion,
+        });
+
+        setPendingNavigateTo(`/whiskey/${encodeURIComponent(newWhiskeyId)}` as any);
+
         await hapticSuccess();
         return finishPostSaveFlow();
       } catch {
@@ -337,13 +355,8 @@ export function usePostSaveMetadata() {
       const { error } = await supabase.rpc("user_fill_whiskey_missing_fields", {
         p_whiskey_id: postSaveTargetWhiskeyId,
         p_distillery: dist,
-
-        // ✅ canonical now
         p_whiskey_type_id: fTypeId,
-
-        // legacy stays null (server can keep back-compat if it wants)
-        p_whiskey_type: null,
-
+        p_whiskey_type: whiskeyTypeOptions.find(x => x.id === fTypeId)?.name ?? null,
         p_proof: proof,
         p_age: age,
         p_category: cat,

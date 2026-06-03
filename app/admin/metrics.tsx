@@ -1,328 +1,69 @@
-// app/admin/metrics.tsx
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
-import { supabase } from "../../lib/supabase";
+import {
+  type AdminDashboardMetrics,
+  fetchAdminMetrics,
+} from "../../lib/adminMetrics";
 
-import { radii } from "../../lib/radii";
-import { shadows } from "../../lib/shadows";
 import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
-type TrendsBlock = {
-  activation?: {
-    activated_7?: number | null;
-    activated_prev7?: number | null;
-    activated_30avg7?: number | null;
-    pct_vs_prev7?: number | null;
-    pct_vs_30avg7?: number | null;
-  } | null;
+import {
+  HeroStat,
+  MetricBarRow,
+  MetricRow,
+  MetricRowNoDivider,
+  MetricsCard,
+  PowerGrid,
+  SectionDivider,
+  TabPill,
+  TotalChip,
+} from "../../components/admin/metrics/MetricsPrimitives";
+import {
+  fmtCount,
+  fmtDateTime,
+  fmtNum2,
+  fmtPct,
+  statusActivation,
+  statusCatalogCompletion,
+  statusCoverage,
+  statusLowEffort,
+  statusNotes,
+  statusRetention,
+} from "../../components/admin/metrics/formatters";
 
-  tastings?: {
-    tastings_7?: number | null;
-    tastings_prev7?: number | null;
-    tastings_30avg7?: number | null;
-    pct_vs_prev7?: number | null;
-    pct_vs_30avg7?: number | null;
-  } | null;
-};
-
-type Snapshot = {
-  generated_at?: string;
-
-  trends?: TrendsBlock | null;
-
-  activation?: {
-    signup_to_first_tasting_pct?: number | null;
-    time_to_first_tasting_median_minutes?: number | null;
-    tasting_completion_rate_pct?: number | null;
-    note?: string | null;
-  } | null;
-
-  engagement?: {
-    weekly_active_tasters?: number | null;
-    monthly_active_tasters?: number | null;
-    tastings_last_7d?: number | null;
-    tastings_last_30d?: number | null;
-    tastings_per_active_user_7d?: number | null;
-    note?: string | null;
-  } | null;
-
-  data_quality?: {
-    pct_tastings_with_notes?: number | null;
-    avg_note_length?: number | null;
-    pct_with_type_populated?: number | null;
-    edit_rate_24h?: number | null;
-    note?: string | null;
-  } | null;
-
-  catalog_pipeline?: {
-    candidates_created_7d?: number | null;
-    promoted_7d?: number | null;
-    rejected_7d?: number | null;
-    median_hours_to_promotion_30d?: number | null;
-  } | null;
-
-  monetization_readiness?: {
-    users_10plus_tastings?: number | null;
-    users_25plus_tastings?: number | null;
-    users_50plus_tastings?: number | null;
-    users_100plus_tastings?: number | null;
-    note?: string | null;
-  } | null;
-
-  reliability?: {
-    auth_success_rate?: number | null;
-    sync_error_rate?: number | null;
-    crash_free_sessions?: number | null;
-    note?: string | null;
-  } | null;
-};
-
-function fmt(v: any) {
-  if (v === null || v === undefined) return "—";
-  if (typeof v === "number" && Number.isFinite(v)) return String(v);
-  return String(v);
-}
-
-function fmtPct(v: any) {
-  if (v === null || v === undefined) return "—";
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "—";
-  return `${n.toFixed(2)}%`;
-}
-
-function fmtPct1(v: any) {
-  if (v === null || v === undefined) return "—";
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "—";
-  return `${n.toFixed(1)}%`;
-}
-
-function fmtNum2(v: any) {
-  if (v === null || v === undefined) return "—";
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "—";
-  return n.toFixed(2);
-}
-
-function fmtDateTime(s?: string) {
-  if (!s) return "—";
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return s;
-  return d.toLocaleString();
-}
-
-function trendArrow(pct: any) {
-  const n = Number(pct);
-  if (!Number.isFinite(n)) return "→";
-  if (n > 0) return "↑";
-  if (n < 0) return "↓";
-  return "→";
-}
-
-function trendTone(pct: any) {
-  const n = Number(pct);
-  if (!Number.isFinite(n)) return colors.textSecondary;
-  if (n > 0) return colors.textPrimary;
-  if (n < 0) return colors.accent;
-  return colors.textSecondary;
-}
-
-function Card({
-  title,
-  children,
-  right,
-}: {
-  title: string;
-  children: React.ReactNode;
-  right?: React.ReactNode;
-}) {
-  return (
-    <View
-      style={{
-        backgroundColor: colors.surface,
-        borderRadius: radii.lg,
-        padding: spacing.lg,
-        borderWidth: 1,
-        borderColor: colors.divider,
-        ...shadows.card,
-        gap: spacing.md,
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: spacing.md,
-        }}
-      >
-        <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>{title}</Text>
-        {right ? right : null}
-      </View>
-      {children}
-    </View>
-  );
-}
-
-function MetricRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "baseline",
-        justifyContent: "space-between",
-        gap: spacing.md,
-        paddingVertical: 6,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.divider,
-      }}
-    >
-      <Text
-        style={[
-          type.body,
-          {
-            flex: 1,
-            color: colors.textSecondary,
-            fontSize: 14,
-            lineHeight: 18,
-          },
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-
-      <Text
-        style={[
-          type.body,
-          {
-            color: colors.textPrimary,
-            fontSize: 14,
-            lineHeight: 18,
-            fontWeight: "900",
-          },
-        ]}
-        numberOfLines={1}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function MetricRowNoDivider({ label, value }: { label: string; value: string }) {
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "baseline",
-        justifyContent: "space-between",
-        gap: spacing.md,
-        paddingVertical: 6,
-      }}
-    >
-      <Text
-        style={[
-          type.body,
-          {
-            flex: 1,
-            color: colors.textSecondary,
-            fontSize: 14,
-            lineHeight: 18,
-          },
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-
-      <Text
-        style={[
-          type.body,
-          {
-            color: colors.textPrimary,
-            fontSize: 14,
-            lineHeight: 18,
-            fontWeight: "900",
-          },
-        ]}
-        numberOfLines={1}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function NoteText({ text }: { text?: string | null }) {
-  if (!text) return null;
-  return (
-    <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.9 }]}>
-      {text}
-    </Text>
-  );
-}
-
-function TrendLine({
-  title,
-  value,
-  pctPrev7,
-  pct30Avg,
-}: {
-  title: string;
-  value: any;
-  pctPrev7: any;
-  pct30Avg: any;
-}) {
-  const arrow = trendArrow(pctPrev7);
-  const tone = trendTone(pctPrev7);
-
-  return (
-    <View style={{ gap: 6, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider }}>
-      <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: spacing.md }}>
-        <Text style={[type.body, { color: colors.textSecondary, fontSize: 14 }]} numberOfLines={1}>
-          {title}
-        </Text>
-
-        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 10 }}>
-          <Text style={[type.body, { color: tone, fontWeight: "900", fontSize: 14 }]} numberOfLines={1}>
-            {arrow} {fmt(value)}
-          </Text>
-        </View>
-      </View>
-
-      <View style={{ flexDirection: "row", justifyContent: "space-between", gap: spacing.md }}>
-        <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.9 }]}>
-          vs prev 7d: {fmtPct(pctPrev7)}
-        </Text>
-        <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.9 }]}>
-          vs 30d avg: {fmtPct(pct30Avg)}
-        </Text>
-      </View>
-    </View>
-  );
-}
+type MetricsTab =
+  | "overview"
+  | "engagement"
+  | "pipeline"
+  | "catalog"
+  | "quality"
+  | "insights"
+  | "retention"
+  | "monetization";
 
 export default function AdminMetricsScreen() {
   const [loading, setLoading] = useState(true);
-  const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [data, setData] = useState<AdminDashboardMetrics | null>(null);
   const [error, setError] = useState<string>("");
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+  const [tab, setTab] = useState<MetricsTab>("overview");
+  const insights = data?.insights;
 
   const load = useCallback(async () => {
     setError("");
     setLoading(true);
+
     try {
-      const { data, error } = await supabase.rpc("admin_metrics_snapshot");
-      if (error) throw error;
-      setSnap((data ?? null) as any);
+      const next = await fetchAdminMetrics();
+      setData(next);
+      setFetchedAt(new Date().toISOString());
     } catch (e: any) {
       setError(String(e?.message ?? e));
-      setSnap(null);
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -332,19 +73,751 @@ export default function AdminMetricsScreen() {
     load();
   }, [load]);
 
-  const updatedAt = useMemo(() => fmtDateTime(snap?.generated_at), [snap?.generated_at]);
+  const updatedAt = fetchedAt ? fmtDateTime(fetchedAt) : "—";
 
-  const trendsActivation = snap?.trends?.activation ?? null;
-  const trendsTastings = snap?.trends?.tastings ?? null;
+  const totals = data?.totals;
+  const overview = data?.overview;
+  const engagement = data?.engagement;
+  const powerUsers = data?.power_users;
+  const pipeline = data?.pipeline;
+  const catalog = data?.catalog;
+  const quality = data?.quality;
+  const retention = data?.retention;
+  const monetization = data?.monetization;
 
+  const wauMauRatio =
+    overview?.wau != null && overview?.mau
+      ? overview.wau / overview.mau
+      : null;
+
+  const usersUnder5 =
+    engagement && powerUsers
+      ? Math.max(0, engagement.users_with_tastings - powerUsers.users_5_plus)
+      : null;
+
+  function renderOverviewTab() {
+    return (
+      <>
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          <TotalChip label="Users" value={fmtCount(totals?.total_users)} />
+          <TotalChip label="Whiskies" value={fmtCount(totals?.total_whiskeys)} />
+          <TotalChip label="Tastings" value={fmtCount(totals?.total_tastings)} />
+        </View>
+
+        <SectionDivider label="Health signals" />
+
+        <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Activation Rate"
+              value={fmtPct(
+                overview?.activation_rate != null ? overview.activation_rate * 100 : null
+              )}
+              subtitle="Users with at least one tasting"
+              status={statusActivation(overview?.activation_rate)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="WAU / MAU"
+              value={fmtPct(wauMauRatio != null ? wauMauRatio * 100 : null)}
+              subtitle={`${fmtCount(overview?.wau)} weekly / ${fmtCount(overview?.mau)} monthly`}
+              status={statusRetention(wauMauRatio)}
+            />
+          </View>
+        </View>
+
+        <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="7d Retention"
+              value={fmtPct(
+                retention?.retention_7d != null ? retention.retention_7d * 100 : null
+              )}
+              subtitle="Eligible users only"
+              status={statusRetention(retention?.retention_7d)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Low-effort logs"
+              value={fmtPct(
+                quality?.pct_low_effort_tastings != null
+                  ? quality.pct_low_effort_tastings * 100
+                  : null
+              )}
+              subtitle="No tags and no notes"
+              status={statusLowEffort(quality?.pct_low_effort_tastings)}
+            />
+          </View>
+        </View>
+
+        <SectionDivider label="Growth" />
+
+        <MetricsCard
+          title="Growth snapshot"
+          insight="Growth is strong post-launch. This card shows whether usage is expanding or flattening."
+          thresholdTitle="Growth Snapshot thresholds"
+          thresholdDescription="These are reference ranges for reading the growth snapshot during the early app phase."
+          thresholdItems={[
+            { label: "New users (7d) — green", value: "Strong upward trend vs your recent baseline", tone: "good" },
+            { label: "New users (7d) — amber", value: "Flat to modest growth", tone: "warn" },
+            { label: "New users (7d) — red", value: "Sustained decline vs recent baseline", tone: "bad" },
+            { label: "Tastings (7d) — green", value: "Meaningful week-over-week increase", tone: "good" },
+            { label: "Tastings (7d) — amber", value: "Stable / normal variance", tone: "warn" },
+            { label: "Tastings (7d) — red", value: "Sustained drop vs recent baseline", tone: "bad" },
+            { label: "Tastings (30d)", value: "Context metric, not directly color-scored yet", tone: "neutral" },
+          ]}
+        >
+          <MetricBarRow
+            label="New users (7d)"
+            value={fmtCount(overview?.new_users_7d)}
+            fillPct={overview?.new_users_7d != null ? Math.min(100, (overview.new_users_7d / 30) * 100) : 0}
+          />
+          <MetricBarRow
+            label="Tastings (7d)"
+            value={fmtCount(overview?.tastings_7d)}
+            fillPct={overview?.tastings_7d != null ? Math.min(100, (overview.tastings_7d / 50) * 100) : 0}
+          />
+          <MetricBarRow
+            label="Tastings (30d)"
+            value={fmtCount(overview?.tastings_30d)}
+            fillPct={overview?.tastings_30d != null ? Math.min(100, (overview.tastings_30d / 200) * 100) : 0}
+          />
+        </MetricsCard>
+
+        <SectionDivider label="Power users" />
+
+        <MetricsCard
+          title="Power users"
+          insight="These are your highest-intent users and the clearest monetization signal in the product."
+          thresholdTitle="Power User thresholds"
+          thresholdDescription="These ranges are directional. The more users that reach 5+ and 10+ tastings, the stronger the product habit and monetization signal."
+          thresholdItems={[
+            { label: "Users with 5+ tastings", value: "High-intent cohort", tone: "good" },
+            { label: "Users with 10+ tastings", value: "Very high-intent cohort", tone: "good" },
+            { label: "Interpretation", value: "More users crossing these thresholds is better", tone: "neutral" },
+          ]}
+        >
+          <PowerGrid
+            items={[
+              { label: "5+ tastings", value: fmtCount(powerUsers?.users_5_plus) },
+              { label: "10+ tastings", value: fmtCount(powerUsers?.users_10_plus) },
+              { label: "Under 5 tastings", value: fmtCount(usersUnder5) },
+              { label: "Premium users", value: fmtCount(monetization?.total_premium_users) },
+            ]}
+          />
+        </MetricsCard>
+      </>
+    );
+  }
+
+  function renderEngagementTab() {
+    return (
+      <>
+        <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Users With Tastings"
+              value={fmtCount(engagement?.users_with_tastings)}
+              subtitle="Activated users"
+              status={statusActivation(overview?.activation_rate)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Total Tastings"
+              value={fmtCount(engagement?.total_tastings)}
+              subtitle="All tasting logs"
+            />
+          </View>
+        </View>
+
+                <MetricsCard
+          title="Depth of Use"
+          insight="The goal is not just activation. It is getting users beyond their first few logs and into habit."
+          thresholdTitle="Depth of Use thresholds"
+          thresholdDescription="These thresholds describe progression depth, not failure states. More users moving into higher buckets is the goal."
+          thresholdItems={[
+            { label: "Users with 5+ tastings", value: "Strong engagement milestone", tone: "good" },
+            { label: "Users with 10+ tastings", value: "Habit / enthusiast milestone", tone: "good" },
+            { label: "Activated but under 5 tastings", value: "Opportunity pool for deeper engagement", tone: "warn" },
+          ]}
+        >
+          <MetricRow label="Users with 5+ tastings" value={fmtCount(powerUsers?.users_5_plus)} />
+          <MetricRow label="Users with 10+ tastings" value={fmtCount(powerUsers?.users_10_plus)} />
+          <MetricRowNoDivider
+            label="Activated, under 5 tastings"
+            value={fmtCount(usersUnder5)}
+          />
+        </MetricsCard>
+
+        <MetricsCard
+          title="Pour source breakdown"
+          insight="Shows how users are consuming whiskey — bar pours vs. home bottles vs. events."
+        >
+          <MetricRow label="Bar" value={fmtCount(engagement?.source_bar)} />
+          <MetricRow label="Purchased" value={fmtCount(engagement?.source_bottle)} />
+          <MetricRow label="Event" value={fmtCount(engagement?.source_event)} />
+          <MetricRowNoDivider label="Other / unset" value={fmtCount(engagement?.source_other)} />
+        </MetricsCard>
+      </>
+    );
+  }
+
+  function renderPipelineTab() {
+    return (
+      <>
+        <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Pending Queue"
+              value={fmtCount(pipeline?.pending_candidates)}
+              subtitle="Needs admin review"
+              status={
+                pipeline?.avg_pending_age_hours != null && pipeline.avg_pending_age_hours <= 6
+                  ? "good"
+                  : pipeline?.avg_pending_age_hours != null && pipeline.avg_pending_age_hours <= 24
+                  ? "warn"
+                  : "bad"
+              }
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Median Review"
+              value={fmtNum2(pipeline?.median_review_minutes)}
+              subtitle="Minutes to decision"
+              status={
+                pipeline?.median_review_minutes != null && pipeline.median_review_minutes <= 10
+                  ? "good"
+                  : pipeline?.median_review_minutes != null && pipeline.median_review_minutes <= 60
+                  ? "warn"
+                  : "bad"
+              }
+            />
+          </View>
+        </View>
+
+                <MetricsCard
+          title="Queue Health"
+          insight="You are reviewing quickly, but this is the section to watch as submissions scale and merge workflows are added."
+          thresholdTitle="Queue Health thresholds"
+          thresholdDescription="These are the current operational thresholds used to color the pipeline KPIs."
+          thresholdItems={[
+            { label: "Avg pending age — green", value: "6 hours or less", tone: "good" },
+            { label: "Avg pending age — amber", value: "More than 6 and up to 24 hours", tone: "warn" },
+            { label: "Avg pending age — red", value: "More than 24 hours", tone: "bad" },
+
+            { label: "Review rate (7d) — green", value: "100% or higher", tone: "good" },
+            { label: "Review rate (7d) — amber", value: "80% to 99.9%", tone: "warn" },
+            { label: "Review rate (7d) — red", value: "Below 80%", tone: "bad" },
+
+            { label: "Rejected candidates", value: "Currently informational only", tone: "neutral" },
+          ]}
+        >
+          <MetricRow label="Total candidates" value={fmtCount(pipeline?.total_candidates)} />
+          <MetricRow label="Approved candidates" value={fmtCount(pipeline?.approved_candidates)} />
+          <MetricRow label="Rejected candidates" value={fmtCount(pipeline?.rejected_candidates)} />
+          <MetricRow
+            label="Avg pending age (hrs)"
+            value={fmtNum2(pipeline?.avg_pending_age_hours)}
+            status={
+              pipeline?.avg_pending_age_hours != null && pipeline.avg_pending_age_hours <= 6
+                ? "good"
+                : pipeline?.avg_pending_age_hours != null && pipeline.avg_pending_age_hours <= 24
+                ? "warn"
+                : "bad"
+            }
+          />
+          <MetricRowNoDivider
+            label="Review rate (7d)"
+            value={fmtPct(
+              pipeline?.review_rate_7d != null ? pipeline.review_rate_7d * 100 : null
+            )}
+            status={
+              pipeline?.review_rate_7d != null && pipeline.review_rate_7d >= 1
+                ? "good"
+                : pipeline?.review_rate_7d != null && pipeline.review_rate_7d >= 0.8
+                ? "warn"
+                : "bad"
+            }
+          />
+        </MetricsCard>
+
+                <MetricsCard
+          title="Throughput"
+          insight="This shows whether the inbox is being kept under control week over week."
+          thresholdTitle="Throughput thresholds"
+          thresholdDescription="Throughput is read comparatively. Reviewed volume should generally keep pace with or exceed created volume."
+          thresholdItems={[
+            { label: "Healthy throughput", value: "Reviewed ≈ Created or higher", tone: "good" },
+            { label: "Watch area", value: "Reviewed slightly below Created", tone: "warn" },
+            { label: "Backlog risk", value: "Reviewed consistently well below Created", tone: "bad" },
+          ]}
+        >
+          <MetricRow label="Created (7d)" value={fmtCount(pipeline?.created_7d)} />
+          <MetricRowNoDivider label="Reviewed (7d)" value={fmtCount(pipeline?.reviewed_7d)} />
+        </MetricsCard>
+      </>
+    );
+  }
+
+  function renderCatalogTab() {
+    return (
+      <>
+        <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Fully Enriched"
+              value={fmtCount(catalog?.fully_enriched_count)}
+              subtitle={fmtPct(
+                catalog?.fully_enriched_pct != null ? catalog.fully_enriched_pct * 100 : null
+              )}
+              status={statusCatalogCompletion(catalog?.fully_enriched_pct)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="With Proof"
+              value={fmtPct(
+                catalog?.with_proof_pct != null ? catalog.with_proof_pct * 100 : null
+              )}
+              subtitle="Coverage rate"
+              status={statusCoverage(catalog?.with_proof_pct)}
+            />
+          </View>
+        </View>
+
+                <MetricsCard
+          title="Coverage"
+          insight="Catalog enrichment is your biggest product leverage point right now. Proof and distillery coverage are the highest-value cleanup targets."
+          thresholdTitle="Coverage thresholds"
+          thresholdDescription="These are the current coverage thresholds used to interpret catalog completeness metrics."
+          thresholdItems={[
+            { label: "Coverage — green", value: "70%+", tone: "good" },
+            { label: "Coverage — amber", value: "40% to 69.9%", tone: "warn" },
+            { label: "Coverage — red", value: "Below 40%", tone: "bad" },
+
+            { label: "Missing proof", value: "Higher counts are worse", tone: "warn" },
+            { label: "Missing distillery", value: "Higher counts are worse", tone: "bad" },
+            { label: "Missing age", value: "Tracked, but lower priority today", tone: "neutral" },
+          ]}
+        >
+          <MetricRow
+            label="With distillery"
+            value={fmtPct(
+              catalog?.with_distillery_pct != null ? catalog.with_distillery_pct * 100 : null
+            )}
+            status={statusCoverage(catalog?.with_distillery_pct)}
+          />
+          <MetricRow
+            label="With type"
+            value={fmtPct(
+              catalog?.with_type_pct != null ? catalog.with_type_pct * 100 : null
+            )}
+          />
+          <MetricRow label="Missing proof" value={fmtCount(catalog?.missing_proof)} status="warn" />
+          <MetricRow
+            label="Missing distillery"
+            value={fmtCount(catalog?.missing_distillery)}
+            status="bad"
+          />
+          <MetricRowNoDivider label="Missing age" value={fmtCount(catalog?.missing_age)} status="bad" />
+        </MetricsCard>
+
+                <MetricsCard
+          title='"Other" Cleanup'
+          insight='This is where weak metadata silently hurts search, filtering, and future recommendations.'
+          thresholdTitle='"Other" Cleanup thresholds'
+          thresholdDescription='Lower "Other" counts are better. This card is meant to expose metadata buckets that still need cleanup.'
+          thresholdItems={[
+            { label: 'Type = Other', value: "Lower is better", tone: "warn" },
+            { label: 'Category = Other', value: "Lower is better", tone: "warn" },
+            { label: 'Region = Other', value: "Lower is better; highest priority here", tone: "bad" },
+          ]}
+        >
+          <MetricRow label="Type = Other" value={fmtCount(catalog?.type_other)} status="warn" />
+          <MetricRow
+            label="Category = Other"
+            value={fmtCount(catalog?.category_other)}
+            status="warn"
+          />
+          <MetricRowNoDivider
+            label="Region = Other"
+            value={fmtCount(catalog?.region_other)}
+            status="bad"
+          />
+        </MetricsCard>
+      </>
+    );
+  }
+
+  function renderQualityTab() {
+    return (
+      <>
+        <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Flavor Tag Usage"
+              value={fmtPct(
+                quality?.pct_with_flavor_tags != null ? quality.pct_with_flavor_tags * 100 : null
+              )}
+              subtitle="Tastings with flavor tags"
+              status={statusCoverage(quality?.pct_with_flavor_tags)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Low-Effort Logs"
+              value={fmtPct(
+                quality?.pct_low_effort_tastings != null
+                  ? quality.pct_low_effort_tastings * 100
+                  : null
+              )}
+              subtitle="No tags and no notes"
+              status={statusLowEffort(quality?.pct_low_effort_tastings)}
+            />
+          </View>
+        </View>
+
+                <MetricsCard
+          title="Tasting Quality"
+          insight="Users are heavily engaging with structured flavor inputs. Written notes are optional depth, not the primary success metric."
+          thresholdTitle="Tasting Quality thresholds"
+          thresholdDescription="These thresholds explain how the dashboard colors and interprets the main tasting quality KPIs."
+          thresholdItems={[
+            { label: "Flavor tag usage — green", value: "70%+", tone: "good" },
+            { label: "Flavor tag usage — amber", value: "40% to 69.9%", tone: "warn" },
+            { label: "Flavor tag usage — red", value: "Below 40%", tone: "bad" },
+
+            { label: "Avg flavor tags / tasting — green", value: "3.0+", tone: "good" },
+            { label: "Avg flavor tags / tasting — amber", value: "2.0 to 2.99", tone: "warn" },
+            { label: "Avg flavor tags / tasting — red", value: "Below 2.0", tone: "bad" },
+
+            { label: "Written notes", value: "Currently treated as optional depth", tone: "neutral" },
+            { label: "Low-effort logs — green", value: "5% or lower", tone: "good" },
+            { label: "Low-effort logs — amber", value: "5.1% to 15%", tone: "warn" },
+            { label: "Low-effort logs — red", value: "Above 15%", tone: "bad" },
+          ]}
+        >
+          <MetricRow
+            label="Tastings with flavor tags"
+            value={fmtCount(quality?.tastings_with_flavor_tags)}
+            status={statusCoverage(quality?.pct_with_flavor_tags)}
+          />
+          <MetricRow
+            label="Avg flavor tags / tasting"
+            value={fmtNum2(quality?.avg_flavor_tags_per_tasting)}
+            status={
+              quality?.avg_flavor_tags_per_tasting != null &&
+              quality.avg_flavor_tags_per_tasting >= 3
+                ? "good"
+                : quality?.avg_flavor_tags_per_tasting != null &&
+                  quality.avg_flavor_tags_per_tasting >= 2
+                ? "warn"
+                : "bad"
+            }
+          />
+          <MetricRow
+            label="Tastings with written notes"
+            value={fmtCount(quality?.tastings_with_written_notes)}
+            status={statusNotes(quality?.pct_with_written_notes)}
+          />
+          <MetricRowNoDivider
+            label="% with written notes"
+            value={fmtPct(
+              quality?.pct_with_written_notes != null
+                ? quality.pct_with_written_notes * 100
+                : null
+            )}
+            status={statusNotes(quality?.pct_with_written_notes)}
+          />
+        </MetricsCard>
+
+        <MetricsCard
+          title="Input adoption"
+          insight="Tracks how many users are filling structured intensity and texture fields — signals depth of tasting behavior beyond just flavor tags."
+          thresholdTitle="Input adoption thresholds"
+          thresholdDescription="Higher fill rates mean richer palate data for future personalization features."
+          thresholdItems={[
+            { label: "Any input field — green", value: "50%+", tone: "good" },
+            { label: "Any input field — amber", value: "25% to 49.9%", tone: "warn" },
+            { label: "Any input field — red", value: "Below 25%", tone: "bad" },
+            { label: "Unlinked tastings — green", value: "0 (none orphaned)", tone: "good" },
+            { label: "Unlinked tastings — red", value: "Any count above 0", tone: "bad" },
+          ]}
+        >
+          <MetricRow
+            label="Texture level filled"
+            value={fmtPct(
+              quality?.pct_with_texture != null ? quality.pct_with_texture * 100 : null
+            )}
+            status={
+              quality?.pct_with_texture != null && quality.pct_with_texture >= 0.5
+                ? "good"
+                : quality?.pct_with_texture != null && quality.pct_with_texture >= 0.25
+                ? "warn"
+                : "bad"
+            }
+          />
+          <MetricRow
+            label="Proof intensity filled"
+            value={fmtPct(
+              quality?.pct_with_proof_intensity != null
+                ? quality.pct_with_proof_intensity * 100
+                : null
+            )}
+            status={
+              quality?.pct_with_proof_intensity != null && quality.pct_with_proof_intensity >= 0.5
+                ? "good"
+                : quality?.pct_with_proof_intensity != null &&
+                  quality.pct_with_proof_intensity >= 0.25
+                ? "warn"
+                : "bad"
+            }
+          />
+          <MetricRow
+            label="Flavor intensity filled"
+            value={fmtPct(
+              quality?.pct_with_flavor_intensity != null
+                ? quality.pct_with_flavor_intensity * 100
+                : null
+            )}
+            status={
+              quality?.pct_with_flavor_intensity != null &&
+              quality.pct_with_flavor_intensity >= 0.5
+                ? "good"
+                : quality?.pct_with_flavor_intensity != null &&
+                  quality.pct_with_flavor_intensity >= 0.25
+                ? "warn"
+                : "bad"
+            }
+          />
+          <MetricRowNoDivider
+            label="Unlinked tastings"
+            value={fmtCount(quality?.tastings_unlinked)}
+            status={quality?.tastings_unlinked != null && quality.tastings_unlinked > 0 ? "bad" : "good"}
+          />
+        </MetricsCard>
+      </>
+    );
+  }
+
+  function renderRetentionTab() {
+    return (
+      <>
+        <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="7d Retention"
+              value={fmtPct(
+                retention?.retention_7d != null ? retention.retention_7d * 100 : null
+              )}
+              subtitle="Eligible users only"
+              status={statusRetention(retention?.retention_7d)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Eligible Users"
+              value={fmtCount(retention?.eligible_users_7d)}
+              subtitle="Users with full 7-day window"
+            />
+          </View>
+        </View>
+
+                <MetricsCard
+          title="Retention Detail"
+          insight="This metric is still early-stage and sample-size limited, but it will become one of the most important health signals over time."
+          thresholdTitle="Retention thresholds"
+          thresholdDescription="These are the current retention thresholds used by the dashboard. Retention is only measured on users with a full 7-day eligibility window."
+          thresholdItems={[
+            { label: "7d retention — green", value: "25%+", tone: "good" },
+            { label: "7d retention — amber", value: "15% to 24.9%", tone: "warn" },
+            { label: "7d retention — red", value: "Below 15%", tone: "bad" },
+
+            { label: "Eligible users", value: "Sample-size context only", tone: "neutral" },
+            { label: "Retained users", value: "Raw count context only", tone: "neutral" },
+          ]}
+        >
+          <MetricRow
+            label="Eligible users (7d)"
+            value={fmtCount(retention?.eligible_users_7d)}
+          />
+          <MetricRowNoDivider
+            label="Retained users (7d)"
+            value={fmtCount(retention?.retained_users_7d)}
+          />
+        </MetricsCard>
+      </>
+    );
+  }
+
+  function renderMonetizationTab() {
+    return (
+      <>
+        <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Premium Users"
+              value={fmtCount(monetization?.total_premium_users)}
+              subtitle="Active premium accounts"
+              status={
+                monetization?.premium_pct != null && monetization.premium_pct >= 0.05
+                  ? "good"
+                  : monetization?.premium_pct != null && monetization.premium_pct >= 0.01
+                  ? "warn"
+                  : "bad"
+              }
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <HeroStat
+              label="Premium %"
+              value={fmtPct(
+                monetization?.premium_pct != null ? monetization.premium_pct * 100 : null
+              )}
+              subtitle="Share of total users"
+              status={
+                monetization?.premium_pct != null && monetization.premium_pct >= 0.05
+                  ? "good"
+                  : monetization?.premium_pct != null && monetization.premium_pct >= 0.01
+                  ? "warn"
+                  : "bad"
+              }
+            />
+          </View>
+        </View>
+
+        <MetricsCard
+          title="Engagement by tier"
+          insight="Premium users logging more tastings on average confirms the paywall is attracting high-intent users, not blocking them."
+          thresholdTitle="Tier engagement thresholds"
+          thresholdDescription="These are directional benchmarks. Premium avg tastings should consistently exceed free avg tastings to validate monetization health."
+          thresholdItems={[
+            { label: "Premium avg tastings", value: "Higher than free avg is healthy", tone: "good" },
+            { label: "Free avg tastings", value: "Context metric — tracks casual user depth", tone: "neutral" },
+            { label: "Premium % — green", value: "5%+ of users are premium", tone: "good" },
+            { label: "Premium % — amber", value: "1% to 4.9%", tone: "warn" },
+            { label: "Premium % — red", value: "Below 1%", tone: "bad" },
+          ]}
+        >
+          <MetricRow
+            label="Avg tastings (premium)"
+            value={fmtNum2(monetization?.premium_avg_tastings)}
+          />
+          <MetricRowNoDivider
+            label="Avg tastings (free)"
+            value={fmtNum2(monetization?.free_avg_tastings)}
+          />
+        </MetricsCard>
+      </>
+    );
+  }
+
+function renderInsightsTab() {
+  return (
+    <>
+      <View style={{ flexDirection: "row", gap: spacing.md }}>
+        <View style={{ flex: 1 }}>
+          <HeroStat
+            label="5+ Tastings"
+            value={fmtPct(
+              insights?.whiskies_with_5_plus_tastings_pct != null
+                ? insights.whiskies_with_5_plus_tastings_pct * 100
+                : null
+            )}
+            subtitle={`${fmtCount(insights?.whiskies_with_5_plus_tastings)} whiskies`}
+            status={
+              insights?.whiskies_with_5_plus_tastings_pct != null &&
+              insights.whiskies_with_5_plus_tastings_pct >= 0.3
+                ? "good"
+                : insights?.whiskies_with_5_plus_tastings_pct != null &&
+                  insights.whiskies_with_5_plus_tastings_pct >= 0.1
+                ? "warn"
+                : "bad"
+            }
+          />
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <HeroStat
+            label="Radar Ready"
+            value={fmtPct(
+              insights?.flavor_radar_ready_pct != null
+                ? insights.flavor_radar_ready_pct * 100
+                : null
+            )}
+            subtitle={`${fmtCount(insights?.flavor_radar_ready_count)} whiskies`}
+            status={
+              insights?.flavor_radar_ready_pct != null &&
+              insights.flavor_radar_ready_pct >= 0.2
+                ? "good"
+                : insights?.flavor_radar_ready_pct != null &&
+                  insights.flavor_radar_ready_pct >= 0.05
+                ? "warn"
+                : "bad"
+            }
+          />
+        </View>
+      </View>
+
+      <MetricsCard
+        title="Insight Readiness"
+        insight="This shows how much of your catalog can actually power product features like flavor radar and top tasting notes."
+        thresholdTitle="Insight thresholds"
+        thresholdDescription="These thresholds help you understand when features are worth shipping based on data density."
+        thresholdItems={[
+          { label: "5+ tastings", value: "Minimum for basic insights", tone: "warn" },
+          { label: "10+ tastings", value: "Stronger signal for features", tone: "good" },
+          { label: "Radar Ready", value: "10+ tastings with notes", tone: "good" },
+        ]}
+      >
+        <MetricRow
+          label="1+ tasting"
+          value={fmtCount(insights?.whiskies_with_1_plus_tasting)}
+        />
+        <MetricRow
+          label="5+ tastings"
+          value={fmtCount(insights?.whiskies_with_5_plus_tastings)}
+        />
+        <MetricRow
+          label="10+ tastings"
+          value={fmtCount(insights?.whiskies_with_10_plus_tastings)}
+        />
+        <MetricRow
+          label="5+ with notes"
+          value={fmtCount(insights?.whiskies_with_5_plus_note_tastings)}
+        />
+        <MetricRow
+          label="10+ with notes"
+          value={fmtCount(insights?.whiskies_with_10_plus_note_tastings)}
+        />
+        <MetricRowNoDivider
+          label="Flavor radar ready"
+          value={fmtCount(insights?.flavor_radar_ready_count)}
+        />
+      </MetricsCard>
+    </>
+  );
+}
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ padding: spacing.xl, gap: spacing.lg }}>
-        {/* Header */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: spacing.md,
+          }}
+        >
           <View style={{ gap: 6, flex: 1 }}>
             <Text style={[type.screenTitle, { color: colors.textPrimary }]}>Metrics</Text>
-            <Text style={[type.microcopyItalic, { color: colors.textSecondary }]}>Updated: {updatedAt}</Text>
+            <Text style={[type.microcopyItalic, { color: colors.textSecondary }]}>
+              {updatedAt}
+            </Text>
           </View>
 
           <View style={{ flexDirection: "row", gap: spacing.xs }}>
@@ -370,119 +843,64 @@ export default function AdminMetricsScreen() {
               )}
             </Pressable>
 
-            <Pressable
-              onPress={() => router.push("/admin")}
-              style={({ pressed }) => ({
-                height: 40,
-                paddingHorizontal: 12,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: colors.divider,
-                backgroundColor: colors.surface,
-                opacity: pressed ? 0.9 : 1,
-              })}
-            >
-              <Text style={[type.button, { fontSize: 13, lineHeight: 16, color: colors.textPrimary }]}>Back</Text>
-            </Pressable>
           </View>
         </View>
 
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+          <TabPill label="Overview" active={tab === "overview"} onPress={() => setTab("overview")} />
+          <TabPill
+            label="Engagement"
+            active={tab === "engagement"}
+            onPress={() => setTab("engagement")}
+          />
+          <TabPill label="Pipeline" active={tab === "pipeline"} onPress={() => setTab("pipeline")} />
+          <TabPill label="Catalog" active={tab === "catalog"} onPress={() => setTab("catalog")} />
+          <TabPill
+            label="Quality"
+            active={tab === "quality"}
+            onPress={() => setTab("quality")}
+          />
+          <TabPill
+            label="Retention"
+            active={tab === "retention"}
+            onPress={() => setTab("retention")}
+          />
+          <TabPill
+            label="Insights"
+            active={tab === "insights"}
+            onPress={() => setTab("insights")}
+          />
+          <TabPill
+            label="Monetization"
+            active={tab === "monetization"}
+            onPress={() => setTab("monetization")}
+          />
+        </View>
+
         {error ? (
-          <Card title="Error">
+          <MetricsCard title="Error">
             <Text style={[type.body, { color: colors.accent }]}>{error}</Text>
-          </Card>
+          </MetricsCard>
         ) : null}
 
-        {loading && !snap ? (
+        {loading && !data ? (
           <View style={{ paddingVertical: spacing.xl }}>
             <ActivityIndicator />
           </View>
         ) : null}
 
-        {/* Trends */}
-        <Card title="Trends">
-          <TrendLine
-            title="Activated users (last 7d)"
-            value={trendsActivation?.activated_7}
-            pctPrev7={trendsActivation?.pct_vs_prev7}
-            pct30Avg={trendsActivation?.pct_vs_30avg7}
-          />
-          <TrendLine
-            title="Tastings (last 7d)"
-            value={trendsTastings?.tastings_7}
-            pctPrev7={trendsTastings?.pct_vs_prev7}
-            pct30Avg={trendsTastings?.pct_vs_30avg7}
-          />
-          <MetricRowNoDivider
-            label="Note"
-            value="Early beta = big % swings (low baseline)."
-          />
-        </Card>
-
-        <Card title="Activation">
-          <MetricRow label="Signup → first tasting" value={fmtPct1(snap?.activation?.signup_to_first_tasting_pct)} />
-          <MetricRow
-            label="Time to first tasting (median)"
-            value={
-              snap?.activation?.time_to_first_tasting_median_minutes == null
-                ? "—"
-                : `${fmt(snap.activation.time_to_first_tasting_median_minutes)} min`
-            }
-          />
-          <MetricRow label="Tasting completion rate" value={fmtPct1(snap?.activation?.tasting_completion_rate_pct)} />
-          <NoteText text={snap?.activation?.note ?? null} />
-        </Card>
-
-        <Card title="Engagement">
-          <MetricRow label="Weekly active tasters" value={fmt(snap?.engagement?.weekly_active_tasters)} />
-          <MetricRow label="Monthly active tasters" value={fmt(snap?.engagement?.monthly_active_tasters)} />
-          <MetricRow label="Tastings (last 7d)" value={fmt(snap?.engagement?.tastings_last_7d)} />
-          <MetricRow label="Tastings (last 30d)" value={fmt(snap?.engagement?.tastings_last_30d)} />
-          <MetricRow
-            label="Tastings per active user (7d)"
-            value={fmtNum2(snap?.engagement?.tastings_per_active_user_7d)}
-          />
-          <NoteText text={snap?.engagement?.note ?? null} />
-        </Card>
-
-        <Card title="Data quality">
-          <MetricRow label="% tastings with notes" value={fmtPct(snap?.data_quality?.pct_tastings_with_notes)} />
-          <MetricRow label="Avg note length" value={fmtNum2(snap?.data_quality?.avg_note_length)} />
-          <MetricRow label="% with type populated" value={fmtPct(snap?.data_quality?.pct_with_type_populated)} />
-          <MetricRow label="Edit rate (24h)" value={fmtPct(snap?.data_quality?.edit_rate_24h)} />
-          <NoteText text={snap?.data_quality?.note ?? null} />
-        </Card>
-
-        <Card title="Catalog pipeline">
-          <MetricRow label="Candidates created (7d)" value={fmt(snap?.catalog_pipeline?.candidates_created_7d)} />
-          <MetricRow label="Promoted (7d)" value={fmt(snap?.catalog_pipeline?.promoted_7d)} />
-          <MetricRow label="Rejected (7d)" value={fmt(snap?.catalog_pipeline?.rejected_7d)} />
-          <MetricRow
-            label="Median hours to promotion (30d)"
-            value={fmtNum2(snap?.catalog_pipeline?.median_hours_to_promotion_30d)}
-          />
-        </Card>
-
-        <Card title="Monetization readiness">
-          <MetricRow label="Users with 10+ tastings" value={fmt(snap?.monetization_readiness?.users_10plus_tastings)} />
-          <MetricRow label="Users with 25+ tastings" value={fmt(snap?.monetization_readiness?.users_25plus_tastings)} />
-          <MetricRow label="Users with 50+ tastings" value={fmt(snap?.monetization_readiness?.users_50plus_tastings)} />
-          <MetricRow label="Users with 100+ tastings" value={fmt(snap?.monetization_readiness?.users_100plus_tastings)} />
-          <NoteText text={snap?.monetization_readiness?.note ?? null} />
-        </Card>
-
-        <Card title="Reliability">
-          <MetricRow label="Auth success rate" value={fmtPct(snap?.reliability?.auth_success_rate)} />
-          <MetricRow label="Sync error rate" value={fmtPct(snap?.reliability?.sync_error_rate)} />
-          <MetricRow label="Crash-free sessions" value={fmtPct(snap?.reliability?.crash_free_sessions)} />
-          <NoteText text={snap?.reliability?.note ?? null} />
-        </Card>
-
-        <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.85 }]}>
-          Tip: Trends will stabilize as the beta pool grows.
-        </Text>
+        {!loading && data ? (
+          <>
+            {tab === "overview" ? renderOverviewTab() : null}
+            {tab === "engagement" ? renderEngagementTab() : null}
+            {tab === "pipeline" ? renderPipelineTab() : null}
+            {tab === "catalog" ? renderCatalogTab() : null}
+            {tab === "quality" ? renderQualityTab() : null}
+            {tab === "retention" ? renderRetentionTab() : null}
+            {tab === "insights" ? renderInsightsTab() : null}
+            {tab === "monetization" ? renderMonetizationTab() : null}
+          </>
+        ) : null}
       </View>
     </ScrollView>
   );
