@@ -70,3 +70,4 @@ neatnotes-web/.env.local
 neatnotes-web/git
 .claude/settings.local.json
 supabase/.temp/
+google-services.json
