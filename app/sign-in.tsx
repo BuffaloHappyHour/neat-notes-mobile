@@ -484,15 +484,48 @@ export default function SignInScreen() {
 
       setBusy(true);
 
-      const { error } = await supabase.auth.signInWithOtp({
+      // Step 1: Reject if phone already linked to an account
+      const { data: phoneExists } = await supabase.rpc("check_phone_exists", { p_phone: formattedPhone });
+      if (phoneExists) {
+        setBusy(false);
+        return Alert.alert(
+          "Phone already linked",
+          "This phone number is already linked to an account. Please sign in instead.",
+          [
+            { text: "Go to Sign In", onPress: goToSignIn },
+            { text: "OK", style: "cancel" },
+          ]
+        );
+      }
+
+      // Step 2: Create the email account first
+      const { error: signUpError } = await supabase.auth.signUp({ email: em, password: pw });
+      if (signUpError) {
+        setBusy(false);
+        const msg = signUpError.message.toLowerCase();
+        if (msg.includes("already") || msg.includes("registered") || msg.includes("user already")) {
+          return Alert.alert(
+            "An account with this email already exists. Please sign in.",
+            undefined,
+            [
+              { text: "Go to Sign In", onPress: goToSignIn },
+              { text: "OK", style: "cancel" },
+            ]
+          );
+        }
+        return Alert.alert("Create account failed", signUpError.message);
+      }
+
+      // Step 3: Send verification OTP without creating a new user
+      const { error: otpError } = await supabase.auth.signInWithOtp({
         phone: formattedPhone,
-        options: { shouldCreateUser: true },
+        options: { shouldCreateUser: false },
       });
 
       setBusy(false);
 
-      if (error) {
-        return Alert.alert("Error", error.message);
+      if (otpError) {
+        return Alert.alert("Error", otpError.message);
       }
 
       setSignupPendingPhone(formattedPhone);
