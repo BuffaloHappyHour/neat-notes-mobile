@@ -1,6 +1,6 @@
 WhiskeyAppBeta — Feature Ideas & Roadmap
 
-> Last updated: May 28, 2026  
+> Last updated: June 2, 2026  
 > Maintained by: Derek  
 
 ---
@@ -133,6 +133,9 @@ Each feature includes:
 | F097 | Whiskey Card Revamp + Related Whiskey Features | Tasting | High | v1.1.2 | High | Low | 🔍 Scoped | Full whiskey feature release: Whiskey Card revamp (F050), Go-UPC fallback + bottle images (F053), user submit edits for whiskey records (F054), whiskey profile page rework (F069). Consolidates all whiskey-surface improvements into one focused release. |
 | F098 | Pending Whiskey Verification System | Tasting | High | v1.1.3 | Medium | Low | ✅ Done | Custom whiskeys inserted directly into whiskeys table with status=pending instead of whiskey_candidates. Redirects to whiskey detail page post-save. Pending Verification badge on detail page. Admin inbox Pending Whiskeys tab. RLS insert policy for authenticated users. |
 | F099 | Venue Menu Management | Venue | High | v1.2.0 | Medium | Medium | 💡 Idea | Self-service menu management for venue owners — add/edit/remove whiskeys, update 1oz/2oz pricing, mark items available or out of stock, without requiring admin intervention. Foundation for B2B venue owner value prop. |
+| F100 | Event Monthly Cap Enforcement | Infrastructure | High | v1.1.4 | Medium | Medium | 💡 Idea | Server-side monthly event creation cap by role. Starter: 2 events/calendar month. Pro: 5 events/calendar month. Reset on 1st of each month. |
+| F101 | Server-Side Attendee Cap Enforcement | Infrastructure | High | v1.1.4 | Medium | Medium | 💡 Idea | Move attendee cap enforcement from client to server. RPC or DB trigger validates max_attendees before allowing join. Currently client-side only — bypassable. |
+| F102 | Join-Time Attendee Cap Check | Infrastructure | High | v1.1.4 | Low | Low | 💡 Idea | Gate join_event RPC to reject if current attendee count >= max_attendees. Currently no server-side check at join time. |
 ---
 
 ## Feature Detail
@@ -793,6 +796,82 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 
 ---
 
+### F100 — Event Monthly Cap Enforcement
+**Area:** Infrastructure
+**Priority:** High
+**Release Target:** v1.1.4
+**Complexity:** Medium
+**Risk:** Medium
+**Status:** 💡 Idea
+
+**Description:**
+Enforce monthly event creation caps by role at the server level to match pricing model. Starter: 2 events per calendar month. Pro: 5 events per calendar month. Free: unlimited (attendee cap is the gate). Reset on the 1st of each calendar month.
+
+**Scope / Requirements:**
+- New column events_this_month on user_roles or a dedicated monthly_event_counts table
+- DB trigger or RPC check on event creation that rejects if count >= tier cap
+- Cap values: host_starter=2, host_pro=5, no cap for free (attendee cap governs)
+- Calendar month reset via pg_cron job on 1st of month at 00:00 UTC
+- Return clear error message to client: "You've reached your monthly event limit. Upgrade to Host Pro for more events."
+
+**Dependencies:**
+- F101 server-side attendee cap (ship together as pricing gate milestone)
+- Pricing doc update to reflect confirmed caps: Starter 2/mo, Pro 5/mo
+
+**Notes:**
+Pricing model confirmed caps: Starter=2, Pro=5. These match the commercial pricing document. Do not use rolling 30-day window — calendar month is simpler to build and easier for users to understand.
+
+---
+
+### F101 — Server-Side Attendee Cap Enforcement
+**Area:** Infrastructure
+**Priority:** High
+**Release Target:** v1.1.4
+**Complexity:** Medium
+**Risk:** Medium
+**Status:** 💡 Idea
+
+**Description:**
+Move attendee cap enforcement from client-side to server-side. Currently tierCap is calculated in app/host-events/create.tsx and written to max_attendees at event creation, but nothing prevents a technical user from bypassing the cap at join time or event creation.
+
+**Scope / Requirements:**
+- Add server-side check in event creation RPC or trigger: reject if requested max_attendees exceeds tier allowance (host_starter=25, host_pro=50, free=10)
+- Validate against user_roles table at creation time
+- Return error if cap exceeded
+- Remove reliance on client-calculated tierCap as the only enforcement mechanism
+
+**Dependencies:**
+- F102 join-time check (ship together)
+- Existing user_roles table and useRoles hook already in place
+
+**Notes:**
+Current code in app/host-events/create.tsx lines 325-329 calculates tierCap client-side. This is the only enforcement — no server validation exists. Risk: paying customers could see others bypass caps, undermining pricing integrity.
+
+---
+
+### F102 — Join-Time Attendee Cap Check
+**Area:** Infrastructure
+**Priority:** High
+**Release Target:** v1.1.4
+**Complexity:** Low
+**Risk:** Low
+**Status:** 💡 Idea
+
+**Description:**
+Add attendee count validation to the join_event RPC. Currently lib/eventAttendees.ts tracks attendee count but does not compare against max_attendees before allowing a join. An event can exceed its cap with no server-side rejection.
+
+**Scope / Requirements:**
+- In join_event RPC: query current attendee count for the event
+- Compare against events.max_attendees
+- Reject with clear error if count >= max_attendees
+- Return error message to client: "This event is full."
+
+**Dependencies:**
+- F101 server-side attendee cap enforcement
+- join_event RPC already exists
+
+---
+
 ## Section Indexes
 
 ### Events
@@ -906,6 +985,9 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 - F070 — Catalog Duplicate Audit Bulk Brands (v1.1.0)
 - F088 — Phone Auth Analytics Events (v1.1.0)
 - F095 — Notification Tap Navigation (v1.1.2) 🔍 Scoped
+- F100 — Event Monthly Cap Enforcement (v1.1.4)
+- F101 — Server-Side Attendee Cap Enforcement (v1.1.4)
+- F102 — Join-Time Attendee Cap Check (v1.1.4)
 
 ### Website
 - F035 — Core Marketing Site (Website)
@@ -931,6 +1013,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 | v1.1.1 | TBD | Venue Foundation & Analytics Revamp | 💡 Planning | Venue check-in infrastructure, tastings mapped to venues, event host analytics revamp, Bar/Venue Menu feature |
 | v1.1.2 | TBD | B2B Monetization | 💡 Planning | F094 Sign in with Apple ✅ Done. Venue owner analytics dashboard, B2B access & subscription model, Palate Match for venue menus |
 | v1.1.3 | TBD | Venue & Whiskey Catalog Quality | 💡 Planning | Venue menu population (F044 ✅), check-in foundation (F027), pending whiskey verification (F098 ✅), user submit edits / Improve this entry (F054 ✅), custom whiskey flow redirect (F048 🔨) |
+| v1.1.4 | TBD | Pricing Gate Enforcement | 💡 Planning | Server-side event monthly caps (F100), server-side attendee cap enforcement (F101), join-time attendee cap check (F102). Aligns code gates with commercial pricing model: Starter 2 events/mo 25 attendees, Pro 5 events/mo 50 attendees. |
 | v1.2.0 | TBD | Location Platform | 💡 Planning | Location foundation, nearby whiskey alerts, bar discovery fed by venue data, event discovery by location |
 | Website | TBD | Web Presence | 💡 Planning | Core marketing site + public events finder (events finder depends on v1.2.0 location platform) |
 | Backlog | — | Unscheduled ideas | — | |
@@ -941,6 +1024,7 @@ Makes the app feel alive and social without requiring user profiles or follows. 
 
 | Date | Update |
 |---|---|
+| June 2, 2026 | F100, F101, F102 added — v1.1.4 milestone created for pricing gate enforcement. Server-side monthly event caps (Starter 2/mo, Pro 5/mo, calendar month reset), server-side attendee cap validation, and join-time attendee check. Aligns enforcement with commercial pricing model. |
 | May 28, 2026 | F048 marked ✅ Done — Suggest Edits mode shipped on whiskey detail page. Inline editing for all 8 bottle detail fields, edit suggestions table with admin approve/reject flow, camera access for photo upload. MetadataModal removed as dead code. |
 | May 28, 2026 | F098 added and shipped — Pending Whiskey Verification System. Custom whiskeys now insert directly into whiskeys table as pending, redirect to whiskey detail page, show Pending Verification badge. Admin Pending Whiskeys inbox tab added. F044 marked ✅ Done — Hartman's Barrel Room menu fully imported, venue profile complete with live check-in count, share deeplink, dynamic last updated. F054 marked ✅ Done — Improve This Entry section shipped on whiskey detail page. F048 moved to 🔨 In Progress. F027 moved to 🔨 In Progress. F099 added — Venue Menu Management. v1.1.3 milestone added. |
 | May 26, 2026 | F095, F096, F097 added — notification tap navigation, weekly palate clarity update system, and whiskey card revamp scoped as next action items for v1.1.2. |
