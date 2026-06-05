@@ -9,6 +9,12 @@ const REVENUECAT_PROJECT_ID = Deno.env.get('REVENUECAT_PROJECT_ID')!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+const EXCLUDED_USER_IDS = [
+  '50a365b5-4f94-4043-a652-7a5a4cf6f1c5', // Derek (main)
+  '9484147d-0d97-4ee7-ae9d-7fea0175a47a', // Derek (test)
+  'bfae8e51-ca88-452e-a25d-e97f97288b1e', // Mike
+];
+
 function pct(a: number, b: number): string {
   if (b === 0) return '0%';
   return `${((a / b) * 100).toFixed(1)}%`;
@@ -151,6 +157,55 @@ async function getRevenueCatMetrics() {
   }
 }
 
+async function getNewSignups() {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  let query = supabase
+    .from('profiles')
+    .select('id, is_premium')
+    .gte('created_at', since);
+
+  if (EXCLUDED_USER_IDS.length > 0) {
+    query = query.not('id', 'in', `(${EXCLUDED_USER_IDS.join(',')})`);
+  }
+
+  const { data } = await query;
+
+  const total = data?.length ?? 0;
+  const premium = data?.filter(r => r.is_premium).length ?? 0;
+
+  return { total, premium };
+}
+
+async function getFirstTimeTasters() {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  let recentQuery = supabase
+    .from('tastings')
+    .select('user_id')
+    .gte('created_at', since)
+    .not('user_id', 'is', null);
+
+  if (EXCLUDED_USER_IDS.length > 0) {
+    recentQuery = recentQuery.not('user_id', 'in', `(${EXCLUDED_USER_IDS.join(',')})`);
+  }
+
+  const { data: recentData } = await recentQuery;
+
+  const recentUserIds = [...new Set(recentData?.map(r => r.user_id).filter(Boolean) ?? [])];
+
+  if (recentUserIds.length === 0) return 0;
+
+  const { data: priorData } = await supabase
+    .from('tastings')
+    .select('user_id')
+    .in('user_id', recentUserIds)
+    .lt('created_at', since);
+
+  const hadPrior = new Set(priorData?.map(r => r.user_id) ?? []);
+  return recentUserIds.filter(id => !hadPrior.has(id)).length;
+}
+
 async function postToSlack(blocks: object[]) {
   await fetch(SLACK_WEBHOOK_APP_HEALTH, {
     method: 'POST',
@@ -161,12 +216,14 @@ async function postToSlack(blocks: object[]) {
 
 serve(async () => {
   try {
-    const [funnel, users, errors, insightsViews, rc] = await Promise.all([
+    const [funnel, users, errors, insightsViews, rc, signups, firstTimers] = await Promise.all([
       getTastingFunnel(),
       getActiveUsers(),
       getErrorBreakdown(),
       getInsightsViews(),
       getRevenueCatMetrics(),
+      getNewSignups(),
+      getFirstTimeTasters(),
     ]);
 
     const newSaved = funnel.saved - funnel.edited;
@@ -218,6 +275,16 @@ serve(async () => {
             `*👥 Active Users*\n` +
             `  • Last 24h: ${users.unique24h}\n` +
             `  • Last 7d: ${users.unique7d}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text:
+            `*🆕 New Users (24h)*\n` +
+            `  • Signups: ${signups.total}${signups.premium > 0 ? ` (${signups.premium} premium)` : ''}\n` +
+            `  • First-time tasters: ${firstTimers}`,
         },
       },
       {
