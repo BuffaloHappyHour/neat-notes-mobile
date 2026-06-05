@@ -25,15 +25,39 @@ async function getTastingFunnel() {
 
   const { data } = await supabase
     .from('analytics_events')
-    .select('event_name')
-    .in('event_name', ['tasting_start', 'tasting_saved', 'tasting_save_failed'])
+    .select('event_name, properties')
+    .in('event_name', ['tasting_start', 'tasting_saved', 'tasting_edit_saved', 'tasting_save_failed'])
     .gte('created_at', since);
 
-  const started = data?.filter(e => e.event_name === 'tasting_start').length ?? 0;
-  const saved = data?.filter(e => e.event_name === 'tasting_saved').length ?? 0;
-  const failed = data?.filter(e => e.event_name === 'tasting_save_failed').length ?? 0;
+  const startedIds = new Set(
+    data?.filter(e => e.event_name === 'tasting_start')
+      .map(e => e.properties?.session_id).filter(Boolean)
+  );
+  const savedIds = new Set(
+    data?.filter(e => e.event_name === 'tasting_saved' || e.event_name === 'tasting_edit_saved')
+      .map(e => e.properties?.session_id).filter(Boolean)
+  );
+  const editedIds = new Set(
+    data?.filter(e => e.event_name === 'tasting_edit_saved')
+      .map(e => e.properties?.session_id).filter(Boolean)
+  );
+  const failedIds = new Set(
+    data?.filter(e => e.event_name === 'tasting_save_failed')
+      .map(e => e.properties?.session_id).filter(Boolean)
+  );
 
-  return { started, saved, failed };
+  // Fall back to raw counts for old events that predate session_id
+  const startedRaw = data?.filter(e => e.event_name === 'tasting_start').length ?? 0;
+  const savedRaw = data?.filter(e => e.event_name === 'tasting_saved' || e.event_name === 'tasting_edit_saved').length ?? 0;
+  const editedRaw = data?.filter(e => e.event_name === 'tasting_edit_saved').length ?? 0;
+  const failedRaw = data?.filter(e => e.event_name === 'tasting_save_failed').length ?? 0;
+
+  const started = startedIds.size || startedRaw;
+  const saved = savedIds.size || savedRaw;
+  const edited = editedIds.size || editedRaw;
+  const failed = failedIds.size || failedRaw;
+
+  return { started, saved, edited, failed };
 }
 
 async function getActiveUsers() {
@@ -145,7 +169,8 @@ serve(async () => {
       getRevenueCatMetrics(),
     ]);
 
-    const saveRate = pct(funnel.saved, funnel.started);
+    const newSaved = funnel.saved - funnel.edited;
+    const saveRate = pct(newSaved, funnel.started);
     const failRate = pct(funnel.failed, funnel.started);
     const today = new Date().toLocaleDateString('en-US', {
       weekday: 'long', month: 'long', day: 'numeric',
@@ -180,7 +205,8 @@ serve(async () => {
           text:
             `*📊 Tasting Funnel (last 24h)*\n` +
             `  • Started: ${funnel.started}\n` +
-            `  • Saved: ${funnel.saved} (${saveRate})\n` +
+            `  • Saved (new): ${newSaved} (${saveRate})\n` +
+            `  • Saved (edit): ${funnel.edited}\n` +
             `  • Failed: ${funnel.failed} (${failRate})`,
         },
       },

@@ -50,6 +50,8 @@ import {
 } from "../../src/log/utils/text";
 
 // ✅ ANALYTICS
+import 'react-native-get-random-values';
+import { v4 as uuidv4 } from 'uuid';
 import { trackTastingStart } from "../../lib/analytics";
 
 // ====== SECTION: Types ======
@@ -318,6 +320,7 @@ export default function CloudTastingScreen() {
 
   const [isSliding, setIsSliding] = useState(false);
   const startedRef = useRef(false);
+  const sessionIdRef = useRef<string>(uuidv4());
 
   // ====== SECTION: Flavor Nodes Engine ======
 
@@ -384,6 +387,7 @@ export default function CloudTastingScreen() {
       whiskey_id: whiskeyId,
       existing: isExisting,
       source_type: sourceType,
+      session_id: sessionIdRef.current,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExisting, loading]);
@@ -821,6 +825,8 @@ export default function CloudTastingScreen() {
 
         replaceTastingFlavorNodes,
         replaceTastingFlavorNodesWithSentiment,
+
+        sessionId: sessionIdRef.current,
       });
 
       setLocked(true);

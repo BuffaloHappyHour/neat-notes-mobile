@@ -84,6 +84,8 @@ export async function saveCloudTasting(params: {
     selectedNodeIds: string[],
     sentimentById: Record<string, ReviewSentiment>
   ) => Promise<void>;
+
+  sessionId: string;
 }) {
   const {
     isExisting,
@@ -125,6 +127,8 @@ export async function saveCloudTasting(params: {
 
     replaceTastingFlavorNodes,
     replaceTastingFlavorNodesWithSentiment,
+
+    sessionId,
   } = params;
 
   const safeName = String(name ?? "").trim();
@@ -385,6 +389,7 @@ const activeEventId = await getActiveEventId();
         notes_len: finalPersonalNotes ? finalPersonalNotes.length : 0,
         has_flavor_tags: mergedFlavorTags.length > 0,
         source_type: sourceType,
+        session_id: sessionId,
       });
 
       return {
@@ -419,6 +424,7 @@ const activeEventId = await getActiveEventId();
       notes_len: finalPersonalNotes ? finalPersonalNotes.length : 0,
       has_flavor_tags: mergedFlavorTags.length > 0,
       source_type: sourceType,
+      session_id: sessionId,
     });
 
     await hapticSuccess();

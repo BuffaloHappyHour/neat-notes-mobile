@@ -1,4 +1,6 @@
 // lib/analytics.ts
+import 'react-native-get-random-values';
+import { v4 as uuidv4 } from 'uuid';
 import { supabase } from "./supabase";
 
 type Json =
@@ -56,6 +58,7 @@ export function trackTastingStart(input: {
   whiskey_id: string | null;
   existing: boolean;
   source_type: string;
+  session_id: string;
 }) {
   return insertEvent({
     event_name: "tasting_start",
@@ -64,6 +67,7 @@ export function trackTastingStart(input: {
     properties: {
       existing: input.existing,
       source_type: input.source_type,
+      session_id: input.session_id,
     },
   });
 }
@@ -77,6 +81,7 @@ export function trackTastingSaved(input: {
   notes_len: number;
   has_flavor_tags: boolean;
   source_type: string;
+  session_id: string;
 }) {
   return insertEvent({
     event_name: input.existing
@@ -90,6 +95,7 @@ export function trackTastingSaved(input: {
       notes_len: input.notes_len,
       has_flavor_tags: input.has_flavor_tags,
       source_type: input.source_type,
+      session_id: input.session_id,
     },
   });
 }
