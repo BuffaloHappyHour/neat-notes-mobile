@@ -146,6 +146,33 @@ serve(async (req: Request) => {
       } catch { /* non-fatal */ }
     }
 
+    async function getUserNames(userIds: string[]): Promise<Record<string, string>> {
+      if (userIds.length === 0) return {};
+      const profileRows = await rest(
+        `profiles?select=id,first_name&id=in.(${userIds.join(",")})`
+      ) as Array<{ id: string; first_name: string | null }>;
+      const nullNameIds = profileRows.filter((r) => !r.first_name).map((r) => r.id);
+      const emailPrefixMap: Record<string, string> = {};
+      if (nullNameIds.length > 0) {
+        try {
+          const res = await fetch(`${supabaseUrl}/rest/v1/rpc/get_user_email_prefixes`, {
+            method: "POST",
+            headers: authHeaders,
+            body: JSON.stringify({ user_ids: nullNameIds }),
+          });
+          if (res.ok) {
+            const data = await res.json() as Array<{ id: string; email_prefix: string }>;
+            for (const row of data) emailPrefixMap[row.id] = row.email_prefix;
+          }
+        } catch { /* non-fatal */ }
+      }
+      const nameMap: Record<string, string> = {};
+      for (const row of profileRows) {
+        nameMap[row.id] = row.first_name || emailPrefixMap[row.id] || "Hey";
+      }
+      return nameMap;
+    }
+
     // ── Notification preferences ──────────────────────────────────────────────
 
     type NpRow = { user_id: string; notify_behavioral: boolean; notify_premium_nudge: boolean };
@@ -156,7 +183,7 @@ serve(async (req: Request) => {
     const behavioralIds  = new Set(npRows.filter((r) => r.notify_behavioral).map((r) => r.user_id));
     const premiumNudgeIds = new Set(npRows.filter((r) => r.notify_premium_nudge).map((r) => r.user_id));
 
-    const counts = { a: 0, b: 0, c: 0, d: 0 };
+    const counts = { a: 0, b: 0, c: 0, d: 0, e: 0 };
 
     // ── SEGMENTS A & B — tasting milestones ───────────────────────────────────
     //
@@ -263,126 +290,71 @@ serve(async (req: Request) => {
         console.log(`Segment D sent=${counts.d}`);
       }
     }
-// ── SEGMENT E — Monday weekly palate pulse ────────────────────────────────
-//
-// Sends to ALL users with a push token and notify_behavioral=true.
-// Copy varies by weekly_movement_status.
-// Deduped: not sent more than once in last 6 days.
+    // ── SEGMENT E — Monday weekly palate pulse ────────────────────────────────
+    type TrendRow = {
+      user_id: string;
+      weekly_movement_status: string;
+      biggest_driver_label: string | null;
+      biggest_driver_delta: number | null;
+    };
 
-const SEGMENT_E_COPY = {
-  increased: (name: string, driver: string, delta: number) => ({
-    title: `${name}, your palate score moved this week 📈`,
-    body: `Your ${driver} score shifted by ${delta > 0 ? "+" : ""}${delta} points. See what changed.`,
-  }),
-  decreased: (name: string, driver: string, delta: number) => ({
-    title: `${name}, your palate score moved this week`,
-    body: `Your ${driver} score shifted by ${delta} points this week. Check your profile.`,
-  }),
-  stable: (name: string) => ({
-    title: `${name}, your weekly palate update is ready`,
-    body: "Keep logging to sharpen your palate profile.",
-  }),
-  first_snapshot: (name: string) => ({
-    title: `${name}, your palate profile is building`,
-    body: "Your first weekly snapshot is in. Keep logging to see trends.",
-  }),
-};
+    const trendRows = await rest(
+      "user_metric_weekly_trends_current?select=user_id,weekly_movement_status,biggest_driver_label,biggest_driver_delta"
+    ) as TrendRow[];
 
-type TrendRow = {
-  user_id: string;
-  weekly_movement_status: string;
-  biggest_driver_label: string | null;
-  biggest_driver_delta: number | null;
-  palate_clarity_delta: number | null;
-};
+    const segECandidates = trendRows
+      .filter((r) => behavioralIds.has(r.user_id))
+      .map((r) => r.user_id);
 
-type ProfileNameRow = {
-  id: string;
-  first_name: string | null;
-  email_prefix: string | null;
-};
+    if (segECandidates.length > 0) {
+      const d6Ago = new Date(now - 6 * 24 * 60 * 60 * 1000).toISOString();
+      const alreadySentE = await alreadySentSet(segECandidates, "e", d6Ago);
+      const segEToSend = segECandidates.filter((id) => !alreadySentE.has(id));
 
-const trendRows = await rest(
-  "user_metric_weekly_trends_current?select=user_id,weekly_movement_status,biggest_driver_label,biggest_driver_delta,palate_clarity_delta"
-) as TrendRow[];
+      if (segEToSend.length > 0) {
+        const nameMap = await getUserNames(segEToSend);
+        const trendMap = Object.fromEntries(trendRows.map((r) => [r.user_id, r]));
+        const tokenMap = await getTokenMap(segEToSend);
 
-const segECandidates = trendRows
-  .filter((r) => behavioralIds.has(r.user_id))
-  .map((r) => r.user_id);
+        let segECount = 0;
+        for (const userId of segEToSend) {
+          const token = tokenMap[userId];
+          if (!token) continue;
+          const trend = trendMap[userId];
+          const name = nameMap[userId] ?? "Hey";
+          const status = trend?.weekly_movement_status ?? "stable";
+          const driver = trend?.biggest_driver_label ?? "";
+          const delta = trend?.biggest_driver_delta ?? 0;
 
-if (segECandidates.length > 0) {
-  const d6Ago = new Date(now - 6 * 24 * 60 * 60 * 1000).toISOString();
-  const alreadySentE = await alreadySentSet(segECandidates, "e", d6Ago);
-  const segEToSend = segECandidates.filter((id) => !alreadySentE.has(id));
+          let title: string;
+          let body: string;
 
-  if (segEToSend.length > 0) {
-    // Fetch names — first_name from profiles, email prefix from auth.users via RPC
-    const nameRows = await rest(
-      `profiles?select=id,first_name&id=in.(${segEToSend.join(",")})`
-    ) as Array<{ id: string; first_name: string | null }>;
+          if (status === "increased" && driver) {
+            title = `${name}, your palate score moved this week 📈`;
+            body = `Your ${driver} score shifted by +${Math.abs(delta)} points. See what changed.`;
+          } else if (status === "decreased" && driver) {
+            title = `${name}, your palate score moved this week`;
+            body = `Your ${driver} score shifted by -${Math.abs(delta)} points this week. Check your profile.`;
+          } else if (status === "first_snapshot") {
+            title = `${name}, your palate profile is building`;
+            body = "Your first weekly snapshot is in. Keep logging to see trends.";
+          } else {
+            title = `${name}, your weekly palate update is ready`;
+            body = "Keep logging to sharpen your palate profile.";
+          }
 
-    // Fetch email prefixes for nulls
-    const nullNameIds = nameRows
-      .filter((r) => !r.first_name)
-      .map((r) => r.id);
+          const sent = await sendExpoBatch([token], title, body);
+          segECount += sent;
+        }
 
-    const emailRows = nullNameIds.length > 0
-      ? await rest(
-          `auth_email_lookup?select=id,email&id=in.(${nullNameIds.join(",")})`
-        ) as Array<{ id: string; email: string }>
-      : [];
-
-    // Build name map
-    const emailPrefixMap = Object.fromEntries(
-      emailRows.map((r) => [r.id, r.email.split("@")[0]])
-    );
-    const nameMap: Record<string, string> = {};
-    for (const row of nameRows) {
-      nameMap[row.id] = row.first_name
-        || emailPrefixMap[row.id]
-        || "Hey";
-    }
-
-    // Build per-user messages
-    const trendMap = Object.fromEntries(trendRows.map((r) => [r.user_id, r]));
-    const tokenMap = await getTokenMap(segEToSend);
-
-    let segECount = 0;
-    for (const userId of segEToSend) {
-      const token = tokenMap[userId];
-      if (!token) continue;
-
-      const trend = trendMap[userId];
-      const name = nameMap[userId] ?? "Hey";
-      const status = trend?.weekly_movement_status ?? "stable";
-      const driver = trend?.biggest_driver_label ?? "Confidence";
-      const delta = trend?.biggest_driver_delta ?? 0;
-
-      let title: string;
-      let body: string;
-
-      if (status === "increased" && driver) {
-        ({ title, body } = SEGMENT_E_COPY.increased(name, driver, delta));
-      } else if (status === "decreased" && driver) {
-        ({ title, body } = SEGMENT_E_COPY.decreased(name, driver, delta));
-      } else if (status === "first_snapshot") {
-        ({ title, body } = SEGMENT_E_COPY.first_snapshot(name));
-      } else {
-        ({ title, body } = SEGMENT_E_COPY.stable(name));
+        await recordSends(segEToSend.filter((id) => tokenMap[id]), "e");
+        console.log(`Segment E sent=${segECount}`);
+        counts.e = segECount;
       }
-
-      const sent = await sendExpoBatch([token], title, body);
-      segECount += sent;
     }
-
-    await recordSends(segEToSend.filter((id) => tokenMap[id]), "e");
-    console.log(`Segment E sent=${segECount}`);
-    counts.e = segECount;
-  }
-}
     // ── Response ──────────────────────────────────────────────────────────────
 
-    const total = counts.a + counts.b + counts.c + counts.d;
+    const total = counts.a + counts.b + counts.c + counts.d + counts.e;
     console.log(`Behavioral notifications complete total=${total}`, counts);
 
     return new Response(
