@@ -327,6 +327,8 @@ export default function ProfileTab() {
                     (lifetimeClarity as any)?.tasting_count ?? 0
                   )}
                   daysSinceLastTasting={lifetimeDaysSinceLastTasting} // ✅ FIXED
+                  weeklyDelta={weeklyTrend?.palate_clarity_delta ?? null}
+                  weeklyStatus={weeklyTrend?.weekly_movement_status ?? null}
                 />
               ) : null}
             </View>

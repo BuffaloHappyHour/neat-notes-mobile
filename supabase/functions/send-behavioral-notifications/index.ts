@@ -291,6 +291,8 @@ serve(async (req: Request) => {
       }
     }
     // ── SEGMENT E — Monday weekly palate pulse ────────────────────────────────
+    const dayOfWeek = new Date().getUTCDay(); // 0 = Sunday, 1 = Monday
+    if (dayOfWeek === 1) {
     type TrendRow = {
       user_id: string;
       weekly_movement_status: string;
@@ -352,6 +354,7 @@ serve(async (req: Request) => {
         counts.e = segECount;
       }
     }
+    } // end Monday guard
     // ── Response ──────────────────────────────────────────────────────────────
 
     const total = counts.a + counts.b + counts.c + counts.d + counts.e;

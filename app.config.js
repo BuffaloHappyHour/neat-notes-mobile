@@ -4,7 +4,7 @@ module.exports = {
   expo: {
     name: IS_DEV_CLIENT ? "Neat Notes Dev" : "Neat Notes",
     slug: "neat-notes",
-    version: "1.1.6",
+    version: "1.1.7",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: IS_DEV_CLIENT ? "neatnotesdev" : "neatnotes",

@@ -17,6 +17,8 @@ type ReadyProps = {
   confidenceLevel: "low" | "medium" | "high";
   totalTastings: number;
   daysSinceLastTasting: number | null;
+  weeklyDelta?: number | null;
+  weeklyStatus?: string | null;
 };
 
 type PendingProps = {
@@ -38,6 +40,8 @@ export function PalateClarityCard(props: Props) {
   const statusText = isPending ? "Pending" : props.tierLabel;
   const tastingGoal = isPending ? props.tastingGoal ?? 3 : null;
   const totalTastings = isPending ? props.totalTastings ?? 0 : props.totalTastings;
+  const weeklyDelta = isPending ? null : props.weeklyDelta ?? null;
+  const weeklyStatus = isPending ? null : props.weeklyStatus ?? null;
 
   const lastPourShort = formatLastPourLabel(
     daysSinceLastTasting,
@@ -128,15 +132,21 @@ export function PalateClarityCard(props: Props) {
             gap: spacing.md,
           }}
         >
-          <Text style={type.heroMetric}>{isPending ? "Pending" : `${score}%`}</Text>
-
-          <Text
-            style={[
-              type.sectionHeader,
-              { color: colors.textPrimary, opacity: 0.92, paddingBottom: 10 },
-            ]}
-            numberOfLines={1}
-          />
+          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: spacing.sm }}>
+            <Text style={type.heroMetric}>{isPending ? "Pending" : `${score}%`}</Text>
+            {!isPending && weeklyStatus && (
+              <Text style={[type.body, {
+                color: weeklyStatus === "increased" ? "#4CAF50" : weeklyStatus === "decreased" ? "#E57373" : colors.textMuted,
+                paddingBottom: 14,
+                fontSize: 13,
+                fontWeight: "600",
+              }]}>
+                {weeklyStatus === "increased" && weeklyDelta != null ? `↑ +${weeklyDelta} this week` :
+                 weeklyStatus === "decreased" && weeklyDelta != null ? `↓ ${weeklyDelta} this week` :
+                 "— Stable this week"}
+              </Text>
+            )}
+          </View>
         </View>
 
         <View
