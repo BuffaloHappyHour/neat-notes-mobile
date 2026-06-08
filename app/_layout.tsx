@@ -10,6 +10,7 @@ import {
   Montserrat_500Medium,
   useFonts as useMontserratFonts,
 } from "@expo-google-fonts/montserrat";
+import * as Application from 'expo-application';
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack, router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
@@ -26,6 +27,16 @@ export default function RootLayout() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
+    async function syncAppVersion(userId: string) {
+      await supabase
+        .from('profiles')
+        .update({
+          app_version: Application.nativeApplicationVersion,
+          app_version_updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId);
+    }
+
     async function checkOnboarding(userId: string) {
       const { data: profileRow } = await supabase
         .from("profiles")
@@ -39,7 +50,11 @@ export default function RootLayout() {
 
     supabase.auth.getSession().then(({ data }) => {
       const user = data.session?.user;
-      if (user) { void checkOnboarding(user.id); void registerForPushNotifications(); }
+      if (user) {
+        void checkOnboarding(user.id);
+        void registerForPushNotifications();
+        void syncAppVersion(user.id);
+      }
     });
 
     const {
@@ -48,6 +63,7 @@ export default function RootLayout() {
       if (event === "SIGNED_IN" && session?.user) {
         void checkOnboarding(session.user.id);
         void registerForPushNotifications();
+        void syncAppVersion(session.user.id);
       }
     });
 

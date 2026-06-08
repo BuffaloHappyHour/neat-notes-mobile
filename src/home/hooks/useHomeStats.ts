@@ -165,7 +165,7 @@ export function useHomeStats() {
       const [rpcResult, metricsResult, profileResult] = await Promise.all([
         supabase.rpc("get_home_screen_data", { p_user_id: user.id }),
         supabase
-          .from("user_metrics_lifetime_v1")
+          .from("user_metrics_lifetime_current")
           .select("palate_clarity_0_100")
           .eq("user_id", user.id)
           .maybeSingle(),

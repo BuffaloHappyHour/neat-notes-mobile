@@ -160,7 +160,7 @@ async function getRevenueCatMetrics() {
 async function getNewSignups() {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  let query = supabase
+  let query: any = supabase
     .from('profiles')
     .select('id, is_premium')
     .gte('created_at', since);
@@ -177,10 +177,27 @@ async function getNewSignups() {
   return { total, premium };
 }
 
+async function getAppVersions() {
+  const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('app_version')
+    .gte('app_version_updated_at', since7d)
+    .not('id', 'in', `(${EXCLUDED_USER_IDS.join(',')})`);
+
+  const counts: Record<string, number> = {};
+  for (const row of data ?? []) {
+    const v = row.app_version ?? 'unknown';
+    counts[v] = (counts[v] ?? 0) + 1;
+  }
+  return counts;
+}
+
 async function getFirstTimeTasters() {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  let recentQuery = supabase
+  let recentQuery: any = supabase
     .from('tastings')
     .select('user_id')
     .gte('created_at', since)
@@ -216,7 +233,7 @@ async function postToSlack(blocks: object[]) {
 
 serve(async () => {
   try {
-    const [funnel, users, errors, insightsViews, rc, signups, firstTimers] = await Promise.all([
+    const [funnel, users, errors, insightsViews, rc, signups, firstTimers, appVersions] = await Promise.all([
       getTastingFunnel(),
       getActiveUsers(),
       getErrorBreakdown(),
@@ -224,6 +241,7 @@ serve(async () => {
       getRevenueCatMetrics(),
       getNewSignups(),
       getFirstTimeTasters(),
+      getAppVersions(),
     ]);
 
     const newSaved = funnel.saved - funnel.edited;
@@ -299,6 +317,20 @@ serve(async () => {
         text: {
           type: 'mrkdwn',
           text: `*⚠️ Save Errors (24h)*\n${errorLines}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text:
+            `*📱 App Versions (active last 7d)*\n` +
+            (Object.keys(appVersions).length === 0
+              ? '  • No data yet'
+              : Object.entries(appVersions)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([v, n]) => `  • ${v}: ${n}`)
+                  .join('\n')),
         },
       },
       { type: 'divider' },

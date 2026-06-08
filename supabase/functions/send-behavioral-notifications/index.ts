@@ -162,7 +162,7 @@ serve(async (req: Request) => {
     //
     // Find users who logged their N-th tasting in the last 24 hours:
     // 1. Users active in last 24h
-    // 2. Cross-reference with user_metrics_90d_v4 tasting_count
+    // 2. Cross-reference with user_metrics_90d_current tasting_count
 
     const recentRows = await rest(
       `tastings?select=user_id&created_at=gte.${h24Ago}`
@@ -175,7 +175,7 @@ serve(async (req: Request) => {
     if (recentActiveIds.length > 0) {
       type MetricRow = { user_id: string; tasting_count: number };
       const metricRows = await rest(
-        `user_metrics_90d_v4?select=user_id,tasting_count&user_id=in.(${recentActiveIds.join(",")})`
+        `user_metrics_90d_current?select=user_id,tasting_count&user_id=in.(${recentActiveIds.join(",")})`
       ) as MetricRow[];
 
       // Segment A — exactly 3 tastings
@@ -207,7 +207,7 @@ serve(async (req: Request) => {
 
     type MetricRow2 = { user_id: string; tasting_count: number };
     const allMetricRows = await rest(
-      "user_metrics_90d_v4?select=user_id,tasting_count&tasting_count=gte.1"
+      "user_metrics_90d_current?select=user_id,tasting_count&tasting_count=gte.1"
     ) as MetricRow2[];
 
     const segCCandidates = allMetricRows
@@ -236,7 +236,7 @@ serve(async (req: Request) => {
 
     type MetricRow3 = { user_id: string; tasting_count: number };
     const nudgeMetricRows = await rest(
-      "user_metrics_90d_v4?select=user_id,tasting_count&tasting_count=gte.5"
+      "user_metrics_90d_current?select=user_id,tasting_count&tasting_count=gte.5"
     ) as MetricRow3[];
 
     const nudgeCandidates = nudgeMetricRows

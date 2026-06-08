@@ -358,7 +358,7 @@ export default function InsightsSummary({ metrics, onTabChange }: InsightsSummar
   const drivers = [
     { label: "Depth", score: metrics?.depth_0_100 ?? 0 },
     { label: "Diversity", score: metrics?.diversity_0_100 ?? 0 },
-    { label: "Consistency", score: metrics?.consistency_0_100 ?? 0 },
+    { label: "Consistency", score: metrics?.preference_patterns_0_100 ?? 0 },
     { label: "Confidence", score: metrics?.confidence_0_100 ?? 0 },
   ];
 

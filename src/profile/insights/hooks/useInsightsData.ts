@@ -80,7 +80,7 @@ export function useInsightsData() {
         .sort((a, b) => a.label.localeCompare(b.label));
 
       const { data: metricsRow, error: metricsErr } = await supabase
-        .from("user_metrics_90d_v4")
+        .from("user_metrics_90d_current")
         .select("radar_l1_affinity, top_traits_l1, avoided_traits_l1")
         .eq("user_id", user.id)
         .single();

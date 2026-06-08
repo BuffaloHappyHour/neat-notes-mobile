@@ -142,7 +142,7 @@ export function useProfileData() {
     const mixPromise = supabase.from("tastings").select("whiskey_id").limit(3000);
 
     const clarityPromise = supabase
-      .from("user_metrics_lifetime_v1")
+      .from("user_metrics_lifetime_current")
       .select("*")
       .eq("user_id", session.user.id)
       .limit(1);

@@ -55,7 +55,7 @@ export type UserMetrics90dRow = {
   palate_clarity_0_100: number;
   depth_0_100: number;
   diversity_0_100: number;
-  consistency_0_100: number;
+  preference_patterns_0_100: number;
   confidence_0_100: number;
   radar_l1_pct: Record<string, number> | null;
   radar_l1_affinity: Record<string, number> | null;
@@ -165,7 +165,7 @@ export function useClarityInsightsData(): ClarityInsightsData {
       }
 
       const { data, error } = await supabase
-        .from("user_metrics_90d_v4")
+        .from("user_metrics_90d_current")
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle();
@@ -185,7 +185,7 @@ export function useClarityInsightsData(): ClarityInsightsData {
 
       const depthPct = clamp01((metrics.depth_0_100 ?? 0) / 100);
       const diversityPct = clamp01((metrics.diversity_0_100 ?? 0) / 100);
-      const consistencyPct = clamp01((metrics.consistency_0_100 ?? 0) / 100);
+      const consistencyPct = clamp01((metrics.preference_patterns_0_100 ?? 0) / 100);
       const confidencePct = clamp01((metrics.confidence_0_100 ?? 0) / 100);
       const clarityPct = clamp01((metrics.palate_clarity_0_100 ?? 0) / 100);
 
@@ -263,13 +263,13 @@ export function useClarityInsightsData(): ClarityInsightsData {
             "Consistency",
             "Consistency reflects how repeatable your recent likes and dislikes have been across flavor patterns.",
             [
-              { label: "Consistency score", value: `${metrics.consistency_0_100}/100` },
+              { label: "Consistency score", value: `${metrics.preference_patterns_0_100}/100` },
               { label: "Top repeated traits", value: `${topTraits.slice(0, 3).length}` },
               { label: "Avoided traits", value: `${avoidedTraits.length}` },
             ],
             "Recent consistency",
             consistencyPct,
-            `${metrics.consistency_0_100}%`,
+            `${metrics.preference_patterns_0_100}%`,
             "Repeated signals",
             topTraits.slice(0, 3).length ? topTraits.slice(0, 3) : ["Building..."],
             "Consistency-related trait presence",
@@ -360,7 +360,7 @@ function prettyTrait(value: string) {
 function bestNextMoves(metrics: UserMetrics90dRow) {
   const moves: string[] = [];
 
-  if ((metrics.consistency_0_100 ?? 0) < 45) moves.push("Log consistently");
+  if ((metrics.preference_patterns_0_100 ?? 0) < 45) moves.push("Log consistently");
   if ((metrics.confidence_0_100 ?? 0) < 45) moves.push("Use structured notes");
   if ((metrics.depth_0_100 ?? 0) < 60) moves.push("Get more specific");
   if ((metrics.diversity_0_100 ?? 0) < 60) moves.push("Explore new styles");
@@ -375,7 +375,7 @@ function buildCurrentRead(metrics: UserMetrics90dRow) {
 
   if ((metrics.diversity_0_100 ?? 0) >= 70) parts.push("broad");
   if ((metrics.depth_0_100 ?? 0) >= 55) parts.push("expressive");
-  if ((metrics.consistency_0_100 ?? 0) < 45) parts.push("still forming");
+  if ((metrics.preference_patterns_0_100 ?? 0) < 45) parts.push("still forming");
   if ((metrics.confidence_0_100 ?? 0) < 50) parts.push("gaining confidence");
 
   if (!parts.length) {
