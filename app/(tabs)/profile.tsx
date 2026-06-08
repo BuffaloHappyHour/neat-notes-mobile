@@ -10,6 +10,7 @@ import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
 import { CategoryMixCard } from "../../src/profile/components/CategoryMixCard";
+import { WeeklyPulseBanner } from "../../src/profile/components/WeeklyPulseBanner";
 import { InsightsCTA } from "../../src/profile/components/InsightsCTA";
 import { PalateClarityCard } from "../../src/profile/components/PalateClarityCard";
 import { ProfileHeader } from "../../src/profile/components/ProfileHeader";
@@ -201,6 +202,7 @@ export default function ProfileTab() {
     isAdmin,
     isPremium,
 
+    privateName,
     welcomeTitle,
     tastingsText,
     avgText,
@@ -220,6 +222,7 @@ export default function ProfileTab() {
     deleting,
 
     clarityInput,
+    weeklyTrend,
 
     loadAll,
     openActionsForRow,
@@ -327,6 +330,14 @@ export default function ProfileTab() {
                 />
               ) : null}
             </View>
+
+            {!isEarlyUser && (
+              <WeeklyPulseBanner
+                trend={weeklyTrend}
+                firstName={privateName || null}
+                isPremium={isPremium}
+              />
+            )}
 
             <View style={{ gap: spacing.sm }}>
               {isEarlyUser ? (

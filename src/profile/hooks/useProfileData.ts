@@ -11,6 +11,14 @@ import { hapticError, hapticSuccess, hapticTick } from "../../../lib/hapticsPres
 import { type MixRow, type RecentRow, type TopRow } from "../types";
 import { MIX_DEFAULT_ALPHAS, safeLabel } from "../utils";
 
+type WeeklyTrendRow = {
+  palate_clarity_0_100: number;
+  palate_clarity_delta: number | null;
+  weekly_movement_status: string;
+  biggest_driver_label: string | null;
+  biggest_driver_delta: number | null;
+};
+
 type ClarityInputRow = {
   user_id: string;
   period_start: string | null;
@@ -80,6 +88,7 @@ export function useProfileData() {
   const [deleting, setDeleting] = useState(false);
 
   const [clarityInput, setClarityInput] = useState<ClarityInputRow[]>([]);
+  const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendRow | null>(null);
 
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = !!opts?.silent;
@@ -110,6 +119,7 @@ export function useProfileData() {
       setMixError("");
       setShareAnon(true);
       setClarityInput([]);
+      setWeeklyTrend(null);
 
       if (silent) setRefreshing(false);
       else setLoading(false);
@@ -147,7 +157,13 @@ export function useProfileData() {
       .eq("user_id", session.user.id)
       .limit(1);
 
-    const [profileRes, countRes, ratingsRes, top5Res, recentRes, mixRes, clarityRes] =
+    const weeklyTrendPromise = supabase
+      .from("user_metric_weekly_trends_current")
+      .select("palate_clarity_0_100,palate_clarity_delta,weekly_movement_status,biggest_driver_label,biggest_driver_delta")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
+    const [profileRes, countRes, ratingsRes, top5Res, recentRes, mixRes, clarityRes, weeklyTrendRes] =
       await Promise.allSettled([
         profilePromise,
         countPromise,
@@ -156,6 +172,7 @@ export function useProfileData() {
         recentPromise,
         mixPromise,
         clarityPromise,
+        weeklyTrendPromise,
       ]);
 
     if (profileRes.status === "fulfilled") {
@@ -223,6 +240,14 @@ export function useProfileData() {
     } catch (e: any) {
       console.warn("Lifetime clarity load failed:", String(e?.message ?? e));
       setClarityInput([]);
+    }
+
+    if (weeklyTrendRes.status === "fulfilled") {
+      const { data, error } = weeklyTrendRes.value as any;
+      if (!error && data) setWeeklyTrend(data as WeeklyTrendRow);
+      else setWeeklyTrend(null);
+    } else {
+      setWeeklyTrend(null);
     }
 
     try {
@@ -404,6 +429,7 @@ export function useProfileData() {
     isPremium,
     shareAnon,
 
+    privateName,
     tastingCount,
 
     top5,
@@ -423,6 +449,7 @@ export function useProfileData() {
     deleting,
 
     clarityInput,
+    weeklyTrend,
 
     loadAll,
     openActionsForRow,

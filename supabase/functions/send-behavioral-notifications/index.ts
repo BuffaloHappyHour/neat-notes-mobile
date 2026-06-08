@@ -162,7 +162,7 @@ serve(async (req: Request) => {
     //
     // Find users who logged their N-th tasting in the last 24 hours:
     // 1. Users active in last 24h
-    // 2. Cross-reference with user_metrics_90d_current tasting_count
+    // 2. Cross-reference with user_metrics_lifetime_current tasting_count
 
     const recentRows = await rest(
       `tastings?select=user_id&created_at=gte.${h24Ago}`
@@ -175,7 +175,7 @@ serve(async (req: Request) => {
     if (recentActiveIds.length > 0) {
       type MetricRow = { user_id: string; tasting_count: number };
       const metricRows = await rest(
-        `user_metrics_90d_current?select=user_id,tasting_count&user_id=in.(${recentActiveIds.join(",")})`
+        `user_metrics_lifetime_current?select=user_id,tasting_count&user_id=in.(${recentActiveIds.join(",")})`
       ) as MetricRow[];
 
       // Segment A — exactly 3 tastings
@@ -207,7 +207,7 @@ serve(async (req: Request) => {
 
     type MetricRow2 = { user_id: string; tasting_count: number };
     const allMetricRows = await rest(
-      "user_metrics_90d_current?select=user_id,tasting_count&tasting_count=gte.1"
+      "user_metrics_lifetime_current?select=user_id,tasting_count&tasting_count=gte.1"
     ) as MetricRow2[];
 
     const segCCandidates = allMetricRows
@@ -236,7 +236,7 @@ serve(async (req: Request) => {
 
     type MetricRow3 = { user_id: string; tasting_count: number };
     const nudgeMetricRows = await rest(
-      "user_metrics_90d_current?select=user_id,tasting_count&tasting_count=gte.5"
+      "user_metrics_lifetime_current?select=user_id,tasting_count&tasting_count=gte.5"
     ) as MetricRow3[];
 
     const nudgeCandidates = nudgeMetricRows
@@ -263,7 +263,123 @@ serve(async (req: Request) => {
         console.log(`Segment D sent=${counts.d}`);
       }
     }
+// ── SEGMENT E — Monday weekly palate pulse ────────────────────────────────
+//
+// Sends to ALL users with a push token and notify_behavioral=true.
+// Copy varies by weekly_movement_status.
+// Deduped: not sent more than once in last 6 days.
 
+const SEGMENT_E_COPY = {
+  increased: (name: string, driver: string, delta: number) => ({
+    title: `${name}, your palate score moved this week 📈`,
+    body: `Your ${driver} score shifted by ${delta > 0 ? "+" : ""}${delta} points. See what changed.`,
+  }),
+  decreased: (name: string, driver: string, delta: number) => ({
+    title: `${name}, your palate score moved this week`,
+    body: `Your ${driver} score shifted by ${delta} points this week. Check your profile.`,
+  }),
+  stable: (name: string) => ({
+    title: `${name}, your weekly palate update is ready`,
+    body: "Keep logging to sharpen your palate profile.",
+  }),
+  first_snapshot: (name: string) => ({
+    title: `${name}, your palate profile is building`,
+    body: "Your first weekly snapshot is in. Keep logging to see trends.",
+  }),
+};
+
+type TrendRow = {
+  user_id: string;
+  weekly_movement_status: string;
+  biggest_driver_label: string | null;
+  biggest_driver_delta: number | null;
+  palate_clarity_delta: number | null;
+};
+
+type ProfileNameRow = {
+  id: string;
+  first_name: string | null;
+  email_prefix: string | null;
+};
+
+const trendRows = await rest(
+  "user_metric_weekly_trends_current?select=user_id,weekly_movement_status,biggest_driver_label,biggest_driver_delta,palate_clarity_delta"
+) as TrendRow[];
+
+const segECandidates = trendRows
+  .filter((r) => behavioralIds.has(r.user_id))
+  .map((r) => r.user_id);
+
+if (segECandidates.length > 0) {
+  const d6Ago = new Date(now - 6 * 24 * 60 * 60 * 1000).toISOString();
+  const alreadySentE = await alreadySentSet(segECandidates, "e", d6Ago);
+  const segEToSend = segECandidates.filter((id) => !alreadySentE.has(id));
+
+  if (segEToSend.length > 0) {
+    // Fetch names — first_name from profiles, email prefix from auth.users via RPC
+    const nameRows = await rest(
+      `profiles?select=id,first_name&id=in.(${segEToSend.join(",")})`
+    ) as Array<{ id: string; first_name: string | null }>;
+
+    // Fetch email prefixes for nulls
+    const nullNameIds = nameRows
+      .filter((r) => !r.first_name)
+      .map((r) => r.id);
+
+    const emailRows = nullNameIds.length > 0
+      ? await rest(
+          `auth_email_lookup?select=id,email&id=in.(${nullNameIds.join(",")})`
+        ) as Array<{ id: string; email: string }>
+      : [];
+
+    // Build name map
+    const emailPrefixMap = Object.fromEntries(
+      emailRows.map((r) => [r.id, r.email.split("@")[0]])
+    );
+    const nameMap: Record<string, string> = {};
+    for (const row of nameRows) {
+      nameMap[row.id] = row.first_name
+        || emailPrefixMap[row.id]
+        || "Hey";
+    }
+
+    // Build per-user messages
+    const trendMap = Object.fromEntries(trendRows.map((r) => [r.user_id, r]));
+    const tokenMap = await getTokenMap(segEToSend);
+
+    let segECount = 0;
+    for (const userId of segEToSend) {
+      const token = tokenMap[userId];
+      if (!token) continue;
+
+      const trend = trendMap[userId];
+      const name = nameMap[userId] ?? "Hey";
+      const status = trend?.weekly_movement_status ?? "stable";
+      const driver = trend?.biggest_driver_label ?? "Confidence";
+      const delta = trend?.biggest_driver_delta ?? 0;
+
+      let title: string;
+      let body: string;
+
+      if (status === "increased" && driver) {
+        ({ title, body } = SEGMENT_E_COPY.increased(name, driver, delta));
+      } else if (status === "decreased" && driver) {
+        ({ title, body } = SEGMENT_E_COPY.decreased(name, driver, delta));
+      } else if (status === "first_snapshot") {
+        ({ title, body } = SEGMENT_E_COPY.first_snapshot(name));
+      } else {
+        ({ title, body } = SEGMENT_E_COPY.stable(name));
+      }
+
+      const sent = await sendExpoBatch([token], title, body);
+      segECount += sent;
+    }
+
+    await recordSends(segEToSend.filter((id) => tokenMap[id]), "e");
+    console.log(`Segment E sent=${segECount}`);
+    counts.e = segECount;
+  }
+}
     // ── Response ──────────────────────────────────────────────────────────────
 
     const total = counts.a + counts.b + counts.c + counts.d;
