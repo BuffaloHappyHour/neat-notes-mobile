@@ -11,6 +11,8 @@ const APP_STORE_ISSUER_ID = Deno.env.get('APP_STORE_ISSUER_ID')!;
 const APP_STORE_PRIVATE_KEY = Deno.env.get('APP_STORE_PRIVATE_KEY')!;
 const APP_STORE_APP_ID = Deno.env.get('APP_STORE_APP_ID')!;
 const APP_STORE_VENDOR_NUMBER = Deno.env.get('APP_STORE_VENDOR_NUMBER')!;
+const GOOGLE_PLAY_SERVICE_ACCOUNT_JSON = Deno.env.get('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON')!;
+const GOOGLE_PLAY_PACKAGE_NAME = Deno.env.get('GOOGLE_PLAY_PACKAGE_NAME')!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -331,6 +333,100 @@ async function getAppStoreRatings() {
   }
 }
 
+async function getGooglePlayMetrics() {
+  try {
+    const serviceAccount = JSON.parse(GOOGLE_PLAY_SERVICE_ACCOUNT_JSON);
+
+    // Get OAuth2 token using service account
+    const now = Math.floor(Date.now() / 1000);
+    const header = { alg: 'RS256', typ: 'JWT' };
+    const payload = {
+      iss: serviceAccount.client_email,
+      scope: 'https://www.googleapis.com/auth/androidpublisher',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600,
+    };
+
+    const encode = (obj: object) =>
+      btoa(JSON.stringify(obj))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+    const signingInput = `${encode(header)}.${encode(payload)}`;
+
+    // Import the RSA private key
+    const pemContents = serviceAccount.private_key
+      .replace(/-----BEGIN PRIVATE KEY-----/, '')
+      .replace(/-----END PRIVATE KEY-----/, '')
+      .replace(/\s+/g, '');
+
+    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+
+    const cryptoKey = await crypto.subtle.importKey(
+      'pkcs8',
+      binaryDer,
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+
+    const signingBytes = new TextEncoder().encode(signingInput);
+    const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, signingBytes);
+    const sigBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    const jwt = `${signingInput}.${sigBase64}`;
+
+    // Exchange JWT for access token
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+    });
+
+    if (!tokenRes.ok) {
+      console.error('Google OAuth error:', await tokenRes.text());
+      return null;
+    }
+
+    const { access_token } = await tokenRes.json();
+
+    // Fetch reviews
+    const reviewsRes = await fetch(
+      `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${GOOGLE_PLAY_PACKAGE_NAME}/reviews?maxResults=3&token=`,
+      {
+        headers: { Authorization: `Bearer ${access_token}` },
+      }
+    );
+
+    if (!reviewsRes.ok) {
+      console.error('Google Play reviews error:', reviewsRes.status, await reviewsRes.text());
+      return null;
+    }
+
+    const reviewsData = await reviewsRes.json();
+    const reviews = reviewsData?.reviews ?? [];
+
+    const recentReviews = reviews.slice(0, 3).map((r: any) => {
+      const comment = r.comments?.[0]?.userComment;
+      const rating = comment?.starRating ?? 0;
+      const text = comment?.text ?? '';
+      const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+      const snippet = text.length > 80 ? text.slice(0, 80) + '…' : text;
+      return `  ${stars} _"${snippet}"_`;
+    });
+
+    return { recentReviews };
+  } catch (err) {
+    console.error('Google Play metrics error:', err);
+    return null;
+  }
+}
+
 async function postToSlack(blocks: object[]) {
   await fetch(SLACK_WEBHOOK_APP_HEALTH, {
     method: 'POST',
@@ -341,7 +437,7 @@ async function postToSlack(blocks: object[]) {
 
 serve(async () => {
   try {
-    const [funnel, users, errors, insightsViews, rc, signups, firstTimers, appVersions, appStore, ratings] = await Promise.all([
+    const [funnel, users, errors, insightsViews, rc, signups, firstTimers, appVersions, appStore, ratings, googlePlay] = await Promise.all([
       getTastingFunnel(),
       getActiveUsers(),
       getErrorBreakdown(),
@@ -352,6 +448,7 @@ serve(async () => {
       getAppVersions(),
       getAppStoreMetrics(),
       getAppStoreRatings(),
+      getGooglePlayMetrics(),
     ]);
 
     const newSaved = funnel.saved - funnel.edited;
@@ -442,6 +539,18 @@ serve(async () => {
                 ? `  *Recent:*\n` + ratings.recentReviews.join('\n')
                 : `  • No recent reviews`)
             : `*⭐ Ratings & Reviews*\n  • Data unavailable`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: googlePlay
+            ? `*🤖 Google Play Reviews*\n` +
+              (googlePlay.recentReviews.length > 0
+                ? googlePlay.recentReviews.join('\n')
+                : '  • No recent reviews')
+            : `*🤖 Google Play Reviews*\n  • Data unavailable`,
         },
       },
     ];
