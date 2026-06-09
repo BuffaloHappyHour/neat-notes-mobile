@@ -393,7 +393,7 @@ async function getGooglePlayMetrics() {
     const { access_token } = await tokenRes.json();
 
     const reviewsRes = await fetch(
-      `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${GOOGLE_PLAY_PACKAGE_NAME}/reviews?maxResults=5&translationLanguage=en`,
+      `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${GOOGLE_PLAY_PACKAGE_NAME}/reviews?maxResults=10`,
       { headers: { Authorization: `Bearer ${access_token}` } }
     );
 
@@ -403,6 +403,7 @@ async function getGooglePlayMetrics() {
     }
 
     const reviewsData = await reviewsRes.json();
+    console.log('Google Play reviews raw:', JSON.stringify(reviewsData));
     const reviews = reviewsData?.reviews ?? [];
 
     let totalRating = 0;
