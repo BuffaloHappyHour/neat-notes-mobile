@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SLACK_WEBHOOK_APP_HEALTH = Deno.env.get('SLACK_WEBHOOK_APP_HEALTH')!;
-const REVENUECAT_API_KEY = Deno.env.get('REVENUECAT_API_KEY')!;
+const REVENUECAT_API_KEY = Deno.env.get('REVENUECAT_API_KEY_V2')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const REVENUECAT_PROJECT_ID = Deno.env.get('REVENUECAT_PROJECT_ID')!;
@@ -10,6 +10,7 @@ const APP_STORE_KEY_ID = Deno.env.get('APP_STORE_KEY_ID')!;
 const APP_STORE_ISSUER_ID = Deno.env.get('APP_STORE_ISSUER_ID')!;
 const APP_STORE_PRIVATE_KEY = Deno.env.get('APP_STORE_PRIVATE_KEY')!;
 const APP_STORE_APP_ID = Deno.env.get('APP_STORE_APP_ID')!;
+const APP_STORE_VENDOR_NUMBER = Deno.env.get('APP_STORE_VENDOR_NUMBER')!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -84,41 +85,18 @@ async function getAppStoreMetrics() {
 
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const dateStr = yesterday.toISOString().split('T')[0]; // YYYY-MM-DD
+    const dateStr = yesterday.toISOString().split('T')[0];
 
     const params = new URLSearchParams({
-      'filter[reportType]': 'OVERVIEW',
-      'filter[reportDate]': dateStr,
-      'filter[apps]': APP_STORE_APP_ID,
-      'filter[frequency]': 'DAILY',
-    });
-
-    const res = await fetch(
-      `https://api.appstoreconnect.apple.com/v1/analyticsReportRequests?${params}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    if (!res.ok) {
-      console.error('App Store API error:', res.status, await res.text());
-      return null;
-    }
-
-    // Use Sales Reports for downloads — simpler and more reliable
-    const salesParams = new URLSearchParams({
       'filter[frequency]': 'DAILY',
       'filter[reportType]': 'SALES',
       'filter[reportSubType]': 'SUMMARY',
-      'filter[vendorNumber]': APP_STORE_APP_ID,
+      'filter[vendorNumber]': APP_STORE_VENDOR_NUMBER,
       'filter[reportDate]': dateStr,
     });
 
-    const salesRes = await fetch(
-      `https://api.appstoreconnect.apple.com/v1/salesReports?${salesParams}`,
+    const res = await fetch(
+      `https://api.appstoreconnect.apple.com/v1/salesReports?${params}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -127,14 +105,12 @@ async function getAppStoreMetrics() {
       }
     );
 
-    if (!salesRes.ok) {
-      console.error('Sales report error:', salesRes.status);
+    if (!res.ok) {
+      console.error('Sales report error:', res.status, await res.text());
       return null;
     }
 
-    // Parse the TSV response
-    const buffer = await salesRes.arrayBuffer();
-    const { DecompressionStream } = globalThis as any;
+    const buffer = await res.arrayBuffer();
     const ds = new DecompressionStream('gzip');
     const writer = ds.writable.getWriter();
     writer.write(new Uint8Array(buffer));
@@ -170,8 +146,8 @@ async function getAppStoreMetrics() {
     for (const row of rows) {
       const units = parseInt(row['Units'] ?? '0', 10);
       const type = row['Product Type Identifier'] ?? '';
-      if (type === '1') downloads += units;       // new downloads
-      if (type === '7') updates += units;          // updates
+      if (type === '1') downloads += units;
+      if (type === '7') updates += units;
     }
 
     return { downloads, updates, date: dateStr };
@@ -247,7 +223,10 @@ async function getRevenueCatMetrics() {
       `https://api.revenuecat.com/v2/projects/${REVENUECAT_PROJECT_ID}/metrics/overview`,
       { headers: { Authorization: `Bearer ${REVENUECAT_API_KEY}`, 'Content-Type': 'application/json' } }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error('RevenueCat error:', res.status, await res.text());
+      return null;
+    }
     const data = await res.json();
     const metrics = data?.metrics ?? [];
     const find = (id: string) => metrics.find((m: any) => m.id === id);
