@@ -298,7 +298,7 @@ async function getAppStoreRatings() {
     const reviews = data?.data ?? [];
 
     const ratingsRes = await fetch(
-      `https://api.appstoreconnect.apple.com/v1/apps/${APP_STORE_APP_ID}/appStoreVersions?filter[platform]=IOS&limit=1&fields[appStoreVersions]=averageUserRating,userRatingCount`,
+      `https://api.appstoreconnect.apple.com/v1/apps/${APP_STORE_APP_ID}?fields[apps]=averageUserRating,userRatingCount`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -312,9 +312,9 @@ async function getAppStoreRatings() {
 
     if (ratingsRes.ok) {
       const ratingsData = await ratingsRes.json();
-      const version = ratingsData?.data?.[0]?.attributes;
-      avgRating = version?.averageUserRating ?? null;
-      ratingCount = version?.userRatingCount ?? null;
+      const attrs = ratingsData?.data?.attributes;
+      avgRating = attrs?.averageUserRating ?? null;
+      ratingCount = attrs?.userRatingCount ?? null;
     }
 
     const recentReviews = reviews.slice(0, 3).map((r: any) => {
