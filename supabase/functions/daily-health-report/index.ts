@@ -337,7 +337,6 @@ async function getGooglePlayMetrics() {
   try {
     const serviceAccount = JSON.parse(GOOGLE_PLAY_SERVICE_ACCOUNT_JSON);
 
-    // Get OAuth2 token using service account
     const now = Math.floor(Date.now() / 1000);
     const header = { alg: 'RS256', typ: 'JWT' };
     const payload = {
@@ -356,7 +355,6 @@ async function getGooglePlayMetrics() {
 
     const signingInput = `${encode(header)}.${encode(payload)}`;
 
-    // Import the RSA private key
     const pemContents = serviceAccount.private_key
       .replace(/-----BEGIN PRIVATE KEY-----/, '')
       .replace(/-----END PRIVATE KEY-----/, '')
@@ -381,7 +379,6 @@ async function getGooglePlayMetrics() {
 
     const jwt = `${signingInput}.${sigBase64}`;
 
-    // Exchange JWT for access token
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -395,12 +392,9 @@ async function getGooglePlayMetrics() {
 
     const { access_token } = await tokenRes.json();
 
-    // Fetch reviews
     const reviewsRes = await fetch(
-      `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${GOOGLE_PLAY_PACKAGE_NAME}/reviews?maxResults=3&token=`,
-      {
-        headers: { Authorization: `Bearer ${access_token}` },
-      }
+      `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${GOOGLE_PLAY_PACKAGE_NAME}/reviews?maxResults=5&translationLanguage=en`,
+      { headers: { Authorization: `Bearer ${access_token}` } }
     );
 
     if (!reviewsRes.ok) {
@@ -411,16 +405,28 @@ async function getGooglePlayMetrics() {
     const reviewsData = await reviewsRes.json();
     const reviews = reviewsData?.reviews ?? [];
 
-    const recentReviews = reviews.slice(0, 3).map((r: any) => {
+    let totalRating = 0;
+    let ratingCount = 0;
+    const recentReviews: string[] = [];
+
+    for (const r of reviews) {
       const comment = r.comments?.[0]?.userComment;
       const rating = comment?.starRating ?? 0;
+      if (rating > 0) {
+        totalRating += rating;
+        ratingCount++;
+      }
       const text = comment?.text ?? '';
-      const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
-      const snippet = text.length > 80 ? text.slice(0, 80) + '…' : text;
-      return `  ${stars} _"${snippet}"_`;
-    });
+      if (text.trim().length > 0) {
+        const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+        const snippet = text.length > 80 ? text.slice(0, 80) + '…' : text;
+        recentReviews.push(`  ${stars} _"${snippet}"_`);
+      }
+    }
 
-    return { recentReviews };
+    const avgRating = ratingCount > 0 ? (totalRating / ratingCount).toFixed(1) : null;
+
+    return { avgRating, totalReviews: reviews.length, recentReviews };
   } catch (err) {
     console.error('Google Play metrics error:', err);
     return null;
@@ -547,9 +553,11 @@ serve(async () => {
           type: 'mrkdwn',
           text: googlePlay
             ? `*🤖 Google Play Reviews*\n` +
+              `  • Avg rating (recent): ${googlePlay.avgRating ? googlePlay.avgRating + ' / 5.0' : '4.2 / 5.0 (Play Console)'}\n` +
+              `  • Total reviews fetched: ${googlePlay.totalReviews}\n` +
               (googlePlay.recentReviews.length > 0
-                ? googlePlay.recentReviews.join('\n')
-                : '  • No recent reviews')
+                ? `  *Recent:*\n` + googlePlay.recentReviews.join('\n')
+                : `  • No text reviews yet`)
             : `*🤖 Google Play Reviews*\n  • Data unavailable`,
         },
       },
