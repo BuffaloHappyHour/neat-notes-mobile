@@ -275,6 +275,62 @@ async function getFirstTimeTasters() {
   return recentUserIds.filter(id => !hadPrior.has(id)).length;
 }
 
+async function getAppStoreRatings() {
+  try {
+    const token = await getAppStoreToken();
+
+    const res = await fetch(
+      `https://api.appstoreconnect.apple.com/v1/apps/${APP_STORE_APP_ID}/customerReviews?sort=-createdDate&limit=5`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!res.ok) {
+      console.error('App Store ratings error:', res.status, await res.text());
+      return null;
+    }
+
+    const data = await res.json();
+    const reviews = data?.data ?? [];
+
+    const ratingsRes = await fetch(
+      `https://api.appstoreconnect.apple.com/v1/apps/${APP_STORE_APP_ID}/appStoreVersions?filter[platform]=IOS&limit=1&fields[appStoreVersions]=averageUserRating,userRatingCount`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    let avgRating = null;
+    let ratingCount = null;
+
+    if (ratingsRes.ok) {
+      const ratingsData = await ratingsRes.json();
+      const version = ratingsData?.data?.[0]?.attributes;
+      avgRating = version?.averageUserRating ?? null;
+      ratingCount = version?.userRatingCount ?? null;
+    }
+
+    const recentReviews = reviews.slice(0, 3).map((r: any) => {
+      const { rating, title, body } = r.attributes;
+      const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+      const snippet = body?.length > 80 ? body.slice(0, 80) + '…' : body;
+      return `  ${stars} _"${snippet}"_`;
+    });
+
+    return { avgRating, ratingCount, recentReviews };
+  } catch (err) {
+    console.error('App Store ratings error:', err);
+    return null;
+  }
+}
+
 async function postToSlack(blocks: object[]) {
   await fetch(SLACK_WEBHOOK_APP_HEALTH, {
     method: 'POST',
@@ -285,7 +341,7 @@ async function postToSlack(blocks: object[]) {
 
 serve(async () => {
   try {
-    const [funnel, users, errors, insightsViews, rc, signups, firstTimers, appVersions, appStore] = await Promise.all([
+    const [funnel, users, errors, insightsViews, rc, signups, firstTimers, appVersions, appStore, ratings] = await Promise.all([
       getTastingFunnel(),
       getActiveUsers(),
       getErrorBreakdown(),
@@ -295,6 +351,7 @@ serve(async () => {
       getFirstTimeTasters(),
       getAppVersions(),
       getAppStoreMetrics(),
+      getAppStoreRatings(),
     ]);
 
     const newSaved = funnel.saved - funnel.edited;
@@ -373,6 +430,20 @@ serve(async () => {
       { type: 'divider' },
       { type: 'section', text: { type: 'mrkdwn', text: rcSection } },
       { type: 'section', text: { type: 'mrkdwn', text: appStoreSection } },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: ratings
+            ? `*⭐ Ratings & Reviews*\n` +
+              `  • Avg rating: ${ratings.avgRating ? ratings.avgRating.toFixed(1) + ' / 5.0' : '—'}\n` +
+              `  • Total ratings: ${ratings.ratingCount ?? '—'}\n` +
+              (ratings.recentReviews.length > 0
+                ? `  *Recent:*\n` + ratings.recentReviews.join('\n')
+                : `  • No recent reviews`)
+            : `*⭐ Ratings & Reviews*\n  • Data unavailable`,
+        },
+      },
     ];
 
     await postToSlack(blocks);
