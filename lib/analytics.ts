@@ -72,6 +72,21 @@ export function trackTastingStart(input: {
   });
 }
 
+export function trackTastingIntent(input: {
+  screen: string;
+  whiskey_id?: string;
+  session_id: string;
+}) {
+  return insertEvent({
+    event_name: "tasting_intent",
+    screen: input.screen,
+    whiskey_id: input.whiskey_id,
+    properties: {
+      session_id: input.session_id,
+    },
+  });
+}
+
 export function trackTastingSaved(input: {
   screen: string;
   whiskey_id: string | null;

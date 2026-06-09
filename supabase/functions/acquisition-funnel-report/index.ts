@@ -141,14 +141,14 @@ async function getTastingSaveFunnel() {
   const { data } = await supabase
     .from('analytics_events')
     .select('event_name')
-    .in('event_name', ['tasting_start', 'tasting_saved'])
+    .in('event_name', ['tasting_intent', 'tasting_saved'])
     .gte('created_at', since30d);
 
   const events = data ?? [];
-  const tasting_start = events.filter((e: any) => e.event_name === 'tasting_start').length;
+  const tasting_intent = events.filter((e: any) => e.event_name === 'tasting_intent').length;
   const tasting_saved = events.filter((e: any) => e.event_name === 'tasting_saved').length;
 
-  return { tasting_start, tasting_saved };
+  return { tasting_intent, tasting_saved };
 }
 
 async function postToSlack(blocks: object[]) {
@@ -218,9 +218,9 @@ serve(async () => {
         text: {
           type: 'mrkdwn',
           text:
-            `*💾 Tasting Save Funnel (30 days)*\n` +
-            `  • Started: ${saveFunnel.tasting_start}\n` +
-            `  • Saved: ${saveFunnel.tasting_saved} (${rate(saveFunnel.tasting_saved, saveFunnel.tasting_start)}) ${emoji(saveFunnel.tasting_saved, saveFunnel.tasting_start)}`,
+            `*💾 Tasting Completion Rate (30 days)*\n` +
+            `  • Whiskey selected (intent): ${saveFunnel.tasting_intent}\n` +
+            `  • Completed & saved: ${saveFunnel.tasting_saved} (${rate(saveFunnel.tasting_saved, saveFunnel.tasting_intent)}) ${emoji(saveFunnel.tasting_saved, saveFunnel.tasting_intent)}`,
         },
       },
     ];

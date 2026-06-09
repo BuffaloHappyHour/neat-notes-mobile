@@ -20,6 +20,8 @@ type Props = {
   selectedNodeIds: string[];
   selectedCountText: string;
   selectedNodeLabelsPreview: string;
+  highlight?: boolean;
+  validationMessage?: string;
 };
 
 function SectionIntro({ title }: { title: string }) {
@@ -40,6 +42,8 @@ export default function FlavorNotesSection({
   selectedNodeIds,
   selectedCountText,
   selectedNodeLabelsPreview,
+  highlight,
+  validationMessage,
 }: Props) {
   const hasRefined = selectedNodeIds.length > 0;
 
@@ -53,7 +57,19 @@ export default function FlavorNotesSection({
     <View style={{ gap: spacing.sm, marginTop: spacing.lg }}>
       <SectionIntro title="Flavor Notes" />
 
-      <Card style={{ paddingTop: spacing.md, paddingBottom: spacing.lg }}>
+      {validationMessage ? (
+        <Text style={[type.microcopyItalic, { color: colors.danger }]}>
+          {validationMessage}
+        </Text>
+      ) : null}
+
+      <Card
+        style={{
+          paddingTop: spacing.md,
+          paddingBottom: spacing.lg,
+          ...(highlight ? { borderColor: colors.danger, borderWidth: 1.5 } : {}),
+        }}
+      >
         <View style={{ alignItems: "center" }}>
           <Text style={[type.microcopyItalic, { fontSize: 18, lineHeight: 26, opacity: 0.7 }]}>
             Select everything you smell and taste

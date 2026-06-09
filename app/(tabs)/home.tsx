@@ -709,6 +709,7 @@ export default function HomeTab() {
     recommendations,
     isPremium,
     statsLoading,
+    latestTastingRating,
   } = useHomeStats();
 
   const [featured, setFeatured] = React.useState<{
@@ -767,7 +768,8 @@ export default function HomeTab() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthed || tastingCount === null || tastingCount < 5) return;
+    if (!isAuthed || tastingCount === null || tastingCount < 3) return;
+    if (latestTastingRating === null || latestTastingRating < 80) return;
     (async () => {
       if (reviewCheckRan.current) return;
       reviewCheckRan.current = true;
@@ -780,7 +782,11 @@ export default function HomeTab() {
           .select("review_prompted_at")
           .eq("id", uid)
           .maybeSingle();
-        if (profile?.review_prompted_at) return;
+        const lastPrompted = profile?.review_prompted_at
+          ? new Date(profile.review_prompted_at).getTime()
+          : null;
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        if (lastPrompted !== null && lastPrompted > thirtyDaysAgo) return;
         const available = await StoreReview.isAvailableAsync();
         if (!available) return;
         await StoreReview.requestReview();
@@ -790,7 +796,7 @@ export default function HomeTab() {
           .eq("id", uid);
       } catch {}
     })();
-  }, [isAuthed, tastingCount]);
+  }, [isAuthed, tastingCount, latestTastingRating]);
 
   useFocusEffect(
     useCallback(() => {

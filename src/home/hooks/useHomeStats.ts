@@ -43,19 +43,21 @@ function deriveTierLabel(
 async function buildRecommendations(
   userId: string,
   flavorRecs: RpcRecommendation[]
-): Promise<RecommendationItem[]> {
+): Promise<{ recs: RecommendationItem[]; latestTastingRating: number | null }> {
   const result: RecommendationItem[] = [];
 
   // ── Slot 0: whiskey_type ──────────────────────────────────────────────────
   // Single query gets both the type distribution and the set of already-logged IDs.
   const { data: userTastings } = await supabase
     .from("tastings")
-    .select("whiskey_id, whiskeys(whiskey_type)")
+    .select("whiskey_id, whiskeys(whiskey_type), rating, created_at")
     .eq("user_id", userId)
-    .not("whiskey_id", "is", null);
+    .not("whiskey_id", "is", null)
+    .order("created_at", { ascending: false });
 
   const typeCounts: Record<string, number> = {};
   const loggedIds: string[] = [];
+  const latestTastingRating = (userTastings?.[0] as any)?.rating ?? null;
 
   for (const row of userTastings ?? []) {
     const wid = row.whiskey_id as string;
@@ -124,7 +126,7 @@ async function buildRecommendations(
     });
   }
 
-  return result;
+  return { recs: result, latestTastingRating };
 }
 
 export function useHomeStats() {
@@ -139,6 +141,7 @@ export function useHomeStats() {
   const [recommendations, setRecommendations] = useState<RecommendationItem[]>([]);
   const [isPremium, setIsPremium] = useState(false);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [latestTastingRating, setLatestTastingRating] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     setStatsLoading(true);
@@ -157,6 +160,7 @@ export function useHomeStats() {
         setTopAffinities([]);
         setRecommendations([]);
         setIsPremium(false);
+        setLatestTastingRating(null);
         return;
       }
 
@@ -200,11 +204,12 @@ export function useHomeStats() {
       setIsPremium(profileResult.data?.is_premium === true);
 
       // Build the 2-slot recommendations after the parallel round-trip.
-      const recs = await buildRecommendations(
+      const { recs, latestTastingRating: ltr } = await buildRecommendations(
         user.id,
         Array.isArray(d.recommendations) ? d.recommendations : []
       );
       setRecommendations(recs);
+      setLatestTastingRating(ltr);
     } finally {
       setStatsLoading(false);
     }
@@ -233,6 +238,7 @@ export function useHomeStats() {
     recommendations,
     isPremium,
     statsLoading,
+    latestTastingRating,
     refresh,
   };
 }

@@ -52,7 +52,7 @@ import {
 // ✅ ANALYTICS
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
-import { trackTastingStart } from "../../lib/analytics";
+import { trackTastingIntent, trackTastingStart } from "../../lib/analytics";
 
 // ====== SECTION: Types ======
 
@@ -318,8 +318,10 @@ export default function CloudTastingScreen() {
   const [bottleSizeMl, setBottleSizeMl] = useState("750");
   const [pourSizeOz, setPourSizeOz] = useState("2");
 
+  const [flavorNotesMissing, setFlavorNotesMissing] = useState(false);
   const [isSliding, setIsSliding] = useState(false);
   const startedRef = useRef(false);
+  const intentFiredRef = useRef(false);
   const sessionIdRef = useRef<string>(uuidv4());
 
   // ====== SECTION: Flavor Nodes Engine ======
@@ -391,6 +393,30 @@ export default function CloudTastingScreen() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExisting, loading]);
+
+  const hasAnyInput =
+    (rating !== null && rating > 0) ||
+    nose !== null ||
+    taste !== null ||
+    flavorTags.length > 0 ||
+    selectedNodeIds.length > 0 ||
+    personalNotes.trim().length > 0;
+
+  useEffect(() => {
+    if (!hasAnyInput) return;
+    if (intentFiredRef.current) return;
+    intentFiredRef.current = true;
+    void trackTastingIntent({
+      screen: "cloud-tasting",
+      whiskey_id: whiskeyId ?? undefined,
+      session_id: sessionIdRef.current,
+    });
+  }, [hasAnyInput]);
+
+  useEffect(() => {
+    if (flavorNotesMissing) setFlavorNotesMissing(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flavorTags, selectedNodeIds]);
 
   // ====== SECTION: Derived UI helpers ======
 
@@ -782,6 +808,11 @@ export default function CloudTastingScreen() {
 
   async function onSave() {
     if (saving) return;
+
+    if (flavorTags.length === 0 && selectedNodeIds.length === 0) {
+      setFlavorNotesMissing(true);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -1188,6 +1219,12 @@ export default function CloudTastingScreen() {
               selectedNodeIds={selectedNodeIds}
               selectedCountText={selectedCountText}
               selectedNodeLabelsPreview={selectedNodeLabelsPreview}
+              highlight={flavorNotesMissing}
+              validationMessage={
+                flavorNotesMissing
+                  ? "Add at least one flavor note to save your tasting"
+                  : undefined
+              }
             />
 
             <Card tight>
