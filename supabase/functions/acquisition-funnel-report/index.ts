@@ -159,6 +159,16 @@ async function postToSlack(blocks: object[]) {
   });
 }
 
+type SnapRow = Record<string, number | string | null>;
+
+const delta = (current: number, prior: number | null | undefined): string | null => {
+  if (prior == null) return null;
+  const diff = current - prior;
+  if (diff > 0) return `↑${diff}`;
+  if (diff < 0) return `↓${Math.abs(diff)}`;
+  return `→0`;
+};
+
 serve(async () => {
   try {
     const [allTime, last30d, saveFunnel] = await Promise.all([
@@ -166,6 +176,53 @@ serve(async () => {
       getLast30DaysMetrics(),
       getTastingSaveFunnel(),
     ]);
+
+    // Write today's snapshot
+    const todayDate = new Date().toISOString().split('T')[0];
+    await supabase.from('funnel_snapshots').upsert({
+      snapshot_date: todayDate,
+      total_accounts: allTime.total_accounts,
+      first_tasting: allTime.first_tasting,
+      second_tasting: allTime.second_tasting,
+      insights_viewed: allTime.insights_viewed,
+      upgrade_tapped: allTime.purchase_tapped,
+      premium: allTime.is_premium,
+      new_accounts_30d: last30d.new_accounts,
+      new_first_tastings_30d: last30d.new_first_tastings,
+      new_second_tastings_30d: last30d.new_second_tastings,
+      new_insights_viewed_30d: last30d.new_insights_viewed,
+      new_upgrade_tapped_30d: last30d.new_purchase_tapped,
+      new_premium_30d: last30d.new_premium,
+    }, { onConflict: 'snapshot_date' });
+
+    // Read historical snapshots for delta computation
+    const d1 = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const d7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const { data: historicalRows } = await supabase
+      .from('funnel_snapshots')
+      .select('*')
+      .in('snapshot_date', [d1, d7]);
+
+    const byDate: Record<string, SnapRow> = Object.fromEntries(
+      (historicalRows ?? []).map((r: SnapRow) => [r.snapshot_date, r])
+    );
+    const snap1d: SnapRow | null = byDate[d1] ?? null;
+    const snap7d: SnapRow | null = byDate[d7] ?? null;
+
+    // Returns "  ↑N vs yesterday · ↑N vs 7d" — omits windows with no prior snapshot
+    const ds = (current: number, key: string): string => {
+      const parts: string[] = [];
+      if (snap1d !== null) {
+        const d = delta(current, snap1d[key] as number | null | undefined);
+        if (d !== null) parts.push(`${d} vs yesterday`);
+      }
+      if (snap7d !== null) {
+        const d = delta(current, snap7d[key] as number | null | undefined);
+        if (d !== null) parts.push(`${d} vs 7d`);
+      }
+      return parts.length > 0 ? `  ${parts.join(' · ')}` : '';
+    };
 
     const today = new Date().toLocaleDateString('en-US', {
       weekday: 'long',
@@ -189,12 +246,12 @@ serve(async () => {
           type: 'mrkdwn',
           text:
             `*🏆 All Time Funnel*\n` +
-            `  • Accounts created: ${allTime.total_accounts}\n` +
-            `  → First Tasting: ${allTime.first_tasting} (${rate(allTime.first_tasting, allTime.total_accounts)}) ${emoji(allTime.first_tasting, allTime.total_accounts)}\n` +
-            `  → Second Tasting: ${allTime.second_tasting} (${rate(allTime.second_tasting, allTime.first_tasting)} of first) ${emoji(allTime.second_tasting, allTime.first_tasting)}\n` +
-            `  → Insights Viewed: ${allTime.insights_viewed} (${rate(allTime.insights_viewed, allTime.first_tasting)} of first) ${emoji(allTime.insights_viewed, allTime.first_tasting)}\n` +
-            `  → Upgrade Tapped: ${allTime.purchase_tapped} (${rate(allTime.purchase_tapped, allTime.insights_viewed)} of insights) ${emoji(allTime.purchase_tapped, allTime.insights_viewed)}\n` +
-            `  → Premium: ${allTime.is_premium} (${rate(allTime.is_premium, allTime.purchase_tapped)} of tapped) ${emoji(allTime.is_premium, allTime.purchase_tapped)}`,
+            `  • Accounts created: ${allTime.total_accounts}${ds(allTime.total_accounts, 'total_accounts')}\n` +
+            `  → First Tasting: ${allTime.first_tasting} (${rate(allTime.first_tasting, allTime.total_accounts)}) ${emoji(allTime.first_tasting, allTime.total_accounts)}${ds(allTime.first_tasting, 'first_tasting')}\n` +
+            `  → Second Tasting: ${allTime.second_tasting} (${rate(allTime.second_tasting, allTime.first_tasting)} of first) ${emoji(allTime.second_tasting, allTime.first_tasting)}${ds(allTime.second_tasting, 'second_tasting')}\n` +
+            `  → Insights Viewed: ${allTime.insights_viewed} (${rate(allTime.insights_viewed, allTime.first_tasting)} of first) ${emoji(allTime.insights_viewed, allTime.first_tasting)}${ds(allTime.insights_viewed, 'insights_viewed')}\n` +
+            `  → Upgrade Tapped: ${allTime.purchase_tapped} (${rate(allTime.purchase_tapped, allTime.insights_viewed)} of insights) ${emoji(allTime.purchase_tapped, allTime.insights_viewed)}${ds(allTime.purchase_tapped, 'upgrade_tapped')}\n` +
+            `  → Premium: ${allTime.is_premium} (${rate(allTime.is_premium, allTime.purchase_tapped)} of tapped) ${emoji(allTime.is_premium, allTime.purchase_tapped)}${ds(allTime.is_premium, 'premium')}`,
         },
       },
       { type: 'divider' },
