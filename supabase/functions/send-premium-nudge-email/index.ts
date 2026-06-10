@@ -279,8 +279,22 @@ serve(async (req: Request) => {
     ) as SentRow[];
     const sentSet = new Set(sentRows.map((r) => `${r.user_id}:${r.segment}`));
 
-    const toSend = candidates.filter((c) => !sentSet.has(`${c.id}:${c.segment}`));
-    const skipped = candidates.length - toSend.length;
+    let toSend = candidates.filter((c) => !sentSet.has(`${c.id}:${c.segment}`));
+    let skipped = candidates.length - toSend.length;
+
+    // 7-day global email frequency cap — one email per user per week across all campaigns
+    if (toSend.length > 0) {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      type FreqCapRow = { user_id: string };
+      const freqCapRows = await rest(
+        `sent_behavioral_notifications?select=user_id&user_id=in.(${toSend.map((c) => c.id).join(",")})&segment=like.email%&sent_at=gte.${sevenDaysAgo}`
+      ) as FreqCapRow[];
+      const freqCapSet = new Set(freqCapRows.map((r) => r.user_id));
+      const freqCapSkipped = toSend.filter((c) => freqCapSet.has(c.id)).length;
+      toSend = toSend.filter((c) => !freqCapSet.has(c.id));
+      skipped += freqCapSkipped;
+      if (freqCapSkipped > 0) console.log(`send-premium-nudge-email: global_freq_cap_skipped=${freqCapSkipped}`);
+    }
 
     if (toSend.length === 0) {
       console.log(`send-premium-nudge-email: all ${skipped} candidates already contacted`);
