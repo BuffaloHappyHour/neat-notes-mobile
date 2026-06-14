@@ -27,7 +27,15 @@ import {
   type LineupDraft,
   type LineupItem,
 } from "../../lib/eventLineup";
+import {
+  addBarrelToLineup,
+  getBarrelLineup,
+  removeBarrelLineupSlot,
+  type BarrelDraft,
+  type BarrelLineupItem,
+} from "../../lib/barrelApi";
 import { WhiskeySearchModal } from "../../src/logTab/components/WhiskeySearchModal";
+import { BarrelFormModal } from "../../src/events/components/BarrelFormModal";
 import { EventQRModal } from "../../components/EventQRModal";
 import { getAttendeeCount } from "../../lib/eventAttendees";
 
@@ -40,6 +48,7 @@ type EventDetail = {
   is_active: boolean;
   has_lineup: boolean;
   has_pairing: boolean;
+  has_direct_from_barrel: boolean;
   pairing_notes: string | null;
   revealed_at: string | null;
   join_code: string | null;
@@ -148,6 +157,55 @@ function LineupReadCard({ item, index }: { item: LineupItem; index: number }) {
   );
 }
 
+function BarrelReadCard({
+  item,
+  index,
+  onRemove,
+}: {
+  item: BarrelLineupItem;
+  index: number;
+  onRemove: () => void;
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: colors.surfaceSunken,
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.borderStrong,
+        padding: spacing.md,
+        gap: 6,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: spacing.sm }}>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={[type.labelCaps, { color: colors.accent, fontSize: 9 }]}>
+            Pour {index + 1} · Direct from Barrel
+          </Text>
+          <Text
+            style={[type.sectionHeader, { color: colors.textPrimary, fontSize: 15, lineHeight: 20 }]}
+            numberOfLines={2}
+          >
+            {item.distilleryName} — Barrel #{item.barrelNumber}
+          </Text>
+          <View style={{ flexDirection: "row", gap: spacing.xs, flexWrap: "wrap", alignItems: "center" }}>
+            {item.whiskeyTypeName ? <TypeBadge label={item.whiskeyTypeName} /> : null}
+            {item.proof != null ? (
+              <Text style={[type.caption, { color: colors.textMuted }]}>{item.proof} proof</Text>
+            ) : null}
+          </View>
+        </View>
+        <Pressable
+          onPress={onRemove}
+          style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.7 : 1 })}
+        >
+          <Ionicons name="close" size={16} color={colors.danger} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function LineupEditCard({
   item,
   index,
@@ -249,8 +307,10 @@ export default function HostEventDetailScreen() {
 
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [lineup, setLineup] = useState<LineupItem[]>([]);
+  const [barrelLineup, setBarrelLineup] = useState<BarrelLineupItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [barrelFormOpen, setBarrelFormOpen] = useState(false);
 
   // Edit lineup modal state
   const [editVisible, setEditVisible] = useState(false);
@@ -279,7 +339,7 @@ export default function HostEventDetailScreen() {
       const { data, error: eventErr } = await supabase
         .from("events")
         .select(
-          "id, name, starts_at, ends_at, is_blind, is_active, has_lineup, has_pairing, pairing_notes, revealed_at, join_code, status, venue_id, venue_name_free, venue_city, venue_state, venues(display_name, venue_type, address, city, state)"
+          "id, name, starts_at, ends_at, is_blind, is_active, has_lineup, has_pairing, has_direct_from_barrel, pairing_notes, revealed_at, join_code, status, venue_id, venue_name_free, venue_city, venue_state, venues(display_name, venue_type, address, city, state)"
         )
         .eq("id", id)
         .maybeSingle();
@@ -291,8 +351,13 @@ export default function HostEventDetailScreen() {
       setEvent(ev);
 
       if (ev.has_lineup) {
-        const items = await getEventLineup(id);
-        setLineup(items);
+        if (ev.has_direct_from_barrel) {
+          const barrels = await getBarrelLineup(id);
+          setBarrelLineup(barrels);
+        } else {
+          const items = await getEventLineup(id);
+          setLineup(items);
+        }
       }
     } catch (e: any) {
       setError(String(e?.message ?? e));
@@ -523,7 +588,7 @@ export default function HostEventDetailScreen() {
                   <Text style={[type.labelCaps, { color: colors.success, fontSize: 9 }]}>REVEALED</Text>
                 </View>
               ) : null}
-              {!isEnded ? (
+              {!isEnded && !event.has_direct_from_barrel ? (
                 <Pressable
                   onPress={openEditLineup}
                   style={({ pressed }) => ({
@@ -570,7 +635,56 @@ export default function HostEventDetailScreen() {
             </>
           ) : null}
 
-          {event.has_lineup && lineup.length > 0 ? (
+          {event.has_direct_from_barrel ? (
+            <>
+              {barrelLineup.length > 0 ? (
+                <>
+                  <RowDivider />
+                  <View style={{ gap: spacing.sm }}>
+                    {barrelLineup.map((b, index) => (
+                      <BarrelReadCard
+                        key={b.lineupId}
+                        item={b}
+                        index={index}
+                        onRemove={async () => {
+                          try {
+                            await removeBarrelLineupSlot(b.lineupId);
+                            setBarrelLineup((prev) => prev.filter((x) => x.lineupId !== b.lineupId));
+                          } catch (e: any) {
+                            Alert.alert("Error", e?.message ?? "Failed to remove barrel.");
+                          }
+                        }}
+                      />
+                    ))}
+                  </View>
+                </>
+              ) : (
+                <Text style={[type.caption, { color: colors.textSecondary }]}>
+                  No barrels added yet. Tap Add Barrel to add one.
+                </Text>
+              )}
+              {!isEnded && barrelLineup.length < 8 ? (
+                <>
+                  <RowDivider />
+                  <Pressable
+                    onPress={() => setBarrelFormOpen(true)}
+                    style={({ pressed }) => ({
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: spacing.sm,
+                      paddingVertical: spacing.sm,
+                      opacity: pressed ? 0.75 : 1,
+                    })}
+                  >
+                    <Ionicons name="add-circle-outline" size={18} color={colors.accent} />
+                    <Text style={[type.body, { color: colors.accent, fontSize: 14 }]}>
+                      Add Barrel ({barrelLineup.length}/8)
+                    </Text>
+                  </Pressable>
+                </>
+              ) : null}
+            </>
+          ) : event.has_lineup && lineup.length > 0 ? (
             <>
               <RowDivider />
               <View style={{ gap: spacing.sm }}>
@@ -841,6 +955,18 @@ export default function HostEventDetailScreen() {
           }}
         />
       </Modal>
+
+      <BarrelFormModal
+        visible={barrelFormOpen}
+        onClose={() => setBarrelFormOpen(false)}
+        onSubmit={async (draft: BarrelDraft) => {
+          if (!id) return;
+          const nextOrder = barrelLineup.length + 1;
+          const item = await addBarrelToLineup(id, draft, nextOrder);
+          setBarrelLineup((prev) => [...prev, item]);
+          setBarrelFormOpen(false);
+        }}
+      />
     </>
   );
 }

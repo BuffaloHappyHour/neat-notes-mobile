@@ -25,8 +25,10 @@ import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 import { saveEventLineup, type LineupDraft } from "../../lib/eventLineup";
+import { saveBarrelLineup, type BarrelDraft } from "../../lib/barrelApi";
 import { searchVenues, type VenueResult } from "../../lib/venueSearch";
 import { WhiskeySearchModal } from "../../src/logTab/components/WhiskeySearchModal";
+import { BarrelFormModal } from "../../src/events/components/BarrelFormModal";
 
 const EVENT_TYPES = [
   "Tasting Class",
@@ -281,6 +283,95 @@ function LineupCard({
   );
 }
 
+function BarrelDraftCard({
+  draft,
+  index,
+  total,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
+}: {
+  draft: BarrelDraft;
+  index: number;
+  total: number;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: colors.surfaceSunken,
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.borderStrong,
+        padding: spacing.md,
+        gap: spacing.xs,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: spacing.sm }}>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={[type.labelCaps, { color: colors.accent, fontSize: 9 }]}>
+            Pour {index + 1}
+          </Text>
+          <Text
+            style={[type.sectionHeader, { color: colors.textPrimary, fontSize: 15, lineHeight: 20 }]}
+            numberOfLines={2}
+          >
+            {draft.distilleryName} — Barrel #{draft.barrelNumber}
+          </Text>
+          <View style={{ flexDirection: "row", gap: spacing.xs, flexWrap: "wrap" }}>
+            {draft.whiskeyTypeName ? (
+              <View
+                style={{
+                  backgroundColor: colors.accentSoft,
+                  borderRadius: radii.sm ?? radii.md,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text style={[type.labelCaps, { fontSize: 9, color: colors.accent }]}>
+                  {draft.whiskeyTypeName}
+                </Text>
+              </View>
+            ) : null}
+            {draft.proof != null ? (
+              <Text style={[type.caption, { color: colors.textMuted }]}>
+                {draft.proof} proof
+              </Text>
+            ) : null}
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Pressable
+            onPress={onMoveUp}
+            disabled={index === 0}
+            style={({ pressed }) => ({ padding: 6, opacity: index === 0 ? 0.3 : pressed ? 0.7 : 1 })}
+          >
+            <Ionicons name="chevron-up" size={16} color={colors.textMuted} />
+          </Pressable>
+          <Pressable
+            onPress={onMoveDown}
+            disabled={index === total - 1}
+            style={({ pressed }) => ({
+              padding: 6,
+              opacity: index === total - 1 ? 0.3 : pressed ? 0.7 : 1,
+            })}
+          >
+            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+          </Pressable>
+          <Pressable
+            onPress={onRemove}
+            style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.7 : 1 })}
+          >
+            <Ionicons name="close" size={16} color={colors.danger} />
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function CreateEventScreen() {
@@ -297,13 +388,16 @@ export default function CreateEventScreen() {
   const [description, setDescription] = useState("");
   const [isBlind, setIsBlind] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
+  const [hasDirectFromBarrel, setHasDirectFromBarrel] = useState(false);
 
   // Step 3
   const [hasLineup, setHasLineup] = useState(false);
   const [lineupItems, setLineupItems] = useState<LineupDraft[]>([]);
+  const [barrelDrafts, setBarrelDrafts] = useState<BarrelDraft[]>([]);
   const [hasPairing, setHasPairing] = useState(false);
   const [pairingNotes, setPairingNotes] = useState("");
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [barrelFormOpen, setBarrelFormOpen] = useState(false);
 
   // Venue
   const [venueQuery, setVenueQuery] = useState("");
@@ -448,6 +542,7 @@ export default function CreateEventScreen() {
           ends_at: endsAt?.toISOString() ?? null,
           is_blind: isBlind,
           is_public: isPublic,
+          has_direct_from_barrel: hasDirectFromBarrel,
           max_attendees: tierCap,
           host_user_id: user?.id,
           is_active: true,
@@ -466,8 +561,12 @@ export default function CreateEventScreen() {
         .insert({ event_id: data.id, user_id: user?.id, role: "primary" });
       if (hostErr) throw hostErr;
 
-      if (hasLineup && lineupItems.length > 0) {
-        await saveEventLineup(data.id, lineupItems);
+      if (hasLineup) {
+        if (hasDirectFromBarrel && barrelDrafts.length > 0) {
+          await saveBarrelLineup(data.id, barrelDrafts);
+        } else if (!hasDirectFromBarrel && lineupItems.length > 0) {
+          await saveEventLineup(data.id, lineupItems);
+        }
       }
 
       router.replace(`/host-events/${data.id}` as any);
@@ -887,6 +986,15 @@ export default function CreateEventScreen() {
           <RowDivider />
 
           <ToggleRow
+            label="Direct from Barrel"
+            subtitle="Lineup slots are single-cask barrels, not catalog whiskeys"
+            value={hasDirectFromBarrel}
+            onChange={setHasDirectFromBarrel}
+          />
+
+          <RowDivider />
+
+          <ToggleRow
             label="Public Event"
             subtitle="Visible in public event discovery"
             value={isPublic}
@@ -1005,47 +1113,106 @@ export default function CreateEventScreen() {
 
           {hasLineup ? (
             <>
-              {lineupItems.length > 0 ? (
+              {hasDirectFromBarrel ? (
                 <>
-                  <RowDivider />
-                  <View style={{ gap: spacing.sm }}>
-                    {lineupItems.map((item, index) => (
-                      <LineupCard
-                        key={item.whiskeyId}
-                        item={item}
-                        index={index}
-                        total={lineupItems.length}
-                        showPairingNote={hasPairing}
-                        onRemove={() => handleLineupRemove(index)}
-                        onMoveUp={() => handleLineupMove(index, "up")}
-                        onMoveDown={() => handleLineupMove(index, "down")}
-                        onPairingNoteChange={(note) => handlePairingNoteChange(index, note)}
-                      />
-                    ))}
-                  </View>
+                  {barrelDrafts.length > 0 ? (
+                    <>
+                      <RowDivider />
+                      <View style={{ gap: spacing.sm }}>
+                        {barrelDrafts.map((b, index) => (
+                          <BarrelDraftCard
+                            key={index}
+                            draft={b}
+                            index={index}
+                            total={barrelDrafts.length}
+                            onRemove={() =>
+                              setBarrelDrafts((prev) => prev.filter((_, i) => i !== index))
+                            }
+                            onMoveUp={() =>
+                              setBarrelDrafts((prev) => {
+                                const next = [...prev];
+                                if (index > 0) [next[index], next[index - 1]] = [next[index - 1], next[index]];
+                                return next;
+                              })
+                            }
+                            onMoveDown={() =>
+                              setBarrelDrafts((prev) => {
+                                const next = [...prev];
+                                if (index < next.length - 1) [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                                return next;
+                              })
+                            }
+                          />
+                        ))}
+                      </View>
+                    </>
+                  ) : null}
+                  {barrelDrafts.length < 8 ? (
+                    <>
+                      <RowDivider />
+                      <Pressable
+                        onPress={() => setBarrelFormOpen(true)}
+                        style={({ pressed }) => ({
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: spacing.sm,
+                          paddingVertical: spacing.sm,
+                          opacity: pressed ? 0.75 : 1,
+                        })}
+                      >
+                        <Ionicons name="add-circle-outline" size={20} color={colors.accent} />
+                        <Text style={[type.body, { color: colors.accent, fontSize: 15 }]}>
+                          Add Barrel ({barrelDrafts.length}/8)
+                        </Text>
+                      </Pressable>
+                    </>
+                  ) : null}
                 </>
-              ) : null}
+              ) : (
+                <>
+                  {lineupItems.length > 0 ? (
+                    <>
+                      <RowDivider />
+                      <View style={{ gap: spacing.sm }}>
+                        {lineupItems.map((item, index) => (
+                          <LineupCard
+                            key={item.whiskeyId}
+                            item={item}
+                            index={index}
+                            total={lineupItems.length}
+                            showPairingNote={hasPairing}
+                            onRemove={() => handleLineupRemove(index)}
+                            onMoveUp={() => handleLineupMove(index, "up")}
+                            onMoveDown={() => handleLineupMove(index, "down")}
+                            onPairingNoteChange={(note) => handlePairingNoteChange(index, note)}
+                          />
+                        ))}
+                      </View>
+                    </>
+                  ) : null}
 
-              {lineupItems.length < 8 ? (
-                <>
-                  <RowDivider />
-                  <Pressable
-                    onPress={() => setSearchModalOpen(true)}
-                    style={({ pressed }) => ({
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: spacing.sm,
-                      paddingVertical: spacing.sm,
-                      opacity: pressed ? 0.75 : 1,
-                    })}
-                  >
-                    <Ionicons name="add-circle-outline" size={20} color={colors.accent} />
-                    <Text style={[type.body, { color: colors.accent, fontSize: 15 }]}>
-                      Add Whiskey ({lineupItems.length}/8)
-                    </Text>
-                  </Pressable>
+                  {lineupItems.length < 8 ? (
+                    <>
+                      <RowDivider />
+                      <Pressable
+                        onPress={() => setSearchModalOpen(true)}
+                        style={({ pressed }) => ({
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: spacing.sm,
+                          paddingVertical: spacing.sm,
+                          opacity: pressed ? 0.75 : 1,
+                        })}
+                      >
+                        <Ionicons name="add-circle-outline" size={20} color={colors.accent} />
+                        <Text style={[type.body, { color: colors.accent, fontSize: 15 }]}>
+                          Add Whiskey ({lineupItems.length}/8)
+                        </Text>
+                      </Pressable>
+                    </>
+                  ) : null}
                 </>
-              ) : null}
+              )}
             </>
           ) : null}
         </SectionCard>
@@ -1222,15 +1389,27 @@ export default function CreateEventScreen() {
       ) : null}
 
       {/* Whiskey search modal for lineup */}
-      <WhiskeySearchModal
-        visible={searchModalOpen}
-        onClose={() => setSearchModalOpen(false)}
-        onSelect={handleLineupSelect}
-        onCustomEntry={(name) => {
-          setSearchModalOpen(false);
-          router.push(
-            `/log/cloud-tasting?whiskeyName=${encodeURIComponent(name)}&lockName=0` as any
-          );
+      {!hasDirectFromBarrel ? (
+        <WhiskeySearchModal
+          visible={searchModalOpen}
+          onClose={() => setSearchModalOpen(false)}
+          onSelect={handleLineupSelect}
+          onCustomEntry={(name) => {
+            setSearchModalOpen(false);
+            router.push(
+              `/log/cloud-tasting?whiskeyName=${encodeURIComponent(name)}&lockName=0` as any
+            );
+          }}
+        />
+      ) : null}
+
+      {/* Barrel form modal */}
+      <BarrelFormModal
+        visible={barrelFormOpen}
+        onClose={() => setBarrelFormOpen(false)}
+        onSubmit={(draft) => {
+          setBarrelDrafts((prev) => [...prev, draft]);
+          setBarrelFormOpen(false);
         }}
       />
     </KeyboardAvoidingView>

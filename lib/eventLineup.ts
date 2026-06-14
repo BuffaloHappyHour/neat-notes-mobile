@@ -52,10 +52,12 @@ export async function saveEventLineup(
 ): Promise<void> {
   if (items.length > 8) throw new Error("Lineup cannot exceed 8 whiskies.");
 
+  // Only delete whiskey-based rows; barrel slots are managed separately.
   const { error: delErr } = await supabase
     .from("event_lineup")
     .delete()
-    .eq("event_id", eventId);
+    .eq("event_id", eventId)
+    .is("barrel_id", null);
   if (delErr) throw new Error(delErr.message);
 
   if (items.length === 0) return;

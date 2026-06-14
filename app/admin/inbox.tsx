@@ -19,6 +19,12 @@ import {
     type CandidateFilter,
     type CandidateRow,
 } from "../../lib/adminApi";
+import {
+    adminPromoteDistilleryCandidate,
+    adminRejectDistilleryCandidate,
+    fetchPendingDistilleryCandidates,
+    type DistilleryCandidateRow,
+} from "../../lib/barrelApi";
 
 import { radii } from "../../lib/radii";
 import { shadows } from "../../lib/shadows";
@@ -27,7 +33,7 @@ import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
-type Filter = "needs_review" | "promoted" | "rejected" | "all" | "pending_whiskeys" | "edit_suggestions";
+type Filter = "needs_review" | "promoted" | "rejected" | "all" | "pending_whiskeys" | "edit_suggestions" | "distillery_candidates";
 
 function MiniButton({
   label,
@@ -128,6 +134,8 @@ export default function AdminInboxScreen() {
   const [rows, setRows] = useState<CandidateRow[]>([]);
   const [pendingWhiskeys, setPendingWhiskeys] = useState<any[]>([]);
   const [editSuggestions, setEditSuggestions] = useState<any[]>([]);
+  const [distilleryCandidates, setDistilleryCandidates] = useState<DistilleryCandidateRow[]>([]);
+  const [actingDistilleryId, setActingDistilleryId] = useState<string | null>(null);
   const [actingSuggestionId, setActingSuggestionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
@@ -147,6 +155,7 @@ export default function AdminInboxScreen() {
         setPendingWhiskeys(Array.isArray(data) ? data : []);
         setRows([]);
         setEditSuggestions([]);
+        setDistilleryCandidates([]);
       } else if (filter === "edit_suggestions") {
         const { data, error } = await supabase
           .from("whiskey_edit_suggestions")
@@ -157,11 +166,19 @@ export default function AdminInboxScreen() {
         setEditSuggestions(Array.isArray(data) ? data : []);
         setRows([]);
         setPendingWhiskeys([]);
+        setDistilleryCandidates([]);
+      } else if (filter === "distillery_candidates") {
+        const data = await fetchPendingDistilleryCandidates();
+        setDistilleryCandidates(data);
+        setRows([]);
+        setPendingWhiskeys([]);
+        setEditSuggestions([]);
       } else {
         const data = await fetchCandidates({ q, filter: filter as CandidateFilter });
         setRows(data);
         setPendingWhiskeys([]);
         setEditSuggestions([]);
+        setDistilleryCandidates([]);
       }
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load");
@@ -319,6 +336,47 @@ export default function AdminInboxScreen() {
     ]);
   }
 
+  async function approveDistilleryCandidate(dc: DistilleryCandidateRow) {
+    Alert.alert("Promote distillery?", `"${dc.name_raw}" will be added to the canonical distilleries table.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Promote",
+        onPress: async () => {
+          try {
+            setActingDistilleryId(dc.id);
+            await adminPromoteDistilleryCandidate(dc.id);
+            await load();
+          } catch (e: any) {
+            Alert.alert("Promotion failed", e?.message ?? "Unknown error");
+          } finally {
+            setActingDistilleryId(null);
+          }
+        },
+      },
+    ]);
+  }
+
+  async function rejectDistilleryCandidate(dc: DistilleryCandidateRow) {
+    Alert.alert("Reject distillery candidate?", `"${dc.name_raw}" will be marked rejected.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Reject",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setActingDistilleryId(dc.id);
+            await adminRejectDistilleryCandidate(dc.id, "");
+            await load();
+          } catch (e: any) {
+            Alert.alert("Reject failed", e?.message ?? "Unknown error");
+          } finally {
+            setActingDistilleryId(null);
+          }
+        },
+      },
+    ]);
+  }
+
   if (ok === false) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, padding: spacing.lg }}>
@@ -387,6 +445,7 @@ export default function AdminInboxScreen() {
         <FilterPill label="All" active={filter === "all"} onPress={() => setFilter("all")} />
         <FilterPill label="Pending Whiskeys" active={filter === "pending_whiskeys"} onPress={() => setFilter("pending_whiskeys")} />
         <FilterPill label="Edit Suggestions" active={filter === "edit_suggestions"} onPress={() => setFilter("edit_suggestions")} />
+        <FilterPill label="Distilleries" active={filter === "distillery_candidates"} onPress={() => setFilter("distillery_candidates")} />
       </View>
 
       {loading ? (
@@ -395,6 +454,47 @@ export default function AdminInboxScreen() {
         </View>
       ) : err ? (
         <Text style={[type.body, { color: colors.textSecondary }]}>{err}</Text>
+      ) : filter === "distillery_candidates" ? (
+        <FlatList
+          data={distilleryCandidates}
+          keyExtractor={(r) => r.id}
+          contentContainerStyle={{ paddingBottom: spacing.xl }}
+          ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+          ListEmptyComponent={
+            <Text style={[type.body, { color: colors.textSecondary }]}>No pending distillery candidates.</Text>
+          }
+          renderItem={({ item: dc }) => {
+            const busy = actingDistilleryId === dc.id;
+            const meta = [dc.category, dc.region, dc.sub_region].filter(Boolean).join(" • ");
+            return (
+              <View
+                style={{
+                  backgroundColor: colors.surface,
+                  borderRadius: radii.lg,
+                  borderWidth: 1,
+                  borderColor: colors.divider,
+                  ...shadows.card,
+                  padding: spacing.md,
+                  flexDirection: "row",
+                  gap: spacing.md,
+                }}
+              >
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={[type.body, { color: colors.textPrimary, fontWeight: "800" }]} numberOfLines={1}>
+                    {dc.name_raw}
+                  </Text>
+                  <Text style={[type.microcopyItalic, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {meta || "—"}
+                  </Text>
+                </View>
+                <View style={{ width: 92, gap: 6 }}>
+                  <MiniButton label={busy ? "…" : "Approve"} variant="primary" disabled={busy} onPress={() => approveDistilleryCandidate(dc)} />
+                  <MiniButton label={busy ? "…" : "Reject"} variant="danger" disabled={busy} onPress={() => rejectDistilleryCandidate(dc)} />
+                </View>
+              </View>
+            );
+          }}
+        />
       ) : filter === "edit_suggestions" ? (
         <FlatList
           data={editSuggestions}

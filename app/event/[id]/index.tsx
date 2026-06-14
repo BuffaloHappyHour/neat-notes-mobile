@@ -3,6 +3,7 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { getEventLineup, type LineupItem } from "../../../lib/eventLineup";
+import { getBarrelLineup, type BarrelLineupItem } from "../../../lib/barrelApi";
 import { setActiveEventId } from "../../../lib/eventStorage";
 import { supabase } from "../../../lib/supabase";
 import { useEventPageData } from "../../../src/events/hooks/useEventPageData";
@@ -379,6 +380,7 @@ type EventFlags = {
   is_blind: boolean;
   has_lineup: boolean;
   has_pairing: boolean;
+  has_direct_from_barrel: boolean;
   pairing_notes: string | null;
   revealed_at: string | null;
   venue_id: string | null;
@@ -422,6 +424,7 @@ export default function EventPage() {
 
   const [flags, setFlags] = useState<EventFlags | null>(null);
   const [lineup, setLineup] = useState<LineupItem[]>([]);
+  const [barrelLineup, setBarrelLineup] = useState<BarrelLineupItem[]>([]);
   const [bottleStats, setBottleStats] = useState<BottleStat[]>([]);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
 
@@ -436,7 +439,7 @@ export default function EventPage() {
     supabase
       .from("events")
       .select(
-        "is_blind, has_lineup, has_pairing, pairing_notes, revealed_at, venue_id, venue_name_free, venue_city, venue_state, event_type, description, status, is_active, starts_at, ends_at, venues(display_name, venue_type, address, city, state, logo_url, website, phone)"
+        "is_blind, has_lineup, has_pairing, has_direct_from_barrel, pairing_notes, revealed_at, venue_id, venue_name_free, venue_city, venue_state, event_type, description, status, is_active, starts_at, ends_at, venues(display_name, venue_type, address, city, state, logo_url, website, phone)"
       )
       .eq("id", eventId)
       .maybeSingle()
@@ -447,11 +450,16 @@ export default function EventPage() {
 
   useEffect(() => {
     if (!flags?.has_lineup) return;
-    getEventLineup(eventId).then(setLineup).catch(() => {});
-  }, [flags?.has_lineup, eventId]);
+    if (flags.has_direct_from_barrel) {
+      getBarrelLineup(eventId).then(setBarrelLineup).catch(() => {});
+    } else {
+      getEventLineup(eventId).then(setLineup).catch(() => {});
+    }
+  }, [flags?.has_lineup, flags?.has_direct_from_barrel, eventId]);
 
   useEffect(() => {
     if (lineup.length === 0) return;
+    if (flags?.has_direct_from_barrel) return;
     const ids = lineup.map((i) => i.whiskey_id).filter(Boolean) as string[];
     if (ids.length === 0) return;
 
@@ -961,7 +969,83 @@ export default function EventPage() {
         )}
 
         {/* 5. TONIGHT'S LINEUP */}
-        {flags?.has_lineup && lineup.length > 0 ? (
+        {flags?.has_lineup && flags.has_direct_from_barrel && barrelLineup.length > 0 ? (
+          <View style={{ gap: spacing.xs }}>
+            <Text
+              style={[
+                type.labelCaps,
+                { color: colors.accent, letterSpacing: 1.1, marginBottom: 4 },
+              ]}
+            >
+              Tonight's Barrels
+            </Text>
+            {barrelLineup.map((barrel, index) => (
+              <View
+                key={barrel.lineupId}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingVertical: spacing.sm,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radii.lg,
+                  borderWidth: 1,
+                  borderColor: colors.glassBorder,
+                  backgroundColor: colors.glassRaised,
+                  gap: spacing.sm,
+                }}
+              >
+                <Text
+                  style={[
+                    type.caption,
+                    { color: colors.accent, minWidth: 22, textAlign: "center" },
+                  ]}
+                >
+                  {index + 1}
+                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[type.body, { fontSize: 16, lineHeight: 21, color: colors.textPrimary }]}
+                    numberOfLines={1}
+                  >
+                    {barrel.distilleryName}
+                  </Text>
+                  <Text
+                    style={[
+                      type.microcopyItalic,
+                      { fontSize: 12.5, color: colors.textPrimary, opacity: 0.65, marginTop: 2 },
+                    ]}
+                  >
+                    {[
+                      `Barrel #${barrel.barrelNumber}`,
+                      barrel.whiskeyTypeName,
+                      barrel.proof != null ? `${barrel.proof} proof` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() =>
+                    router.push(
+                      `/log/barrel-tasting?barrelId=${encodeURIComponent(barrel.barrelId)}&eventId=${encodeURIComponent(eventId)}` as any
+                    )
+                  }
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: colors.glassBorderStrong,
+                    backgroundColor: pressed ? colors.accentSoft : colors.accentFaint,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text style={[type.caption, { color: colors.accent }]}>Log →</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        ) : flags?.has_lineup && !flags.has_direct_from_barrel && lineup.length > 0 ? (
           <View style={{ gap: spacing.xs }}>
             <Text
               style={[
