@@ -346,23 +346,20 @@ export async function saveBarrelTasting(input: {
 
   const { data: tasting, error: tastingErr } = await supabase
     .from("barrel_tastings")
-    .upsert(
-      {
-        barrel_id: input.barrelId,
-        user_id: user.id,
-        event_id: input.eventId,
-        rating: input.rating,
-        texture_level: input.textureLevel,
-        proof_intensity: input.proofIntensity,
-        flavor_intensity: input.flavorIntensity,
-        personal_notes: input.personalNotes.trim() || null,
-        nose_reaction: input.noseReaction || null,
-        taste_reaction: input.tasteReaction || null,
-        flavor_tags: input.flavorTags,
-        dislike_tags: input.dislikeTags.length > 0 ? input.dislikeTags : null,
-      },
-      { onConflict: "barrel_id,user_id" }
-    )
+    .insert({
+      barrel_id: input.barrelId,
+      user_id: user.id,
+      event_id: input.eventId,
+      rating: input.rating,
+      texture_level: input.textureLevel,
+      proof_intensity: input.proofIntensity,
+      flavor_intensity: input.flavorIntensity,
+      personal_notes: input.personalNotes.trim() || null,
+      nose_reaction: input.noseReaction || null,
+      taste_reaction: input.tasteReaction || null,
+      flavor_tags: input.flavorTags,
+      dislike_tags: input.dislikeTags.length > 0 ? input.dislikeTags : null,
+    })
     .select("id")
     .single();
 
