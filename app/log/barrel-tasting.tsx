@@ -18,9 +18,11 @@ import { Card } from "../../components/ui/Card";
 import { AppToast } from "../../src/components/ui/AppToast";
 import { RefineModal } from "../../src/log/components/refine/RefineModal";
 import FlavorNotesSection from "../../src/log/components/tasting/FlavorNotesSection";
+import { QuickNotesSection } from "../../src/log/components/tasting/QuickNotesSection";
 import RatingSection from "../../src/log/components/tasting/RatingSection";
 import TastingSignalsSection from "../../src/log/components/tasting/TastingSignalsSection";
 import { Pill } from "../../src/log/components/ui/Pill";
+import { type Reaction } from "../../src/log/components/ui/ReactionList";
 import { SectionGroupHeader } from "../../src/log/components/ui/SectionGroupHeader";
 import {
   useFlavorNodesEngine,
@@ -50,6 +52,8 @@ export default function BarrelTastingScreen() {
   const [barrelLoading, setBarrelLoading] = useState(true);
 
   const [rating, setRating] = useState<number | null>(null);
+  const [nose, setNose] = useState<Reaction>(null);
+  const [taste, setTaste] = useState<Reaction>(null);
   const [textureLevel, setTextureLevel] = useState<number | null>(null);
   const [proofIntensity, setProofIntensity] = useState<number | null>(null);
   const [flavorIntensity, setFlavorIntensity] = useState<number | null>(null);
@@ -178,6 +182,13 @@ export default function BarrelTastingScreen() {
     return labels.length ? labels.join(" › ") : "All";
   }, [refinePath, byId]);
 
+  function reactionLabel(r: Reaction): string {
+    if (r === "ENJOYED") return "Enjoyed";
+    if (r === "NEUTRAL") return "Neutral";
+    if (r === "NOT_FOR_ME") return "Not for me";
+    return "";
+  }
+
   function openRefine() { setRefineOpen(true); }
 
   function closeRefine() {
@@ -295,6 +306,10 @@ export default function BarrelTastingScreen() {
         proofIntensity,
         flavorIntensity,
         personalNotes,
+        noseReaction: reactionLabel(nose),
+        tasteReaction: reactionLabel(taste),
+        flavorTags,
+        dislikeTags: [],
         selectedNodeIds,
         sentimentById: finalSentimentById,
       });
@@ -465,6 +480,14 @@ export default function BarrelTastingScreen() {
                   rating={rating}
                   setRating={setRating}
                   onSlidingChange={(s: boolean) => setIsSliding(s)}
+                />
+
+                <QuickNotesSection
+                  locked={false}
+                  nose={nose}
+                  setNose={setNose}
+                  taste={taste}
+                  setTaste={setTaste}
                 />
 
                 <TastingSignalsSection

@@ -332,6 +332,10 @@ export async function saveBarrelTasting(input: {
   proofIntensity: number | null;
   flavorIntensity: number | null;
   personalNotes: string;
+  noseReaction: string;
+  tasteReaction: string;
+  flavorTags: string[];
+  dislikeTags: string[];
   selectedNodeIds: string[];
   sentimentById: Record<string, "LIKE" | "NEUTRAL" | "DISLIKE">;
 }): Promise<string> {
@@ -352,6 +356,10 @@ export async function saveBarrelTasting(input: {
         proof_intensity: input.proofIntensity,
         flavor_intensity: input.flavorIntensity,
         personal_notes: input.personalNotes.trim() || null,
+        nose_reaction: input.noseReaction || null,
+        taste_reaction: input.tasteReaction || null,
+        flavor_tags: input.flavorTags,
+        dislike_tags: input.dislikeTags.length > 0 ? input.dislikeTags : null,
       },
       { onConflict: "barrel_id,user_id" }
     )
