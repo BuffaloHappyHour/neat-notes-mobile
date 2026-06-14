@@ -30,12 +30,14 @@ import {
 import {
   addBarrelToLineup,
   getBarrelLineup,
+  getMyDistilleryAccount,
   removeBarrelLineupSlot,
   type BarrelDraft,
   type BarrelLineupItem,
 } from "../../lib/barrelApi";
 import { WhiskeySearchModal } from "../../src/logTab/components/WhiskeySearchModal";
 import { BarrelFormModal } from "../../src/events/components/BarrelFormModal";
+import { DistilleryBarrelPickerModal } from "../../src/events/components/DistilleryBarrelPickerModal";
 import { EventQRModal } from "../../components/EventQRModal";
 import { getAttendeeCount } from "../../lib/eventAttendees";
 
@@ -311,6 +313,11 @@ export default function HostEventDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [barrelFormOpen, setBarrelFormOpen] = useState(false);
+  const [distilleryPickerOpen, setDistilleryPickerOpen] = useState(false);
+  const [myDistilleryAccount, setMyDistilleryAccount] = useState<{
+    distillery_id: string;
+    distillery_name: string;
+  } | null>(null);
 
   // Edit lineup modal state
   const [editVisible, setEditVisible] = useState(false);
@@ -367,6 +374,12 @@ export default function HostEventDetailScreen() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    getMyDistilleryAccount()
+      .then((accounts) => setMyDistilleryAccount(accounts[0] ?? null))
+      .catch(() => {});
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -666,21 +679,56 @@ export default function HostEventDetailScreen() {
               {!isEnded && barrelLineup.length < 8 ? (
                 <>
                   <RowDivider />
-                  <Pressable
-                    onPress={() => setBarrelFormOpen(true)}
-                    style={({ pressed }) => ({
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: spacing.sm,
-                      paddingVertical: spacing.sm,
-                      opacity: pressed ? 0.75 : 1,
-                    })}
-                  >
-                    <Ionicons name="add-circle-outline" size={18} color={colors.accent} />
-                    <Text style={[type.body, { color: colors.accent, fontSize: 14 }]}>
-                      Add Barrel ({barrelLineup.length}/8)
-                    </Text>
-                  </Pressable>
+                  {myDistilleryAccount ? (
+                    <View style={{ gap: spacing.xs }}>
+                      <Pressable
+                        onPress={() => setDistilleryPickerOpen(true)}
+                        style={({ pressed }) => ({
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: spacing.sm,
+                          paddingVertical: spacing.sm,
+                          opacity: pressed ? 0.75 : 1,
+                        })}
+                      >
+                        <Ionicons name="add-circle-outline" size={18} color={colors.accent} />
+                        <Text style={[type.body, { color: colors.accent, fontSize: 14 }]}>
+                          Add Barrel ({barrelLineup.length}/8)
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setBarrelFormOpen(true)}
+                        style={({ pressed }) => ({
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: spacing.sm,
+                          paddingVertical: 4,
+                          opacity: pressed ? 0.75 : 1,
+                        })}
+                      >
+                        <Ionicons name="create-outline" size={14} color={colors.textMuted} />
+                        <Text style={[type.caption, { color: colors.textMuted }]}>
+                          Add custom barrel
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={() => setBarrelFormOpen(true)}
+                      style={({ pressed }) => ({
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: spacing.sm,
+                        paddingVertical: spacing.sm,
+                        opacity: pressed ? 0.75 : 1,
+                      })}
+                    >
+                      <Ionicons name="add-circle-outline" size={18} color={colors.accent} />
+                      <Text style={[type.body, { color: colors.accent, fontSize: 14 }]}>
+                        Add Barrel ({barrelLineup.length}/8)
+                      </Text>
+                    </Pressable>
+                  )}
                 </>
               ) : null}
             </>
@@ -967,6 +1015,22 @@ export default function HostEventDetailScreen() {
           setBarrelFormOpen(false);
         }}
       />
+
+      {myDistilleryAccount ? (
+        <DistilleryBarrelPickerModal
+          visible={distilleryPickerOpen}
+          onClose={() => setDistilleryPickerOpen(false)}
+          distilleryId={myDistilleryAccount.distillery_id}
+          distilleryName={myDistilleryAccount.distillery_name}
+          onSelect={async (draft: BarrelDraft) => {
+            if (!id) return;
+            const nextOrder = barrelLineup.length + 1;
+            const item = await addBarrelToLineup(id, draft, nextOrder);
+            setBarrelLineup((prev) => [...prev, item]);
+            setDistilleryPickerOpen(false);
+          }}
+        />
+      ) : null}
     </>
   );
 }

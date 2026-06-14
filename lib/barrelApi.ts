@@ -31,6 +31,18 @@ export type BarrelDraft = {
   ageMonths: number | null;
   mashBill: string | null;
   pairingNote: string;
+  /** Set when the barrel already exists in distillery_barrels; skips the barrel insert. */
+  existingBarrelId?: string | null;
+};
+
+export type DistilleryBarrelPickerItem = {
+  id: string;
+  barrelNumber: string;
+  whiskeyTypeId: string | null;
+  whiskeyType: string | null;
+  proof: number | null;
+  ageMonths: number | null;
+  mashBill: string | null;
 };
 
 export type BarrelLineupItem = {
@@ -106,34 +118,41 @@ export async function addBarrelToLineup(
   draft: BarrelDraft,
   pourOrder: number
 ): Promise<BarrelLineupItem> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let barrelId: string;
 
-  const { data: barrel, error: barrelErr } = await supabase
-    .from("distillery_barrels")
-    .insert({
-      event_id: eventId,
-      distillery_id: draft.distilleryId,
-      distillery_candidate_id: draft.distilleryCandidateId,
-      barrel_number: draft.barrelNumber,
-      whiskey_type_id: draft.whiskeyTypeId,
-      proof: draft.proof,
-      age_months: draft.ageMonths,
-      mash_bill: draft.mashBill || null,
-      is_event_private: true,
-      created_by_user_id: user?.id,
-    })
-    .select("id")
-    .single();
+  if (draft.existingBarrelId) {
+    barrelId = draft.existingBarrelId;
+  } else {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (barrelErr) throw new Error(barrelErr.message);
+    const { data: barrel, error: barrelErr } = await supabase
+      .from("distillery_barrels")
+      .insert({
+        event_id: eventId,
+        distillery_id: draft.distilleryId,
+        distillery_candidate_id: draft.distilleryCandidateId,
+        barrel_number: draft.barrelNumber,
+        whiskey_type_id: draft.whiskeyTypeId,
+        proof: draft.proof,
+        age_months: draft.ageMonths,
+        mash_bill: draft.mashBill || null,
+        is_event_private: true,
+        created_by_user_id: user?.id,
+      })
+      .select("id")
+      .single();
+
+    if (barrelErr) throw new Error(barrelErr.message);
+    barrelId = barrel.id as string;
+  }
 
   const { data: lineupRow, error: lineupErr } = await supabase
     .from("event_lineup")
     .insert({
       event_id: eventId,
-      barrel_id: barrel.id,
+      barrel_id: barrelId,
       whiskey_id: null,
       pour_order: pourOrder,
       pairing_note: draft.pairingNote.trim() || null,
@@ -145,7 +164,7 @@ export async function addBarrelToLineup(
 
   return {
     lineupId: lineupRow.id as string,
-    barrelId: barrel.id as string,
+    barrelId,
     pourOrder,
     pairingNote: draft.pairingNote.trim() || null,
     barrelNumber: draft.barrelNumber,
@@ -172,28 +191,35 @@ export async function saveBarrelLineup(
   for (let i = 0; i < drafts.length; i++) {
     const draft = drafts[i];
 
-    const { data: barrel, error: barrelErr } = await supabase
-      .from("distillery_barrels")
-      .insert({
-        event_id: eventId,
-        distillery_id: draft.distilleryId,
-        distillery_candidate_id: draft.distilleryCandidateId,
-        barrel_number: draft.barrelNumber,
-        whiskey_type_id: draft.whiskeyTypeId,
-        proof: draft.proof,
-        age_months: draft.ageMonths,
-        mash_bill: draft.mashBill || null,
-        is_event_private: true,
-        created_by_user_id: user?.id,
-      })
-      .select("id")
-      .single();
+    let barrelId: string;
 
-    if (barrelErr) throw new Error(barrelErr.message);
+    if (draft.existingBarrelId) {
+      barrelId = draft.existingBarrelId;
+    } else {
+      const { data: barrel, error: barrelErr } = await supabase
+        .from("distillery_barrels")
+        .insert({
+          event_id: eventId,
+          distillery_id: draft.distilleryId,
+          distillery_candidate_id: draft.distilleryCandidateId,
+          barrel_number: draft.barrelNumber,
+          whiskey_type_id: draft.whiskeyTypeId,
+          proof: draft.proof,
+          age_months: draft.ageMonths,
+          mash_bill: draft.mashBill || null,
+          is_event_private: true,
+          created_by_user_id: user?.id,
+        })
+        .select("id")
+        .single();
+
+      if (barrelErr) throw new Error(barrelErr.message);
+      barrelId = barrel.id as string;
+    }
 
     const { error: lineupErr } = await supabase.from("event_lineup").insert({
       event_id: eventId,
-      barrel_id: barrel.id,
+      barrel_id: barrelId,
       whiskey_id: null,
       pour_order: i + 1,
       pairing_note: draft.pairingNote.trim() || null,
@@ -408,4 +434,33 @@ export async function adminRejectDistilleryCandidate(
     p_reviewer_note: reviewerNote,
   });
   if (error) throw new Error(error.message);
+}
+
+// ─── Distillery account ───────────────────────────────────────────────────────
+
+export async function getMyDistilleryAccount(): Promise<
+  { distillery_id: string; distillery_name: string }[]
+> {
+  const { data, error } = await supabase.rpc("get_my_distillery_account");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as { distillery_id: string; distillery_name: string }[];
+}
+
+export async function getDistilleryBarrelsForEvent(
+  distilleryId: string
+): Promise<DistilleryBarrelPickerItem[]> {
+  const { data, error } = await supabase.rpc(
+    "get_distillery_barrels_for_event",
+    { p_distillery_id: distilleryId }
+  );
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as any[]).map((row) => ({
+    id: row.id as string,
+    barrelNumber: row.barrel_number as string,
+    whiskeyTypeId: row.whiskey_type_id as string | null,
+    whiskeyType: row.whiskey_type as string | null,
+    proof: row.proof as number | null,
+    ageMonths: row.age_months as number | null,
+    mashBill: row.mash_bill as string | null,
+  }));
 }
