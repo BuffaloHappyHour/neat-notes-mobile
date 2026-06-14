@@ -23,7 +23,7 @@ import { supabase } from "../lib/supabase";
 import { colors } from "../lib/theme";
 import OnboardingModal from "../src/onboarding/OnboardingModal";
 
-export default function RootLayout() {
+function RootLayout() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
@@ -195,6 +195,8 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+export default RootLayout;
 
 const styles = StyleSheet.create({
   bg: { flex: 1, backgroundColor: colors.background },
