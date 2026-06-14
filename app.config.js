@@ -107,9 +107,9 @@ module.exports = {
       url: "https://u.expo.dev/85720fd6-e8f6-405c-b247-40af3fea9563",
     },
 
-   runtimeVersion: {
-  policy: "fingerprint",
-},
+    runtimeVersion: IS_DEV_CLIENT
+      ? "1.0.0"
+      : { policy: "fingerprint" },
 
     experiments: {
       typedRoutes: true,
