@@ -371,6 +371,25 @@ export async function saveBarrelTasting(input: {
 
   const tastingId = tasting.id as string;
 
+  // Mirror to public_tastings for event analytics
+  const { error: mirrorErr } = await supabase.from("public_tastings").insert({
+    source_tasting_id: tastingId,
+    whiskey_id: null,
+    whiskey_name: input.displayName,
+    user_id: user.id,
+    event_id: input.eventId,
+    rating: input.rating,
+    flavor_tags: input.flavorTags,
+    dislike_tags: input.dislikeTags.length > 0 ? input.dislikeTags : null,
+    personal_notes: input.personalNotes.trim() || null,
+    texture_level: input.textureLevel,
+    proof_intensity: input.proofIntensity,
+    flavor_intensity: input.flavorIntensity,
+    source_type: "event",
+    created_at: new Date().toISOString(),
+  });
+  if (mirrorErr) console.warn("public_tastings mirror failed:", mirrorErr.message);
+
   // Replace flavor selections
   await supabase
     .from("tasting_flavor_selections_v2")
