@@ -30,7 +30,9 @@ module.exports = {
       package: IS_DEV_CLIENT
         ? "com.neatnotesapp.neatnotes.dev"
         : "com.neatnotesapp.neatnotes",
-      googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
+      googleServicesFile: IS_DEV_CLIENT
+        ? "./google-services.dev.json"
+        : "./google-services.json",
       adaptiveIcon: {
         backgroundColor: "#000000",
         foregroundImage: "./assets/images/android-icon-foreground.png",
