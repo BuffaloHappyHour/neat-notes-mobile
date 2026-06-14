@@ -298,8 +298,13 @@ export default function BarrelTastingScreen() {
         finalSentimentById[id] = sentimentById[id] ?? "NEUTRAL";
       }
 
+      const displayName = barrel
+        ? `${barrel.distilleryName} — Barrel #${barrel.barrelNumber}`
+        : `Barrel #${barrelId}`;
+
       await saveBarrelTasting({
         barrelId,
+        displayName,
         eventId,
         rating,
         textureLevel,

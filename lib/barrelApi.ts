@@ -326,6 +326,7 @@ export async function getBarrelDetail(barrelId: string): Promise<BarrelDetail> {
 
 export async function saveBarrelTasting(input: {
   barrelId: string;
+  displayName: string;
   eventId: string | null;
   rating: number | null;
   textureLevel: number | null;
@@ -345,11 +346,13 @@ export async function saveBarrelTasting(input: {
   if (!user) throw new Error("Not signed in");
 
   const { data: tasting, error: tastingErr } = await supabase
-    .from("barrel_tastings")
+    .from("tastings")
     .insert({
-      barrel_id: input.barrelId,
       user_id: user.id,
       event_id: input.eventId,
+      whiskey_id: null,
+      whiskey_name: input.displayName,
+      barrel_id: input.barrelId,
       rating: input.rating,
       texture_level: input.textureLevel,
       proof_intensity: input.proofIntensity,
@@ -359,6 +362,7 @@ export async function saveBarrelTasting(input: {
       taste_reaction: input.tasteReaction || null,
       flavor_tags: input.flavorTags,
       dislike_tags: input.dislikeTags.length > 0 ? input.dislikeTags : null,
+      source_type: "event",
     })
     .select("id")
     .single();
@@ -369,22 +373,21 @@ export async function saveBarrelTasting(input: {
 
   // Replace flavor selections
   await supabase
-    .from("barrel_tasting_flavor_selections")
+    .from("tasting_flavor_selections_v2")
     .delete()
-    .eq("barrel_tasting_id", tastingId)
+    .eq("tasting_id", tastingId)
     .eq("user_id", user.id);
 
   if (input.selectedNodeIds.length > 0) {
     const rows = input.selectedNodeIds.map((nodeId) => ({
-      barrel_tasting_id: tastingId,
+      tasting_id: tastingId,
       user_id: user.id,
       flavor_node_id: nodeId,
       sentiment: input.sentimentById[nodeId] ?? "NEUTRAL",
-      intensity: null,
     }));
 
     const { error: selErr } = await supabase
-      .from("barrel_tasting_flavor_selections")
+      .from("tasting_flavor_selections_v2")
       .insert(rows);
 
     if (selErr) throw new Error(selErr.message);
