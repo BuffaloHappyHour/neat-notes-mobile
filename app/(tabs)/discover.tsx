@@ -67,24 +67,30 @@ function fmtEventDate(iso: string): string {
 function EventsTab() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [statePickerOpen, setStatePickerOpen] = useState(false);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
 
-  useEffect(() => {
-    setLoading(true);
-    supabase
+  async function loadEvents(opts?: { silent?: boolean }) {
+    if (opts?.silent) setRefreshing(true);
+    else setLoading(true);
+    const { data } = await supabase
       .from("events")
       .select(
         "id, name, starts_at, ends_at, status, event_type, venue_name_free, venue_city, venue_state, is_public, max_attendees, join_code"
       )
       .eq("is_active", true)
-      .order("starts_at", { ascending: true })
-      .then(({ data }) => {
-        setEvents((data as EventRow[] | null) ?? []);
-        setLoading(false);
-      });
+      .order("starts_at", { ascending: true });
+    setEvents((data as EventRow[] | null) ?? []);
+    if (opts?.silent) setRefreshing(false);
+    else setLoading(false);
+  }
+
+  useEffect(() => {
+    void loadEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isPast = useCallback((event: EventRow): boolean => {
@@ -283,6 +289,13 @@ function EventsTab() {
           paddingBottom: spacing.xl * 2,
           gap: spacing.md,
         }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void loadEvents({ silent: true })}
+            tintColor={colors.accent}
+          />
+        }
       >
         {/* Filter row */}
         <View style={{ flexDirection: "row", gap: spacing.sm }}>
