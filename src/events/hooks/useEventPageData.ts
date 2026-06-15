@@ -146,8 +146,8 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
           .eq("id", eventId)
           .maybeSingle(),
         supabase
-          .from("public_tastings")
-          .select("source_tasting_id, user_id, whiskey_name, rating, created_at")
+          .from("tastings")
+          .select("id, user_id, whiskey_name, rating, created_at")
           .eq("event_id", eventId)
           .order("created_at", { ascending: false })
           .limit(12),
@@ -156,7 +156,7 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
           p_limit: 10,
         }),
         supabase
-          .from("public_tastings")
+          .from("tastings")
           .select("whiskey_name, rating, user_id")
           .eq("event_id", eventId),
       ]);
@@ -198,7 +198,7 @@ export function useEventPageData(eventId: string): UseEventPageDataResult {
       setEvent((eventData as EventHeader | null) ?? null);
       setRecent(
         ((recentData as any[] | null) ?? []).map((r) => ({
-          id: r.source_tasting_id,
+          id: r.id,
           user_id: r.user_id,
           whiskey_name: r.whiskey_name,
           rating: r.rating,
