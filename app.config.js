@@ -4,7 +4,7 @@ module.exports = {
   expo: {
     name: IS_DEV_CLIENT ? "Neat Notes Dev" : "Neat Notes",
     slug: "neat-notes",
-    version: "1.1.7",
+    version: "1.1.8",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: IS_DEV_CLIENT ? "neatnotesdev" : "neatnotes",
@@ -16,7 +16,7 @@ module.exports = {
       bundleIdentifier: IS_DEV_CLIENT
         ? "com.neatnotesapp.neatnotes.dev"
         : "com.neatnotesapp.neatnotes",
-      buildNumber: "50",
+      buildNumber: "51",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSUserNotificationUsageDescription:
@@ -111,7 +111,7 @@ module.exports = {
 
     runtimeVersion: IS_DEV_CLIENT
       ? "1.0.0"
-      : "1.1.7",
+      : "1.1.8",
 
     experiments: {
       typedRoutes: true,
