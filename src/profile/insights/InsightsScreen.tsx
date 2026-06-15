@@ -5,11 +5,14 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Purchases, { type PurchasesPackage } from "react-native-purchases";
 import Svg, { Circle, Line as SvgLine, Polygon, Text as SvgText } from "react-native-svg";
+
+import { BlurView } from "expo-blur";
 
 import { trackInsightsScreenViewed, trackPurchaseCompleted, trackPurchaseTapped, trackRestoreCompleted } from "../../../lib/analytics";
 import { syncPremiumStatusFromRevenueCat } from "../../../lib/premiumSync";
@@ -20,6 +23,7 @@ import {
 } from "../../../lib/purchases";
 import { radii } from "../../../lib/radii";
 import { spacing } from "../../../lib/spacing";
+import { supabase } from "../../../lib/supabase";
 import { colors } from "../../../lib/theme";
 import { type } from "../../../lib/typography";
 import { useProfileData } from "../hooks/useProfileData";
@@ -265,7 +269,18 @@ function PackageOption({
   );
 }
 
-  export default function InsightsScreen() {
+type LifetimeMetrics = {
+  tasting_count: number;
+  top_traits_l1: string[] | null;
+  avoided_traits_l1: string[] | null;
+  proof_pref: number | null;
+  texture_pref: number | null;
+  flavor_pref: number | null;
+  palate_clarity_0_100: number | null;
+  whiskey_type_affinity: Record<string, { name: string; count: number; avg_rating: number | null }> | null;
+};
+
+export default function InsightsScreen() {
   const [tab, setTab] = useState<InsightsTab>("summary");
 
   const { isPremium, loading: profileLoading } = useProfileData();
@@ -279,26 +294,29 @@ function PackageOption({
   const hasPremiumAccess = isPremium;
   const insightsViewedRef = React.useRef(false);
 
- const headerCopy = useMemo(() => {
-  if (tab === "clarity") {
-    return {
-      title: "Palate Clarity",
-      subtitle: "Understand how your tasting identity is forming and evolving.",
-    };
-  }
+  const [lifetimeMetrics, setLifetimeMetrics] = useState<LifetimeMetrics | null>(null);
+  const [expandedFeatureIndex, setExpandedFeatureIndex] = useState<number | null>(null);
 
-  if (tab === "flavor") {
-    return {
-      title: "Flavor Map",
-      subtitle: "A visual summary of your defining flavor tendencies.",
-    };
-  }
+  const headerCopy = useMemo(() => {
+    if (tab === "clarity") {
+      return {
+        title: "Palate Clarity",
+        subtitle: "Understand how your tasting identity is forming and evolving.",
+      };
+    }
 
-  return {
-    title: "Summary",
-    subtitle: "A narrative view of your palate.",
-  };
-}, [tab]);
+    if (tab === "flavor") {
+      return {
+        title: "Flavor Map",
+        subtitle: "A visual summary of your defining flavor tendencies.",
+      };
+    }
+
+    return {
+      title: "Summary",
+      subtitle: "A narrative view of your palate.",
+    };
+  }, [tab]);
 
   const selectedPackage =
     packages.find((pkg) => pkg.identifier === selectedPackageId) ?? null;
@@ -367,7 +385,43 @@ function PackageOption({
     };
   }, [hasPremiumAccess, profileLoading]);
 
-async function handleUnlockInsights() {
+  useEffect(() => {
+    if (hasPremiumAccess || profileLoading) return;
+    let active = true;
+
+    async function loadLifetimeMetrics() {
+      setLifetimeMetrics(null);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData.session?.user;
+        if (!user?.id || !active) return;
+
+        const { data, error } = await supabase
+          .from("user_metrics_lifetime_current")
+          .select(
+            "tasting_count,top_traits_l1,avoided_traits_l1,proof_pref,texture_pref,flavor_pref,palate_clarity_0_100,whiskey_type_affinity"
+          )
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!active) return;
+        if (error) {
+          console.warn("[Insights] lifetime metrics fetch failed:", error.message);
+          return;
+        }
+        if (data) setLifetimeMetrics(data as LifetimeMetrics);
+      } catch (e) {
+        if (active) console.warn("[Insights] lifetime metrics error:", e);
+      }
+    }
+
+    void loadLifetimeMetrics();
+    return () => {
+      active = false;
+    };
+  }, [hasPremiumAccess, profileLoading]);
+
+  async function handleUnlockInsights() {
     if (purchaseLoading || restoreLoading || !selectedPackage) return;
     void trackPurchaseTapped(selectedPackage.identifier);
     try {
@@ -388,7 +442,7 @@ async function handleUnlockInsights() {
     }
   }
 
-async function handleRestorePurchases() {
+  async function handleRestorePurchases() {
     if (purchaseLoading || restoreLoading) return;
     try {
       setRestoreLoading(true);
@@ -422,6 +476,40 @@ async function handleRestorePurchases() {
 
   if (!hasPremiumAccess) {
     const tastingCount = metrics?.tasting_count ?? 0;
+
+    const formatTrait = (t: string) =>
+      t.replace(/-/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+
+    const displayCount = lifetimeMetrics?.tasting_count ?? tastingCount;
+
+    const goToStyle = lifetimeMetrics?.whiskey_type_affinity
+      ? (() => {
+          const entries = Object.entries(lifetimeMetrics.whiskey_type_affinity);
+          if (!entries.length) return null;
+          const top = entries.sort((a, b) => b[1].count - a[1].count)[0];
+          return top[1].name || null;
+        })()
+      : null;
+
+    const seekParts = (lifetimeMetrics?.top_traits_l1 ?? []).slice(0, 2).map(formatTrait);
+    const seekTraits = seekParts.length > 0 ? seekParts.join(", ") : null;
+
+    const avoidTrait = lifetimeMetrics?.avoided_traits_l1?.[0]
+      ? formatTrait(lifetimeMetrics.avoided_traits_l1[0])
+      : null;
+
+    const proofLabel = (() => {
+      const p = lifetimeMetrics?.proof_pref ?? null;
+      if (p === null) return null;
+      const tier = p <= 2.5 ? "Low proof" : p <= 3.5 ? "Mid proof" : "High proof";
+      return `${tier} pours rate better for you`;
+    })();
+
+    const clarityValue =
+      lifetimeMetrics?.palate_clarity_0_100 != null
+        ? `${Math.round(lifetimeMetrics.palate_clarity_0_100)} / 100`
+        : null;
+
     const monthlyPkg = packages.find((p) => p.identifier === "$rc_monthly");
     const annualPkg = packages.find((p) => p.identifier === "$rc_annual");
     const annualSavingsPct =
@@ -494,6 +582,38 @@ async function handleRestorePurchases() {
       })
       .join(" ");
 
+    function buildSommelierBlurb(): string {
+      // Sentence 1 — style + flavor personality
+      let s1: string;
+      if (displayCount === 0) {
+        s1 = "You haven't logged any pours yet — start tasting and we'll build your profile.";
+      } else if (goToStyle && seekTraits) {
+        s1 = `${goToStyle} is where you've spent your time, and your palate keeps coming back to ${seekTraits} notes.`;
+      } else if (goToStyle) {
+        s1 = `You've been spending time with ${goToStyle}, and a preference is starting to take shape.`;
+      } else {
+        s1 = `You're ${displayCount} ${displayCount === 1 ? "pour" : "pours"} in and your palate profile is starting to form.`;
+      }
+
+      // Sentence 2 — proof preference + avoided notes, or clarity fallback
+      const proofTier = proofLabel ? proofLabel.split(" ")[0] : null;
+
+      let s2: string;
+      if (proofTier && avoidTrait) {
+        s2 = `You tend to rate ${proofTier} proof pours higher, and ${avoidTrait} notes don't seem to be your thing.`;
+      } else if (proofTier) {
+        s2 = `Your ratings trend toward ${proofTier} proof pours.`;
+      } else if (avoidTrait) {
+        s2 = `${avoidTrait} notes tend to score lower for you.`;
+      } else if (clarityValue) {
+        s2 = `Your palate clarity is at ${clarityValue} — keep logging to sharpen it.`;
+      } else {
+        s2 = "Log a few more pours and the picture will get sharper.";
+      }
+
+      return `${s1} ${s2}`;
+    }
+
     return (
       <ScrollView
         style={{ flex: 1 }}
@@ -513,7 +633,7 @@ async function handleRestorePurchases() {
               left: 0,
               right: 0,
               height: 280,
-              opacity: 0.35,
+              opacity: 0.2,
               overflow: "hidden",
             }}
           >
@@ -573,6 +693,11 @@ async function handleRestorePurchases() {
               </Svg>
             )}
           </View>
+          <BlurView
+            intensity={18}
+            tint="dark"
+            style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
+          />
 
           <View
             style={{
@@ -584,7 +709,7 @@ async function handleRestorePurchases() {
               alignItems: "center",
               justifyContent: "center",
               paddingHorizontal: spacing.md,
-              gap: spacing.sm,
+              gap: spacing.xs,
             }}
           >
             <Text style={[type.labelCaps, { color: colors.accent, textAlign: "center" }]}>
@@ -615,24 +740,57 @@ async function handleRestorePurchases() {
           </View>
         </View>
 
+        {/* ── What we know about you so far ── */}
+        <View style={{ marginTop: spacing.sm }}>
+          <Text style={[type.labelCaps, { color: colors.accent, marginBottom: spacing.xs }]}>
+            WHAT WE KNOW ABOUT YOU SO FAR
+          </Text>
+          {lifetimeMetrics !== null && (
+            <View
+              style={{
+                backgroundColor: colors.surfaceRaised,
+                borderRadius: radii.md,
+                borderWidth: 1,
+                borderColor: colors.borderStrong,
+                padding: spacing.sm,
+              }}
+            >
+              <Text style={[type.microcopyItalic, { color: colors.textSecondary }]}>
+                {buildSommelierBlurb()}
+              </Text>
+            </View>
+          )}
+        </View>
+
         {/* ── Features ── */}
-        <View style={{ gap: spacing.md }}>
+        <View style={{ gap: spacing.sm }}>
           <Text style={[type.labelCaps, { color: colors.accent }]}>What unlocks</Text>
           <View>
-            {features.map((feature, index) => (
-              <View key={feature.title}>
-                <View style={{ paddingVertical: spacing.xs, gap: spacing.xs }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
-                    <Ionicons name="chevron-forward" size={14} color={colors.accent} />
-                    <Text style={[type.sectionHeader, { flex: 1 }]}>{feature.title}</Text>
+            {features.map((feature, index) => {
+              const isExpanded = expandedFeatureIndex === index;
+              return (
+                <TouchableOpacity
+                  key={feature.title}
+                  activeOpacity={0.7}
+                  onPress={() => setExpandedFeatureIndex(isExpanded ? null : index)}
+                >
+                  <View style={{ paddingVertical: spacing.xs, gap: spacing.xs }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+                      <View style={{ transform: [{ rotate: isExpanded ? "90deg" : "0deg" }] }}>
+                        <Ionicons name="chevron-forward" size={14} color={colors.accent} />
+                      </View>
+                      <Text style={[type.sectionHeader, { flex: 1 }]}>{feature.title}</Text>
+                    </View>
+                    {isExpanded && (
+                      <Text style={[type.caption, { paddingLeft: 14 + spacing.xs }]}>{feature.subtitle}</Text>
+                    )}
                   </View>
-                  <Text style={[type.caption, { paddingLeft: 14 + spacing.xs }]} numberOfLines={1} ellipsizeMode="tail">{feature.subtitle}</Text>
-                </View>
-                {index < features.length - 1 && (
-                  <View style={{ height: 1, backgroundColor: colors.divider }} />
-                )}
-              </View>
-            ))}
+                  {index < features.length - 1 && (
+                    <View style={{ height: 1, backgroundColor: colors.divider }} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
@@ -644,118 +802,108 @@ async function handleRestorePurchases() {
             backgroundColor: colors.surfaceRaised,
             borderWidth: 1,
             borderColor: colors.borderStrong,
-            padding: spacing.heroPadding,
-            gap: spacing.md,
+            padding: spacing.md,
+            gap: spacing.sm,
           }}
         >
           <Text style={[type.labelCaps, { color: colors.accent, textAlign: "center" }]}>Choose a plan</Text>
+
           {packagesLoading ? (
-            <View style={{ paddingVertical: spacing.lg }}>
+            <View style={{ paddingVertical: spacing.md, alignItems: "center" }}>
               <ActivityIndicator color={colors.textPrimary} />
             </View>
-          ) : packages.length > 0 ? (
-            <View style={{ gap: spacing.sm }}>
-              {packages.map((pkg) => {
-                const isAnnual = pkg.identifier === "$rc_annual";
-                const isSelected = pkg.identifier === selectedPackageId;
-                return (
-                  <View key={pkg.identifier}>
-                    {isAnnual && (
-                      <View
-                        style={{
-                          alignSelf: "flex-start",
-                          paddingHorizontal: spacing.sm,
-                          paddingVertical: spacing.xs,
-                          borderRadius: 999,
-                          backgroundColor: colors.accentSoft,
-                          borderWidth: 1,
-                          borderColor: colors.borderStrong,
-                          marginBottom: spacing.xs,
-                        }}
-                      >
-                        <Text style={[type.labelCaps, { color: colors.accent }]}>Best value</Text>
-                      </View>
-                    )}
-                    <Pressable
-                      onPress={() => setSelectedPackageId(pkg.identifier)}
-                      style={({ pressed }) => ({
-                        borderRadius: 20,
-                        borderWidth: 1.5,
-                        borderColor: isSelected ? colors.accent : colors.divider,
-                        backgroundColor: isSelected
-                          ? colors.accentSoft
-                          : pressed
-                            ? colors.surfaceRaised
-                            : colors.surfaceSunken,
-                        padding: spacing.md,
-                      })}
-                    >
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: spacing.md,
-                        }}
-                      >
-                        <View style={{ flex: 1, gap: spacing.xs }}>
-                          <Text style={type.sectionHeader}>
-                            {isAnnual ? "Annual" : "Monthly"}
-                          </Text>
-                          <Text style={[type.body, { color: colors.textSecondary }]}>
-                            {pkg.product.priceString}
-                            {isAnnual ? " / year" : " / month"}
-                          </Text>
-                          {isAnnual && annualSavingsPct ? (
-                            <Text style={[type.caption, { color: colors.accent }]}>
-                              Save {annualSavingsPct}% vs monthly
-                            </Text>
-                          ) : null}
-                        </View>
-                        <View
-                          style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: 999,
-                            borderWidth: 2,
-                            borderColor: isSelected ? colors.accent : colors.divider,
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          {isSelected ? (
-                            <View
-                              style={{
-                                width: 10,
-                                height: 10,
-                                borderRadius: 999,
-                                backgroundColor: colors.accent,
-                              }}
-                            />
-                          ) : null}
-                        </View>
-                      </View>
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
           ) : (
-            <Text style={[type.body, { color: colors.textSecondary }]}>
-              No subscription options are currently available.
-            </Text>
+            <View style={{ flexDirection: "row", gap: spacing.sm }}>
+              {/* Monthly pill */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => monthlyPkg && setSelectedPackageId("$rc_monthly")}
+                style={{
+                  flex: 1,
+                  paddingVertical: spacing.sm,
+                  paddingHorizontal: spacing.sm,
+                  borderRadius: radii.sm,
+                  borderWidth: 1,
+                  backgroundColor: selectedPackageId === "$rc_monthly" ? colors.surfaceRaised : "transparent",
+                  borderColor: selectedPackageId === "$rc_monthly" ? colors.accent : colors.borderStrong,
+                }}
+              >
+                <Text style={[type.caption, { color: colors.textPrimary }]}>Monthly</Text>
+                <Text style={[type.labelCaps, { color: colors.textSecondary }]}>
+                  {monthlyPkg ? `${monthlyPkg.product.priceString}/mo` : "—"}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Annual pill */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => annualPkg && setSelectedPackageId("$rc_annual")}
+                style={{
+                  flex: 1,
+                  paddingVertical: spacing.sm,
+                  paddingHorizontal: spacing.sm,
+                  borderRadius: radii.sm,
+                  borderWidth: 1,
+                  backgroundColor: selectedPackageId === "$rc_annual" ? colors.surfaceRaised : "transparent",
+                  borderColor: selectedPackageId === "$rc_annual" ? colors.accent : colors.borderStrong,
+                }}
+              >
+                <Text style={[type.caption, { color: colors.textPrimary }]}>Annual</Text>
+                <Text style={[type.labelCaps, { color: colors.textSecondary }]}>
+                  {annualPkg ? `${annualPkg.product.priceString}/yr` : "—"}
+                </Text>
+                <View
+                  style={{
+                    alignSelf: "flex-start",
+                    backgroundColor: "rgba(190,150,99,0.15)",
+                    borderRadius: 999,
+                    paddingHorizontal: spacing.xs,
+                    paddingVertical: 2,
+                    marginTop: 3,
+                  }}
+                >
+                  <Text style={[type.labelCaps, { fontSize: 9, color: colors.accent }]}>BEST VALUE</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
           )}
-          <PrimaryButton
-            label="Unlock My Insights"
-            loading={purchaseLoading}
+
+          {/* Unlock button */}
+          <Pressable
             onPress={handleUnlockInsights}
-            disabled={!selectedPackage || packagesLoading || packages.length === 0}
-          />
-          <SecondaryButton
-            label="Restore Purchases"
-            loading={restoreLoading}
+            disabled={purchaseLoading || restoreLoading || !selectedPackage || packagesLoading || packages.length === 0}
+            style={({ pressed }) => ({
+              borderRadius: 999,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: pressed ? "rgba(190,150,99,0.85)" : colors.accent,
+              opacity: (purchaseLoading || restoreLoading || !selectedPackage || packagesLoading || packages.length === 0) ? 0.7 : 1,
+              paddingHorizontal: spacing.lg,
+              paddingVertical: 11,
+            })}
+          >
+            {purchaseLoading ? (
+              <ActivityIndicator color={colors.background} />
+            ) : (
+              <Text style={[type.body, { color: colors.background, fontWeight: "800" }]}>
+                Unlock My Insights
+              </Text>
+            )}
+          </Pressable>
+
+          {/* Restore purchases */}
+          <TouchableOpacity
+            activeOpacity={0.6}
             onPress={handleRestorePurchases}
-          />
+            disabled={purchaseLoading || restoreLoading}
+            style={{ alignItems: "center" }}
+          >
+            {restoreLoading ? (
+              <ActivityIndicator color={colors.textMuted} size="small" />
+            ) : (
+              <Text style={[type.caption, { color: colors.textMuted }]}>Restore Purchases</Text>
+            )}
+          </TouchableOpacity>
         </View>
       </ScrollView>
     );
