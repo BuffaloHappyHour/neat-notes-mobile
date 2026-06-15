@@ -111,7 +111,7 @@ module.exports = {
 
     runtimeVersion: IS_DEV_CLIENT
       ? "1.0.0"
-      : { policy: "fingerprint" },
+      : "1.1.7",
 
     experiments: {
       typedRoutes: true,
