@@ -134,22 +134,34 @@ export function useProfileData() {
     setUsername(metaUsername || emailFallback || "");
 
     const profilePromise = fetchMyProfile();
-    const countPromise = supabase.from("tastings").select("id", { count: "exact", head: true });
-    const ratingsPromise = supabase.from("tastings").select("rating");
+    const countPromise = supabase
+      .from("tastings")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", session.user.id);
+    const ratingsPromise = supabase
+      .from("tastings")
+      .select("rating")
+      .eq("user_id", session.user.id);
 
     const top5Promise = supabase
       .from("tastings")
       .select("id, whiskey_name, rating, whiskey_id")
+      .eq("user_id", session.user.id)
       .order("rating", { ascending: false })
       .limit(5);
 
     const recentPromise = supabase
       .from("tastings")
       .select("id, whiskey_name, rating, created_at, whiskey_id")
+      .eq("user_id", session.user.id)
       .order("created_at", { ascending: false })
       .limit(10);
 
-    const mixPromise = supabase.from("tastings").select("whiskey_id").limit(3000);
+    const mixPromise = supabase
+      .from("tastings")
+      .select("whiskey_id")
+      .eq("user_id", session.user.id)
+      .limit(3000);
 
     const clarityPromise = supabase
       .from("user_metrics_lifetime_current")
