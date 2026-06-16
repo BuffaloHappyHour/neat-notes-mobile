@@ -72,6 +72,7 @@ function EventsTab() {
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [statePickerOpen, setStatePickerOpen] = useState(false);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  const [pastExpanded, setPastExpanded] = useState(false);
 
   async function loadEvents(opts?: { silent?: boolean }) {
     if (opts?.silent) setRefreshing(true);
@@ -82,6 +83,7 @@ function EventsTab() {
         "id, name, starts_at, ends_at, status, event_type, venue_name_free, venue_city, venue_state, is_public, max_attendees, join_code"
       )
       .eq("is_active", true)
+      .eq("is_public", true)
       .order("starts_at", { ascending: true });
     setEvents((data as EventRow[] | null) ?? []);
     if (opts?.silent) setRefreshing(false);
@@ -116,30 +118,36 @@ function EventsTab() {
     return Array.from(cities).sort();
   }, [events, selectedState]);
 
-  const filteredEvents = useMemo(() => {
+  const locationFilteredEvents = useMemo(() => {
     let result = events;
     if (selectedState) result = result.filter((e) => e.venue_state === selectedState);
     if (selectedCity) result = result.filter((e) => e.venue_city === selectedCity);
-    const upcoming = result
+    return result;
+  }, [events, selectedState, selectedCity]);
+
+  const upcomingEvents = useMemo(() => {
+    return locationFilteredEvents
       .filter((e) => !isPast(e))
       .sort((a, b) => {
         if (!a.starts_at) return 1;
         if (!b.starts_at) return -1;
         return new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime();
       });
-    const past = result
+  }, [locationFilteredEvents, isPast]);
+
+  const pastEvents = useMemo(() => {
+    return locationFilteredEvents
       .filter((e) => isPast(e))
       .sort((a, b) => {
         if (!a.starts_at) return 1;
         if (!b.starts_at) return -1;
         return new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime();
       });
-    return [...upcoming, ...past];
-  }, [events, selectedState, selectedCity, isPast]);
+  }, [locationFilteredEvents, isPast]);
 
-  const grouped = useMemo(() => {
+  const groupByLocation = useCallback((list: EventRow[]) => {
     const stateMap = new Map<string, Map<string, EventRow[]>>();
-    filteredEvents.forEach((event) => {
+    list.forEach((event) => {
       const state = event.venue_state ?? "Unknown";
       const city = event.venue_city ?? "Unknown";
       if (!stateMap.has(state)) stateMap.set(state, new Map());
@@ -148,7 +156,142 @@ function EventsTab() {
       cityMap.get(city)!.push(event);
     });
     return stateMap;
-  }, [filteredEvents]);
+  }, []);
+
+  const groupedUpcoming = useMemo(
+    () => groupByLocation(upcomingEvents),
+    [groupByLocation, upcomingEvents]
+  );
+  const groupedPast = useMemo(
+    () => groupByLocation(pastEvents),
+    [groupByLocation, pastEvents]
+  );
+
+  const renderLocationGroups = (grouped: Map<string, Map<string, EventRow[]>>) =>
+    Array.from(grouped.entries()).map(([state, cityMap]) => (
+      <View key={state}>
+        <Text
+          style={[
+            type.labelCaps,
+            { color: colors.accent, marginBottom: spacing.xs },
+          ]}
+        >
+          {state}
+        </Text>
+        {Array.from(cityMap.entries()).map(([city, cityEvents]) => (
+          <View key={city} style={{ marginBottom: spacing.sm }}>
+            <Text
+              style={[
+                type.caption,
+                { color: colors.textSecondary, marginBottom: spacing.xs },
+              ]}
+            >
+              {city}
+            </Text>
+            <View style={{ gap: spacing.sm }}>
+              {cityEvents.map((event) => {
+                const past = isPast(event);
+                return (
+                  <Pressable
+                    key={event.id}
+                    onPress={() => router.push(`/event/${event.id}` as any)}
+                    style={({ pressed }) => ({
+                      borderRadius: radii.lg,
+                      borderWidth: 1,
+                      borderColor: past ? colors.borderSubtle : colors.borderStrong,
+                      backgroundColor: colors.glassSurface,
+                      paddingVertical: spacing.md,
+                      paddingHorizontal: spacing.md,
+                      opacity: past ? (pressed ? 0.4 : 0.5) : pressed ? 0.85 : 1,
+                      gap: spacing.xs,
+                    })}
+                  >
+                    {/* Name + event_type pill */}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "flex-start",
+                        gap: spacing.sm,
+                      }}
+                    >
+                      <Text
+                        style={[
+                          type.sectionHeader,
+                          {
+                            flex: 1,
+                            fontSize: 16,
+                            lineHeight: 21,
+                            color: colors.textPrimary,
+                          },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {event.name}
+                      </Text>
+                      {event.event_type ? (
+                        <View
+                          style={{
+                            paddingHorizontal: 7,
+                            paddingVertical: 3,
+                            borderRadius: 4,
+                            borderWidth: 1,
+                            borderColor: colors.borderStrong,
+                            backgroundColor: colors.accentFaint,
+                          }}
+                        >
+                          <Text
+                            style={[
+                              type.labelCaps,
+                              { fontSize: 9, color: colors.accent },
+                            ]}
+                          >
+                            {event.event_type}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    {/* Venue */}
+                    {event.venue_name_free ? (
+                      <Text
+                        style={[
+                          type.microcopyItalic,
+                          { fontSize: 13, color: colors.textSecondary },
+                        ]}
+                      >
+                        {event.venue_name_free}
+                      </Text>
+                    ) : null}
+
+                    {/* Date */}
+                    {event.starts_at ? (
+                      <Text
+                        style={[
+                          type.caption,
+                          {
+                            color: past ? colors.textMuted : colors.textSecondary,
+                          },
+                        ]}
+                      >
+                        {fmtEventDate(event.starts_at)}
+                        {past ? " · Ended" : ""}
+                      </Text>
+                    ) : null}
+
+                    {/* Capacity */}
+                    {event.max_attendees != null ? (
+                      <Text style={[type.caption, { color: colors.textMuted }]}>
+                        Up to {event.max_attendees} attendees
+                      </Text>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ))}
+      </View>
+    ));
 
   if (loading) {
     return (
@@ -346,8 +489,8 @@ function EventsTab() {
           </Pressable>
         </View>
 
-        {/* Events grouped by state → city */}
-        {filteredEvents.length === 0 ? (
+        {/* Upcoming events grouped by state → city */}
+        {upcomingEvents.length === 0 ? (
           <Text
             style={[
               type.microcopyItalic,
@@ -357,131 +500,34 @@ function EventsTab() {
             No events found.
           </Text>
         ) : (
-          Array.from(grouped.entries()).map(([state, cityMap]) => (
-            <View key={state}>
-              <Text
-                style={[
-                  type.labelCaps,
-                  { color: colors.accent, marginBottom: spacing.xs },
-                ]}
-              >
-                {state}
-              </Text>
-              {Array.from(cityMap.entries()).map(([city, cityEvents]) => (
-                <View key={city} style={{ marginBottom: spacing.sm }}>
-                  <Text
-                    style={[
-                      type.caption,
-                      { color: colors.textSecondary, marginBottom: spacing.xs },
-                    ]}
-                  >
-                    {city}
-                  </Text>
-                  <View style={{ gap: spacing.sm }}>
-                    {cityEvents.map((event) => {
-                      const past = isPast(event);
-                      return (
-                        <Pressable
-                          key={event.id}
-                          onPress={() => router.push(`/event/${event.id}` as any)}
-                          style={({ pressed }) => ({
-                            borderRadius: radii.lg,
-                            borderWidth: 1,
-                            borderColor: past ? colors.borderSubtle : colors.borderStrong,
-                            backgroundColor: colors.glassSurface,
-                            paddingVertical: spacing.md,
-                            paddingHorizontal: spacing.md,
-                            opacity: past ? (pressed ? 0.4 : 0.5) : pressed ? 0.85 : 1,
-                            gap: spacing.xs,
-                          })}
-                        >
-                          {/* Name + event_type pill */}
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "flex-start",
-                              gap: spacing.sm,
-                            }}
-                          >
-                            <Text
-                              style={[
-                                type.sectionHeader,
-                                {
-                                  flex: 1,
-                                  fontSize: 16,
-                                  lineHeight: 21,
-                                  color: colors.textPrimary,
-                                },
-                              ]}
-                              numberOfLines={2}
-                            >
-                              {event.name}
-                            </Text>
-                            {event.event_type ? (
-                              <View
-                                style={{
-                                  paddingHorizontal: 7,
-                                  paddingVertical: 3,
-                                  borderRadius: 4,
-                                  borderWidth: 1,
-                                  borderColor: colors.borderStrong,
-                                  backgroundColor: colors.accentFaint,
-                                }}
-                              >
-                                <Text
-                                  style={[
-                                    type.labelCaps,
-                                    { fontSize: 9, color: colors.accent },
-                                  ]}
-                                >
-                                  {event.event_type}
-                                </Text>
-                              </View>
-                            ) : null}
-                          </View>
-
-                          {/* Venue */}
-                          {event.venue_name_free ? (
-                            <Text
-                              style={[
-                                type.microcopyItalic,
-                                { fontSize: 13, color: colors.textSecondary },
-                              ]}
-                            >
-                              {event.venue_name_free}
-                            </Text>
-                          ) : null}
-
-                          {/* Date */}
-                          {event.starts_at ? (
-                            <Text
-                              style={[
-                                type.caption,
-                                {
-                                  color: past ? colors.textMuted : colors.textSecondary,
-                                },
-                              ]}
-                            >
-                              {fmtEventDate(event.starts_at)}
-                              {past ? " · Ended" : ""}
-                            </Text>
-                          ) : null}
-
-                          {/* Capacity */}
-                          {event.max_attendees != null ? (
-                            <Text style={[type.caption, { color: colors.textMuted }]}>
-                              Up to {event.max_attendees} attendees
-                            </Text>
-                          ) : null}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              ))}
-            </View>
-          ))
+          renderLocationGroups(groupedUpcoming)
         )}
+
+        {/* Past events — collapsible */}
+        {pastEvents.length > 0 ? (
+          <View>
+            <Pressable
+              onPress={() => setPastExpanded((v) => !v)}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingVertical: spacing.sm,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Text style={[type.labelCaps, { color: colors.accent }]}>
+                Past Events ({pastEvents.length})
+              </Text>
+              <Text style={[type.caption, { color: colors.textSecondary }]}>
+                {pastExpanded ? "Hide ▲" : "Show ▼"}
+              </Text>
+            </Pressable>
+            {pastExpanded ? (
+              <View style={{ gap: spacing.md }}>{renderLocationGroups(groupedPast)}</View>
+            ) : null}
+          </View>
+        ) : null}
       </ScrollView>
     </>
   );
