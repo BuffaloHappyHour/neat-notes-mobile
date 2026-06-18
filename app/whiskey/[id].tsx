@@ -57,6 +57,7 @@ type WhiskeyProfileCacheEntry = {
   recent: TastingSupabaseRow[];
   photos: WhiskeyPhoto[];
   whiskeyStatus: string | null;
+  flavorCallouts: { label: string; mention_count: number; level: number }[];
   cachedAt: number;
 };
 
@@ -477,6 +478,7 @@ useEffect(() => {
   const [isPremium, setIsPremium] = useState(false);
   const [whiskeyStatus, setWhiskeyStatus] = useState<string | null>(null);
   const [whiskeySource, setWhiskeySource] = useState<string | null>(null);
+  const [flavorCallouts, setFlavorCallouts] = useState<{ label: string; mention_count: number; level: number }[]>([]);
   const [welcomeSheetOpen, setWelcomeSheetOpen] = useState(false);
   const [improveOpen, setImproveOpen] = useState(false);
   const [improveProof, setImproveProof] = useState("");
@@ -991,6 +993,7 @@ useEffect(() => {
       setRecent(cached.recent);
       setPhotos(cached.photos ?? []);
       setWhiskeyStatus(cached.whiskeyStatus ?? null);
+      setFlavorCallouts(cached.flavorCallouts ?? []);
       setStatusError("");
       setLoading(false);
     }
@@ -1156,6 +1159,18 @@ useEffect(() => {
         const nextPhotos = ((photoRows as any) ?? []) as WhiskeyPhoto[];
         setPhotos(nextPhotos);
 
+        const { data: calloutRows, error: calloutErr } = await supabase
+          .from("whiskey_flavor_callouts")
+          .select("label, mention_count, level")
+          .eq("whiskey_id", w.id)
+          .order("mention_count", { ascending: false })
+          .limit(3);
+
+        if (!alive) return;
+        if (calloutErr) throw new Error(calloutErr.message);
+        const nextFlavorCallouts = ((calloutRows as any) ?? []) as { label: string; mention_count: number; level: number }[];
+        setFlavorCallouts(nextFlavorCallouts);
+
         // Cache computed snapshot (so next open is instant)
         whiskeyProfileCache.set(routeId, {
           whiskeyId: nextWhiskeyId,
@@ -1166,6 +1181,7 @@ useEffect(() => {
           recent: nextRecent,
           photos: nextPhotos,
           whiskeyStatus: nextWhiskeyStatus,
+          flavorCallouts: nextFlavorCallouts,
           cachedAt: Date.now(),
         });
       } catch (e: any) {
@@ -2042,6 +2058,33 @@ useEffect(() => {
                 </View>
               ) : null}
             </View>
+
+            {flavorCallouts.length > 0 ? (
+              <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
+                <Text style={[type.caption, { fontWeight: "700", opacity: 0.75 }]}>
+                  Flavors Detected
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+                  {flavorCallouts.map((c, i) => (
+                    <View
+                      key={i}
+                      style={{
+                        paddingVertical: 6,
+                        paddingHorizontal: 12,
+                        borderRadius: 999,
+                        backgroundColor: sunken,
+                        borderWidth: 1,
+                        borderColor: border,
+                      }}
+                    >
+                      <Text style={[type.caption, { fontWeight: "800", opacity: 0.9 }]}>
+                        {toDisplayTitleCase(c.label)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
 
             <Text
               style={[
