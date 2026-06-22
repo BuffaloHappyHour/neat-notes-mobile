@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
 import { radii } from "../../lib/radii";
@@ -9,6 +9,7 @@ import { spacing } from "../../lib/spacing";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 
+import { getMyDistilleryAccount } from "../../lib/barrelApi";
 import { CategoryMixCard } from "../../src/profile/components/CategoryMixCard";
 import { WeeklyPulseBanner } from "../../src/profile/components/WeeklyPulseBanner";
 import { InsightsCTA } from "../../src/profile/components/InsightsCTA";
@@ -194,6 +195,62 @@ function HostEventCTA({ onPress }: { onPress: () => void }) {
   );
 }
 
+function DistilleryCTA({ name, onPress }: { name: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        backgroundColor: colors.glassSurface,
+        overflow: "hidden",
+        ...shadows.card,
+        flexDirection: "row",
+        alignItems: "center",
+        opacity: pressed ? 0.88 : 1,
+      })}
+    >
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 2,
+          backgroundColor: colors.accent,
+        }}
+      />
+      <View
+        style={{
+          marginLeft: spacing.md,
+          marginVertical: spacing.md,
+          marginRight: spacing.md,
+          width: 36,
+          height: 36,
+          borderRadius: radii.md,
+          backgroundColor: colors.accentSoft,
+          borderWidth: 1,
+          borderColor: colors.borderSubtle,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name="wine-outline" size={18} color={colors.accent} />
+      </View>
+      <View style={{ flex: 1, gap: 3, paddingVertical: spacing.md }}>
+        <Text style={[type.sectionHeader, { color: colors.textPrimary, fontSize: 20, lineHeight: 26 }]}>
+          Barrel Management
+        </Text>
+        <Text style={[type.caption, { color: colors.textSecondary }]}>{name}</Text>
+      </View>
+      <View style={{ paddingRight: spacing.md, paddingLeft: spacing.sm }}>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </View>
+    </Pressable>
+  );
+}
+
 export default function ProfileTab() {
   const {
     loading,
@@ -230,6 +287,14 @@ export default function ProfileTab() {
     editFromActions,
     deleteFromActions,
   } = useProfileData();
+
+  const [myDistillery, setMyDistillery] = useState<{ distillery_id: string; distillery_name: string } | null>(null);
+
+  useEffect(() => {
+    getMyDistilleryAccount()
+      .then((accounts) => setMyDistillery(accounts[0] ?? null))
+      .catch(() => {});
+  }, []);
 
   const isEarlyUser = (tastingCount ?? 0) < 3;
   const hasAnyTastings = (tastingCount ?? 0) > 0;
@@ -356,6 +421,12 @@ export default function ProfileTab() {
               )}
 
               <HostEventCTA onPress={() => router.push("/host-events" as any)} />
+              {myDistillery ? (
+                <DistilleryCTA
+                  name={myDistillery.distillery_name}
+                  onPress={() => router.push("/distillery" as any)}
+                />
+              ) : null}
             </View>
 
             <View style={{ gap: spacing.sm }}>

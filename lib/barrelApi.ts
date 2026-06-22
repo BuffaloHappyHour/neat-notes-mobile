@@ -33,6 +33,23 @@ export type BarrelDraft = {
   pairingNote: string;
   /** Set when the barrel already exists in distillery_barrels; skips the barrel insert. */
   existingBarrelId?: string | null;
+  // Owner-barrel extras (used when adding directly to distillery, not an event)
+  fillDate?: string | null;
+  targetAgeMonths?: number | null;
+  notes?: string | null;
+};
+
+export type OwnerBarrelItem = {
+  id: string;
+  barrelNumber: string;
+  whiskeyTypeId: string | null;
+  whiskeyType: string | null;
+  proof: number | null;
+  ageMonths: number | null;
+  mashBill: string | null;
+  fillDate: string | null;
+  targetAgeMonths: number | null;
+  notes: string | null;
 };
 
 export type DistilleryBarrelPickerItem = {
@@ -471,4 +488,76 @@ export async function getDistilleryBarrelsForEvent(
     ageMonths: row.age_months as number | null,
     mashBill: row.mash_bill as string | null,
   }));
+}
+
+// ─── Owner barrel management (distillery_id-scoped, event_id = null) ─────────
+
+export async function fetchOwnerBarrels(distilleryId: string): Promise<OwnerBarrelItem[]> {
+  const { data, error } = await supabase
+    .from("distillery_barrels")
+    .select(
+      "id, barrel_number, whiskey_type_id, proof, age_months, mash_bill, fill_date, target_age_months, notes, whiskey_types(name)"
+    )
+    .eq("distillery_id", distilleryId)
+    .order("barrel_number");
+
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as any[]).map((b) => ({
+    id: b.id as string,
+    barrelNumber: b.barrel_number as string,
+    whiskeyTypeId: b.whiskey_type_id as string | null,
+    whiskeyType: (b.whiskey_types?.name as string) ?? null,
+    proof: b.proof as number | null,
+    ageMonths: b.age_months as number | null,
+    mashBill: b.mash_bill as string | null,
+    fillDate: b.fill_date as string | null,
+    targetAgeMonths: b.target_age_months as number | null,
+    notes: b.notes as string | null,
+  }));
+}
+
+export async function insertOwnerBarrel(
+  distilleryId: string,
+  draft: BarrelDraft
+): Promise<OwnerBarrelItem> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in");
+
+  const { data, error } = await supabase
+    .from("distillery_barrels")
+    .insert({
+      distillery_id: distilleryId,
+      barrel_number: draft.barrelNumber,
+      whiskey_type_id: draft.whiskeyTypeId,
+      mash_bill: draft.mashBill || null,
+      proof: draft.proof,
+      age_months: draft.ageMonths,
+      fill_date: draft.fillDate || null,
+      target_age_months: draft.targetAgeMonths ?? null,
+      notes: draft.notes || null,
+      created_by_user_id: user.id,
+      event_id: null,
+      is_event_private: false,
+    })
+    .select(
+      "id, barrel_number, whiskey_type_id, proof, age_months, mash_bill, fill_date, target_age_months, notes, whiskey_types(name)"
+    )
+    .single();
+
+  if (error) throw new Error(error.message);
+  const b = data as any;
+  return {
+    id: b.id as string,
+    barrelNumber: b.barrel_number as string,
+    whiskeyTypeId: b.whiskey_type_id as string | null,
+    whiskeyType: (b.whiskey_types?.name as string) ?? null,
+    proof: b.proof as number | null,
+    ageMonths: b.age_months as number | null,
+    mashBill: b.mash_bill as string | null,
+    fillDate: b.fill_date as string | null,
+    targetAgeMonths: b.target_age_months as number | null,
+    notes: b.notes as string | null,
+  };
 }

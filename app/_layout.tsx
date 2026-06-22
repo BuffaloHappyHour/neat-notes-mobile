@@ -17,6 +17,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Alert, ImageBackground, Linking, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Purchases from "react-native-purchases";
+import { initAppsFlyer, setCustomerUserId as afSetCustomerUserId } from '../lib/appsflyer';
 import { bootstrapApp } from "../lib/bootstrapApp";
 import { registerForPushNotifications } from '../lib/notifications';
 import { supabase } from "../lib/supabase";
@@ -54,6 +55,7 @@ function RootLayout() {
         void checkOnboarding(user.id);
         void registerForPushNotifications();
         void syncAppVersion(user.id);
+        afSetCustomerUserId(user.id);
       }
     });
 
@@ -64,6 +66,7 @@ function RootLayout() {
         void checkOnboarding(session.user.id);
         void registerForPushNotifications();
         void syncAppVersion(session.user.id);
+        afSetCustomerUserId(session.user.id);
       }
     });
 
@@ -91,6 +94,7 @@ function RootLayout() {
       }
 
       bootstrapApp().catch((e) => console.error("[bootstrap] unexpected error:", e));
+      initAppsFlyer().catch((e) => console.error('[appsflyer] init failed:', e));
     }
 
     run();

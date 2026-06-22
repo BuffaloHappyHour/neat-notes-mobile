@@ -38,6 +38,18 @@ import {
 
 /* ---------- CACHE ---------- */
 
+type PalateMatchResult = {
+  is_premium?: boolean;
+  score?: number;
+  tier?: string;
+  confidence_label?: string;
+  explanation?: string | null;
+  top_matches?: string[];
+  top_conflicts?: string[];
+  shared_node_count?: number;
+  error?: string;
+};
+
 // Simple in-memory cache so opening the same whiskey feels instant.
 type WhiskeyProfileCacheEntry = {
   whiskeyId: string;
@@ -58,6 +70,7 @@ type WhiskeyProfileCacheEntry = {
   photos: WhiskeyPhoto[];
   whiskeyStatus: string | null;
   flavorCallouts: { label: string; mention_count: number; level: number }[];
+  palateMatch: PalateMatchResult | null;
   cachedAt: number;
 };
 
@@ -144,6 +157,51 @@ function formatAge(v: any): string | null {
 function cleanText(v: any): string | null {
   const s = String(v ?? "").trim();
   return s ? s : null;
+}
+
+/* ---------- PALATE MATCH HELPERS ---------- */
+
+function tierLabel(tier?: string): string {
+  switch (tier) {
+    case "match":    return "Match";
+    case "maybe":    return "Maybe";
+    case "no_match": return "No Match";
+    default:         return "";
+  }
+}
+
+function tierBgColor(tier?: string): string {
+  switch (tier) {
+    case "match":    return colors.accentFaint;
+    case "maybe":    return (colors as any).surfaceRaised ?? colors.surface;
+    case "no_match": return "transparent";
+    default:         return "transparent";
+  }
+}
+
+function tierBorderColor(tier?: string): string {
+  switch (tier) {
+    case "match":    return colors.accent;
+    case "maybe":    return colors.divider;
+    case "no_match": return (colors as any).borderSubtle ?? colors.divider;
+    default:         return colors.divider;
+  }
+}
+
+function tierTextColor(tier?: string): string {
+  switch (tier) {
+    case "match":    return colors.accent;
+    default:         return colors.textSecondary;
+  }
+}
+
+function confidenceLabel(label?: string): string {
+  switch (label) {
+    case "high":     return "High";
+    case "moderate": return "Moderate";
+    case "low":      return "Low";
+    default:         return "";
+  }
 }
 
 /* ---------- THEME TOKENS ---------- */
@@ -476,9 +534,11 @@ useEffect(() => {
   const [recent, setRecent] = useState<TastingSupabaseRow[]>([]);
   const [photos, setPhotos] = useState<WhiskeyPhoto[]>([]);
   const [isPremium, setIsPremium] = useState(false);
+  const [palateMatch, setPalateMatch] = useState<PalateMatchResult | null>(null);
   const [whiskeyStatus, setWhiskeyStatus] = useState<string | null>(null);
   const [whiskeySource, setWhiskeySource] = useState<string | null>(null);
   const [flavorCallouts, setFlavorCallouts] = useState<{ label: string; mention_count: number; level: number }[]>([]);
+  const [bottleDetailsOpen, setBottleDetailsOpen] = useState(false);
   const [welcomeSheetOpen, setWelcomeSheetOpen] = useState(false);
   const [improveOpen, setImproveOpen] = useState(false);
   const [improveProof, setImproveProof] = useState("");
@@ -768,6 +828,7 @@ useEffect(() => {
     setEditRegion(details.region || null);
     setEditSubRegion(details.subRegion || null);
     setEditMode(true);
+    setBottleDetailsOpen(true);
     setEditDropdownOpen(null);
     if (taxWhiskeyTypes.length === 0) {
       await loadTaxonomy(details.category ?? null, details.region ?? null);
@@ -994,6 +1055,7 @@ useEffect(() => {
       setPhotos(cached.photos ?? []);
       setWhiskeyStatus(cached.whiskeyStatus ?? null);
       setFlavorCallouts(cached.flavorCallouts ?? []);
+      setPalateMatch(cached.palateMatch ?? null);
       setStatusError("");
       setLoading(false);
     }
@@ -1171,6 +1233,17 @@ useEffect(() => {
         const nextFlavorCallouts = ((calloutRows as any) ?? []) as { label: string; mention_count: number; level: number }[];
         setFlavorCallouts(nextFlavorCallouts);
 
+        let nextPalateMatch: PalateMatchResult | null = null;
+        if (user?.id) {
+          const { data: matchData } = await supabase.rpc(
+            "get_palate_match_for_display",
+            { p_whiskey_id: w.id }
+          );
+          if (!alive) return;
+          nextPalateMatch = (matchData as any) ?? null;
+          setPalateMatch(nextPalateMatch);
+        }
+
         // Cache computed snapshot (so next open is instant)
         whiskeyProfileCache.set(routeId, {
           whiskeyId: nextWhiskeyId,
@@ -1182,6 +1255,7 @@ useEffect(() => {
           photos: nextPhotos,
           whiskeyStatus: nextWhiskeyStatus,
           flavorCallouts: nextFlavorCallouts,
+          palateMatch: nextPalateMatch,
           cachedAt: Date.now(),
         });
       } catch (e: any) {
@@ -1545,39 +1619,47 @@ useEffect(() => {
         {/* Bottle details */}
         <View style={{ gap: 4, marginTop: 4 }}>
           {/* Header row */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Pressable
+            onPress={withTick(() => setBottleDetailsOpen(v => !v))}
+            style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+          >
             <Text style={[type.sectionHeader, { fontSize: 20 }]}>Bottle details</Text>
-            {!editMode ? (
-              <Pressable
-                onPress={withTick(openEditMode)}
-                style={({ pressed }) => ({
-                  paddingVertical: 4,
-                  paddingHorizontal: 10,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: colors.borderSubtle,
-                  backgroundColor: pressed ? colors.surfaceSunken : "transparent",
-                })}
-              >
-                <Text style={[type.labelCaps, { fontSize: 11, color: colors.textSecondary }]}>Suggest edits</Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={cancelEditMode}
-                style={({ pressed }) => ({
-                  paddingVertical: 4,
-                  paddingHorizontal: 10,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: colors.borderSubtle,
-                  backgroundColor: pressed ? colors.surfaceSunken : "transparent",
-                })}
-              >
-                <Text style={[type.labelCaps, { fontSize: 11, color: colors.textMuted }]}>Cancel</Text>
-              </Pressable>
-            )}
-          </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              {!editMode ? (
+                <Pressable
+                  onPress={withTick(openEditMode)}
+                  style={({ pressed }) => ({
+                    paddingVertical: 4,
+                    paddingHorizontal: 10,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: colors.borderSubtle,
+                    backgroundColor: pressed ? colors.surfaceSunken : "transparent",
+                  })}
+                >
+                  <Text style={[type.labelCaps, { fontSize: 11, color: colors.textSecondary }]}>Suggest edits</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={cancelEditMode}
+                  style={({ pressed }) => ({
+                    paddingVertical: 4,
+                    paddingHorizontal: 10,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: colors.borderSubtle,
+                    backgroundColor: pressed ? colors.surfaceSunken : "transparent",
+                  })}
+                >
+                  <Text style={[type.labelCaps, { fontSize: 11, color: colors.textMuted }]}>Cancel</Text>
+                </Pressable>
+              )}
+              <Ionicons name={bottleDetailsOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} />
+            </View>
+          </Pressable>
 
+          {bottleDetailsOpen ? (
+          <>
           <SectionDivider />
 
           {/* Display Name — only in edit mode */}
@@ -1808,6 +1890,8 @@ useEffect(() => {
               </Text>
             </View>
           )}
+          </>
+          ) : null}
         </View>
 
         <View style={{ gap: 5, marginTop: spacing.sm }}>
@@ -2025,12 +2109,79 @@ useEffect(() => {
           />
         </View>
 
-        {/* Flavor Radar */}
+        {/* Flavor Profile */}
         {community.total >= 2 ? (
           <View style={{ gap: 5 }}>
             <Text style={[type.sectionHeader, { fontSize: 20 }]}>Flavor Profile</Text>
             <SectionDivider />
 
+            {/* Block 1: Palate Match */}
+            {palateMatch !== null && palateMatch.tier !== "insufficient_data" && !palateMatch.error ? (
+              palateMatch.is_premium === false ? (
+                <View style={{ alignItems: "center", gap: spacing.sm, paddingVertical: spacing.md }}>
+                  <View style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 20,
+                    borderRadius: 999,
+                    backgroundColor: tierBgColor(palateMatch.tier),
+                    borderWidth: 1,
+                    borderColor: tierBorderColor(palateMatch.tier),
+                  }}>
+                    <Text style={[type.sectionHeader, { fontSize: 18, color: tierTextColor(palateMatch.tier) }]}>
+                      {tierLabel(palateMatch.tier)}
+                    </Text>
+                  </View>
+                  <Text style={[type.caption, { opacity: 0.6 }]}>
+                    {confidenceLabel(palateMatch.confidence_label)} confidence
+                  </Text>
+                  <Pressable
+                    onPress={() => router.push("/insights" as any)}
+                    style={({ pressed }) => ({
+                      marginTop: spacing.xs,
+                      paddingVertical: 10,
+                      paddingHorizontal: spacing.lg,
+                      borderRadius: radii.md,
+                      borderWidth: 1,
+                      borderColor: colors.accent,
+                      backgroundColor: pressed ? colors.accentFaint : "transparent",
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <Text style={[type.caption, { color: colors.accent, fontWeight: "700", textAlign: "center" }]}>
+                      Unlock your flavor overlay and full match details
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={{ alignItems: "center", gap: spacing.sm, paddingVertical: spacing.md }}>
+                  <Text style={[type.screenTitle, { fontSize: 48, lineHeight: 52 }]}>
+                    {Math.round(palateMatch.score ?? 0)}%
+                  </Text>
+                  <View style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 16,
+                    borderRadius: 999,
+                    backgroundColor: tierBgColor(palateMatch.tier),
+                    borderWidth: 1,
+                    borderColor: tierBorderColor(palateMatch.tier),
+                  }}>
+                    <Text style={[type.labelCaps, { fontSize: 12, color: tierTextColor(palateMatch.tier) }]}>
+                      {tierLabel(palateMatch.tier)}
+                    </Text>
+                  </View>
+                  <Text style={[type.caption, { opacity: 0.6 }]}>
+                    {confidenceLabel(palateMatch.confidence_label)} confidence
+                  </Text>
+                  {palateMatch.explanation ? (
+                    <Text style={[type.body, { textAlign: "center", opacity: 0.85, paddingHorizontal: spacing.lg }]}>
+                      {palateMatch.explanation}
+                    </Text>
+                  ) : null}
+                </View>
+              )
+            ) : null}
+
+            {/* Block 2: Flavor Radar */}
             <View style={{ position: "relative" }}>
               <View style={{ marginHorizontal: -spacing.md }}>
                 <RadarChart
@@ -2059,7 +2210,7 @@ useEffect(() => {
               ) : null}
             </View>
 
-            {flavorCallouts.length > 0 ? (
+            {isPremium && flavorCallouts.length > 0 ? (
               <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
                 <Text style={[type.caption, { fontWeight: "700", opacity: 0.75 }]}>
                   Flavors Detected

@@ -53,6 +53,7 @@ module.exports = {
 
     plugins: [
       "expo-router",
+      ["react-native-appsflyer", { shouldUseStrictMode: false }],
       "@react-native-community/datetimepicker",
       [
         "expo-camera",
@@ -120,6 +121,8 @@ module.exports = {
 
     extra: {
       googleIosClientId: "532540782942-1ri6cahndukdd8q5u7cd4ibhv9mv2aqn.apps.googleusercontent.com",
+      appsflyerDevKey: process.env.APPSFLYER_DEV_KEY ?? null,
+      appsflyerIosAppId: process.env.APPSFLYER_IOS_APP_ID ?? null,
       router: {},
       eas: {
         projectId: "85720fd6-e8f6-405c-b247-40af3fea9563",

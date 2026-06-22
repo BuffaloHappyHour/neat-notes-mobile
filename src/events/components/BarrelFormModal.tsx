@@ -32,6 +32,8 @@ type Props = {
   onClose: () => void;
   onSubmit: (draft: BarrelDraft) => void | Promise<void>;
   submitLabel?: string;
+  /** When set, distillery is pre-filled and locked; owner-barrel extra fields are shown. */
+  fixedDistillery?: { id: string; name: string };
 };
 
 function FieldLabel({ label, required }: { label: string; required?: boolean }) {
@@ -61,7 +63,7 @@ const inputStyle = (base: object) => ({
   fontSize: 15,
 });
 
-export function BarrelFormModal({ visible, onClose, onSubmit, submitLabel = "Add to Lineup" }: Props) {
+export function BarrelFormModal({ visible, onClose, onSubmit, submitLabel = "Add to Lineup", fixedDistillery }: Props) {
   // Distillery state
   const [distilleryQuery, setDistilleryQuery] = useState("");
   const [distilleryResults, setDistilleryResults] = useState<DistilleryResult[]>([]);
@@ -85,6 +87,10 @@ export function BarrelFormModal({ visible, onClose, onSubmit, submitLabel = "Add
   const [ageMonths, setAgeMonths] = useState("");
   const [mashBill, setMashBill] = useState("");
   const [pairingNote, setPairingNote] = useState("");
+  // Owner-barrel extras (only shown when fixedDistillery is set)
+  const [fillDate, setFillDate] = useState("");
+  const [targetAgeMonths, setTargetAgeMonths] = useState("");
+  const [notes, setNotes] = useState("");
 
   // Whiskey type picker
   const [whiskeyTypes, setWhiskeyTypes] = useState<WhiskeyTypeRow[]>([]);
@@ -95,6 +101,14 @@ export function BarrelFormModal({ visible, onClose, onSubmit, submitLabel = "Add
   const [error, setError] = useState("");
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Pre-fill distillery when fixedDistillery is provided
+  useEffect(() => {
+    if (!visible) return;
+    if (fixedDistillery) {
+      setSelectedDistillery({ id: fixedDistillery.id, name: fixedDistillery.name, region: null });
+    }
+  }, [visible, fixedDistillery]);
 
   // Load whiskey types once on open
   useEffect(() => {
@@ -134,7 +148,7 @@ export function BarrelFormModal({ visible, onClose, onSubmit, submitLabel = "Add
   function resetForm() {
     setDistilleryQuery("");
     setDistilleryResults([]);
-    setSelectedDistillery(null);
+    setSelectedDistillery(fixedDistillery ? { id: fixedDistillery.id, name: fixedDistillery.name, region: null } : null);
     setShowNewDistilleryForm(false);
     setNewName("");
     setNewRegion("Other");
@@ -149,6 +163,9 @@ export function BarrelFormModal({ visible, onClose, onSubmit, submitLabel = "Add
     setAgeMonths("");
     setMashBill("");
     setPairingNote("");
+    setFillDate("");
+    setTargetAgeMonths("");
+    setNotes("");
     setError("");
     setSubmitting(false);
     setTypePickerOpen(false);
@@ -216,6 +233,9 @@ export function BarrelFormModal({ visible, onClose, onSubmit, submitLabel = "Add
       ageMonths: ageMonths.trim() ? parseInt(ageMonths.trim(), 10) || null : null,
       mashBill: mashBill.trim() || null,
       pairingNote,
+      fillDate: fillDate.trim() || null,
+      targetAgeMonths: targetAgeMonths.trim() ? parseInt(targetAgeMonths.trim(), 10) || null : null,
+      notes: notes.trim() || null,
     };
 
     setSubmitting(true);
@@ -297,8 +317,24 @@ export function BarrelFormModal({ visible, onClose, onSubmit, submitLabel = "Add
             }}
           >
             <FieldLabel label="Distillery" required />
-
-            {selectedDistillery ? (
+            {fixedDistillery ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: colors.accentSoft,
+                  borderRadius: radii.md,
+                  borderWidth: 1,
+                  borderColor: colors.accent,
+                  paddingHorizontal: spacing.md,
+                  paddingVertical: spacing.sm,
+                }}
+              >
+                <Text style={[type.body, { color: colors.textPrimary, fontSize: 15 }]}>
+                  {fixedDistillery.name}
+                </Text>
+              </View>
+            ) : selectedDistillery ? (
               <View
                 style={{
                   flexDirection: "row",
@@ -656,6 +692,51 @@ export function BarrelFormModal({ visible, onClose, onSubmit, submitLabel = "Add
                 style={inputStyle(type.body)}
               />
             </View>
+
+            {fixedDistillery ? (
+              <>
+                <RowDivider />
+                <View style={{ gap: spacing.xs }}>
+                  <FieldLabel label="Fill Date — optional" />
+                  <TextInput
+                    value={fillDate}
+                    onChangeText={setFillDate}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={colors.textMuted}
+                    style={inputStyle(type.body)}
+                  />
+                </View>
+
+                <RowDivider />
+
+                <View style={{ gap: spacing.xs }}>
+                  <FieldLabel label="Target Age (months) — optional" />
+                  <TextInput
+                    value={targetAgeMonths}
+                    onChangeText={setTargetAgeMonths}
+                    placeholder="e.g. 48"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    style={inputStyle(type.body)}
+                  />
+                </View>
+
+                <RowDivider />
+
+                <View style={{ gap: spacing.xs }}>
+                  <FieldLabel label="Notes — optional" />
+                  <TextInput
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder="Barrel notes…"
+                    placeholderTextColor={colors.textMuted}
+                    multiline
+                    numberOfLines={3}
+                    style={[inputStyle(type.body), { height: 72, textAlignVertical: "top" }]}
+                  />
+                </View>
+              </>
+            ) : null}
           </View>
 
           {error ? (

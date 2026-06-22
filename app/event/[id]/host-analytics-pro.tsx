@@ -208,11 +208,11 @@ export default function EventAnalyticsProScreen() {
       const { data, error: rpcErr } = await supabase.rpc("get_event_analytics", {
         p_event_id: eventId,
       });
+      console.log('analytics rpc result:', JSON.stringify(data), 'error:', JSON.stringify(rpcErr));
       if (rpcErr) {
         setError(rpcErr.message);
       } else {
         const parsed = typeof data === "string" ? JSON.parse(data) : data;
-        if (__DEV__) console.log("get_event_analytics raw:", JSON.stringify(data));
         setAnalytics(parsed as AnalyticsData);
       }
       setLoading(false);
