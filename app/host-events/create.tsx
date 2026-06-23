@@ -1,7 +1,7 @@
+import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, {
   DateTimePickerAndroid,
 } from "@react-native-community/datetimepicker";
-import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -18,19 +18,19 @@ import {
 } from "react-native";
 
 import { useRoles } from "../../hooks/useRoles";
+import { getMyDistilleryAccount, saveBarrelLineup, type BarrelDraft } from "../../lib/barrelApi";
+import { saveEventLineup, type LineupDraft } from "../../lib/eventLineup";
 import { radii } from "../../lib/radii";
 import { shadows } from "../../lib/shadows";
 import { spacing } from "../../lib/spacing";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
-import { saveEventLineup, type LineupDraft } from "../../lib/eventLineup";
-import { saveBarrelLineup, getMyDistilleryAccount, type BarrelDraft } from "../../lib/barrelApi";
 import { searchVenues, type VenueResult } from "../../lib/venueSearch";
-import { WhiskeySearchModal } from "../../src/logTab/components/WhiskeySearchModal";
 import { BarrelFormModal } from "../../src/events/components/BarrelFormModal";
 import { CustomWhiskeyModal } from "../../src/events/components/CustomWhiskeyModal";
 import { DistilleryBarrelPickerModal } from "../../src/events/components/DistilleryBarrelPickerModal";
+import { WhiskeySearchModal } from "../../src/logTab/components/WhiskeySearchModal";
 
 const EVENT_TYPES = [
   "Tasting Class",
@@ -428,10 +428,34 @@ export default function CreateEventScreen() {
   const [iosPickerValue, setIosPickerValue] = useState(new Date());
 
   // Tier cap
-  const { isHostPro, isHostStarter } = useRoles();
-  const tierCap = isHostPro ? 50 : isHostStarter ? 25 : 10;
+  const { isHostPro, isHostStarter, isAdmin } = useRoles();
+  const tierCap = isHostPro ? 50 : isHostStarter ? 25 : 5;
   const tierLabel = isHostPro ? "Host Pro" : isHostStarter ? "Host Starter" : "Free";
   const showUpgradeCaption = !isHostPro;
+
+  // Free tier flag
+  const isFree = !isAdmin && !isHostStarter && !isHostPro;
+
+  // Monthly limit check (host_starter and host_pro only — free has no limit)
+  const [accessLoading, setAccessLoading] = useState(true);
+  const [underLimit, setUnderLimit] = useState(true);
+
+  useEffect(() => {
+    async function checkLimit() {
+      try {
+        if (isFree) {
+          // Free users always pass — no monthly cap
+          setUnderLimit(true);
+          return;
+        }
+        const { data, error } = await supabase.rpc("check_monthly_event_limit");
+        if (!error) setUnderLimit(!!data);
+      } finally {
+        setAccessLoading(false);
+      }
+    }
+    void checkLimit();
+  }, [isFree]);
 
   useEffect(() => {
     getMyDistilleryAccount()
@@ -1016,9 +1040,9 @@ export default function CreateEventScreen() {
 
           <ToggleRow
             label="Public Event"
-            subtitle="Visible in public event discovery"
-            value={isPublic}
-            onChange={setIsPublic}
+            subtitle={isFree ? "Upgrade to Host Starter to make events public" : "Visible in public event discovery"}
+            value={isFree ? false : isPublic}
+            onChange={isFree ? () => {} : setIsPublic}
           />
 
           <RowDivider />
@@ -1368,6 +1392,40 @@ export default function CreateEventScreen() {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  if (accessLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator color={colors.accent} />
+      </View>
+    );
+  }
+
+  if (!underLimit) {
+    const limitLabel = isHostPro ? "5 events" : "2 events";
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background, padding: spacing.xl }}>
+        <Text style={[type.sectionHeader, { color: colors.textPrimary, textAlign: "center", marginBottom: spacing.sm }]}>
+          Monthly limit reached
+        </Text>
+        <Text style={[type.body, { color: colors.textSecondary, textAlign: "center", marginBottom: spacing.lg }]}>
+          Your {tierLabel} plan includes {limitLabel} per month. Upgrade to Host Pro for more.
+        </Text>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => ({
+            paddingVertical: spacing.md,
+            paddingHorizontal: spacing.xl,
+            borderRadius: 999,
+            backgroundColor: colors.accent,
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <Text style={[type.button, { color: colors.background }]}>Go Back</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
