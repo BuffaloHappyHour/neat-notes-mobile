@@ -80,7 +80,7 @@ function EventsTab() {
     const { data } = await supabase
       .from("events")
       .select(
-        "id, name, starts_at, ends_at, status, event_type, venue_name_free, venue_city, venue_state, is_public, max_attendees, join_code"
+        "id, name, starts_at, ends_at, status, event_type, venue_name_free, venue_city, venue_state, is_public, is_active, max_attendees, join_code"
       )
       .eq("is_active", true)
       .eq("is_public", true)
@@ -96,8 +96,10 @@ function EventsTab() {
   }, []);
 
   const isPast = useCallback((event: EventRow): boolean => {
-    return !event.is_active ||
-      (event.ends_at != null && new Date(event.ends_at) < new Date());
+    if (!event.is_active) return true;
+    if (event.ends_at != null) return new Date(event.ends_at) < new Date();
+    if (event.starts_at != null) return new Date(event.starts_at) < new Date();
+    return false;
   }, []);
 
   const allStates = useMemo(() => {
