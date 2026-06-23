@@ -1138,7 +1138,7 @@ export default function EventPage() {
                         : router.push(
                             `/log/cloud-tasting?whiskeyName=${encodeURIComponent(
                               item.display_name
-                            )}&whiskeyId=${encodeURIComponent(item.whiskey_id)}&lockName=1` as any
+                            )}&whiskeyId=${encodeURIComponent(item.whiskey_id)}&lockName=1&eventId=${encodeURIComponent(eventId)}` as any
                           )
                     }
                     style={({ pressed }) => ({
