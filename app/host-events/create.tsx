@@ -29,6 +29,7 @@ import { saveBarrelLineup, getMyDistilleryAccount, type BarrelDraft } from "../.
 import { searchVenues, type VenueResult } from "../../lib/venueSearch";
 import { WhiskeySearchModal } from "../../src/logTab/components/WhiskeySearchModal";
 import { BarrelFormModal } from "../../src/events/components/BarrelFormModal";
+import { CustomWhiskeyModal } from "../../src/events/components/CustomWhiskeyModal";
 import { DistilleryBarrelPickerModal } from "../../src/events/components/DistilleryBarrelPickerModal";
 
 const EVENT_TYPES = [
@@ -405,6 +406,8 @@ export default function CreateEventScreen() {
   const [pairingNotes, setPairingNotes] = useState("");
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [barrelFormOpen, setBarrelFormOpen] = useState(false);
+  const [customWhiskeyVisible, setCustomWhiskeyVisible] = useState(false);
+  const [customWhiskeyInitialName, setCustomWhiskeyInitialName] = useState("");
   const [distilleryPickerOpen, setDistilleryPickerOpen] = useState(false);
 
   // Venue
@@ -1448,12 +1451,26 @@ export default function CreateEventScreen() {
           onSelect={handleLineupSelect}
           onCustomEntry={(name) => {
             setSearchModalOpen(false);
-            router.push(
-              `/log/cloud-tasting?whiskeyName=${encodeURIComponent(name)}&lockName=0` as any
-            );
+            setCustomWhiskeyInitialName(name);
+            setCustomWhiskeyVisible(true);
           }}
         />
       ) : null}
+
+      <CustomWhiskeyModal
+        visible={customWhiskeyVisible}
+        initialName={customWhiskeyInitialName}
+        onClose={() => setCustomWhiskeyVisible(false)}
+        onCreated={(whiskeyId, displayName) => {
+          if (lineupItems.length < 8 && !lineupItems.some((i) => i.whiskeyId === whiskeyId)) {
+            setLineupItems((prev) => [
+              ...prev,
+              { whiskeyId, displayName, whiskeyType: null, proof: null, pairingNote: "" },
+            ]);
+          }
+          setCustomWhiskeyVisible(false);
+        }}
+      />
 
       {/* Barrel form modal (custom / no distillery account) */}
       <BarrelFormModal

@@ -137,6 +137,7 @@ export default function AdminInboxScreen() {
   const [distilleryCandidates, setDistilleryCandidates] = useState<DistilleryCandidateRow[]>([]);
   const [actingDistilleryId, setActingDistilleryId] = useState<string | null>(null);
   const [actingSuggestionId, setActingSuggestionId] = useState<string | null>(null);
+  const [actingPendingWhiskeyId, setActingPendingWhiskeyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -377,6 +378,49 @@ export default function AdminInboxScreen() {
     ]);
   }
 
+  async function approvePendingWhiskey(id: string) {
+    Alert.alert("Approve whiskey?", "This will mark it verified and visible in the catalog.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Approve",
+        onPress: async () => {
+          try {
+            setActingPendingWhiskeyId(id);
+            const { error } = await supabase.rpc("admin_approve_pending_whiskey", { p_id: id });
+            if (error) throw error;
+            await load();
+          } catch (e: any) {
+            Alert.alert("Approve failed", e?.message ?? "Unknown error");
+          } finally {
+            setActingPendingWhiskeyId(null);
+          }
+        },
+      },
+    ]);
+  }
+
+  async function rejectPendingWhiskey(id: string) {
+    Alert.alert("Reject whiskey?", "This will mark it rejected and hide it from the catalog.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Reject",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setActingPendingWhiskeyId(id);
+            const { error } = await supabase.rpc("admin_reject_pending_whiskey", { p_id: id });
+            if (error) throw error;
+            await load();
+          } catch (e: any) {
+            Alert.alert("Reject failed", e?.message ?? "Unknown error");
+          } finally {
+            setActingPendingWhiskeyId(null);
+          }
+        },
+      },
+    ]);
+  }
+
   if (ok === false) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, padding: spacing.lg }}>
@@ -561,29 +605,65 @@ export default function AdminInboxScreen() {
             keyExtractor={(r) => r.id}
             contentContainerStyle={{ paddingBottom: spacing.xl }}
             ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-            renderItem={({ item: w }) => (
-              <Pressable
-                onPress={() => router.push(`/whiskey/${w.id}` as any)}
-                style={({ pressed }) => ({
-                  backgroundColor: pressed ? colors.highlight : colors.surface,
-                  borderRadius: radii.lg,
-                  borderWidth: 1,
-                  borderColor: colors.accent,
-                  padding: spacing.md,
-                  gap: 4,
-                })}
-              >
-                <Text style={[type.body, { color: colors.textPrimary, fontWeight: "800" }]} numberOfLines={1}>
-                  {w.display_name ?? "(no name)"}
-                </Text>
-                <Text style={[type.microcopyItalic, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {[w.whiskey_type, w.proof ? `${w.proof} proof` : null, w.distillery].filter(Boolean).join(" • ") || "—"}
-                </Text>
-                <Text style={[type.microcopyItalic, { color: colors.accent, opacity: 0.85 }]}>
-                  Pending Verification
-                </Text>
-              </Pressable>
-            )}
+            ListEmptyComponent={
+              <Text style={[type.body, { color: colors.textSecondary }]}>No pending whiskeys.</Text>
+            }
+            renderItem={({ item: w }) => {
+              const busy = actingPendingWhiskeyId === w.id;
+              return (
+                <View
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderRadius: radii.lg,
+                    borderWidth: 1,
+                    borderColor: colors.accent,
+                    ...shadows.card,
+                    padding: spacing.md,
+                    flexDirection: "row",
+                    gap: spacing.md,
+                  }}
+                >
+                  <Pressable
+                    onPress={() => router.push(`/whiskey/${w.id}` as any)}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      opacity: pressed ? 0.9 : 1,
+                      gap: 4,
+                    })}
+                  >
+                    <Text style={[type.body, { color: colors.textPrimary, fontWeight: "800" }]} numberOfLines={1}>
+                      {w.display_name ?? "(no name)"}
+                    </Text>
+                    <Text style={[type.microcopyItalic, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {[w.whiskey_type, w.proof ? `${w.proof} proof` : null, w.distillery].filter(Boolean).join(" • ") || "—"}
+                    </Text>
+                    <Text style={[type.microcopyItalic, { color: colors.accent, opacity: 0.85 }]}>
+                      Pending Verification
+                    </Text>
+                  </Pressable>
+                  <View style={{ width: 92, gap: 6 }}>
+                    <MiniButton
+                      label={busy ? "…" : "Approve"}
+                      variant="primary"
+                      disabled={busy}
+                      onPress={() => approvePendingWhiskey(w.id)}
+                    />
+                    <MiniButton
+                      label={busy ? "…" : "Reject"}
+                      variant="danger"
+                      disabled={busy}
+                      onPress={() => rejectPendingWhiskey(w.id)}
+                    />
+                    <MiniButton
+                      label="Merge"
+                      variant="neutral"
+                      disabled={busy}
+                      onPress={() => Alert.alert("Merge coming soon.", "Merge functionality is not yet implemented.")}
+                    />
+                  </View>
+                </View>
+              );
+            }}
           />
         ) : (
           <FlatList

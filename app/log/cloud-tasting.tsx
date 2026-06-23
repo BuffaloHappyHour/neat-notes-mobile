@@ -867,7 +867,7 @@ export default function CloudTastingScreen() {
         return;
       }
 
-      if (isBlind && routeEventId) {
+      if (routeEventId) {
         router.replace(
           `/event/${encodeURIComponent(routeEventId)}?toastTitle=${encodeURIComponent("Tasting saved")}&toastMessage=${encodeURIComponent("Your tasting has been saved.")}` as any
         );
@@ -884,22 +884,50 @@ export default function CloudTastingScreen() {
         const user = sessionData.session?.user;
         if (!user) throw new Error("Not signed in.");
 
-        const { data: rpcData, error: rpcError } = await supabase.rpc("create_custom_whiskey", {
-          p_display_name: name,
-          p_whiskey_canonical: name.toLowerCase().replace(/\s+/g, "-"),
-          p_user_id: user.id,
-        });
-        if (rpcError) throw rpcError;
-        const newId = rpcData;
+        const canonical = name.toLowerCase().replace(/\s+/g, "-");
+
+        // Check for an existing whiskey with this slug before creating — avoids
+        // a duplicate-key error if the user previously logged the same custom name.
+        let resolvedId: string | null = null;
+        const { data: existing } = await supabase
+          .from("whiskeys")
+          .select("id")
+          .eq("whiskey_canonical", canonical)
+          .maybeSingle();
+
+        if (existing?.id) {
+          resolvedId = existing.id;
+        } else {
+          const { data: rpcData, error: rpcError } = await supabase.rpc("create_custom_whiskey", {
+            p_display_name: name,
+            p_whiskey_canonical: canonical,
+            p_user_id: user.id,
+          });
+          if (rpcError) {
+            // Race-condition duplicate: another insert beat us; try lookup once more.
+            const { data: fallback } = await supabase
+              .from("whiskeys")
+              .select("id")
+              .eq("whiskey_canonical", canonical)
+              .maybeSingle();
+            if (fallback?.id) {
+              resolvedId = fallback.id;
+            } else {
+              throw rpcError;
+            }
+          } else {
+            resolvedId = rpcData;
+          }
+        }
 
         const { error: tastingUpdateErr } = await supabase
           .from("tastings")
-          .update({ whiskey_id: newId })
+          .update({ whiskey_id: resolvedId })
           .eq("id", result.tastingId);
 
         if (tastingUpdateErr) throw new Error(tastingUpdateErr.message);
 
-        router.replace(`/whiskey/${encodeURIComponent(newId)}?newEntry=true` as any);
+        router.replace(`/whiskey/${encodeURIComponent(resolvedId!)}?newEntry=true` as any);
       }
     } catch (e: any) {
       const msg = String(e?.message ?? e ?? "Save failed");

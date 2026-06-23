@@ -37,6 +37,7 @@ import {
 } from "../../lib/barrelApi";
 import { WhiskeySearchModal } from "../../src/logTab/components/WhiskeySearchModal";
 import { BarrelFormModal } from "../../src/events/components/BarrelFormModal";
+import { CustomWhiskeyModal } from "../../src/events/components/CustomWhiskeyModal";
 import { DistilleryBarrelPickerModal } from "../../src/events/components/DistilleryBarrelPickerModal";
 import { EventQRModal } from "../../components/EventQRModal";
 import { getAttendeeCount } from "../../lib/eventAttendees";
@@ -324,6 +325,8 @@ export default function HostEventDetailScreen() {
   const [editItems, setEditItems] = useState<LineupDraft[]>([]);
   const [editHasPairing, setEditHasPairing] = useState(false);
   const [editSearchVisible, setEditSearchVisible] = useState(false);
+  const [customWhiskeyVisible, setCustomWhiskeyVisible] = useState(false);
+  const [customWhiskeyInitialName, setCustomWhiskeyInitialName] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -996,13 +999,26 @@ export default function HostEventDetailScreen() {
           onSelect={handleEditSelect}
           onCustomEntry={(name) => {
             setEditSearchVisible(false);
-            setEditVisible(false);
-            router.push(
-              `/log/cloud-tasting?whiskeyName=${encodeURIComponent(name)}&lockName=0` as any
-            );
+            setCustomWhiskeyInitialName(name);
+            setCustomWhiskeyVisible(true);
           }}
         />
       </Modal>
+
+      <CustomWhiskeyModal
+        visible={customWhiskeyVisible}
+        initialName={customWhiskeyInitialName}
+        onClose={() => setCustomWhiskeyVisible(false)}
+        onCreated={(whiskeyId, displayName) => {
+          if (editItems.length < 8 && !editItems.some((i) => i.whiskeyId === whiskeyId)) {
+            setEditItems((prev) => [
+              ...prev,
+              { whiskeyId, displayName, whiskeyType: null, proof: null, pairingNote: "" },
+            ]);
+          }
+          setCustomWhiskeyVisible(false);
+        }}
+      />
 
       <BarrelFormModal
         visible={barrelFormOpen}
