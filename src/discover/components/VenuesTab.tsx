@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { hapticTick } from "../../../lib/hapticsPress";
+import { type ApproximateLocation } from "../../../lib/location";
 import { shadows } from "../../../lib/shadows";
 import { spacing } from "../../../lib/spacing";
 import { supabase } from "../../../lib/supabase";
@@ -108,7 +109,7 @@ function SkeletonCard() {
 
 // ── Main component ─────────────────────────────────────────────────
 
-export function VenuesTab() {
+export function VenuesTab({ approxLocation: _approxLocation }: { approxLocation: ApproximateLocation | null }) {
   const [venues, setVenues] = useState<VenueRow[]>([]);
   const [venueQuery, setVenueQuery] = useState("");
   const [loading, setLoading] = useState(true);

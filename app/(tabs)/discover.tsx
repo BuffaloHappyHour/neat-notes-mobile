@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -20,6 +20,9 @@ import { spacing } from "../../lib/spacing";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
+
+import { type ApproximateLocation } from "../../lib/location";
+import { useLocationPermission } from "../../src/discover/hooks/useLocationPermission";
 
 import { AtHomeShelf } from "../../src/discover/components/AtHomeShelf";
 import { DiscoverHeaderCard } from "../../src/discover/components/DiscoverHeaderCard";
@@ -64,7 +67,7 @@ function fmtEventDate(iso: string): string {
   return `${datePart} · ${timePart}`;
 }
 
-function EventsTab() {
+function EventsTab({ approxLocation }: { approxLocation: ApproximateLocation | null }) {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -73,6 +76,7 @@ function EventsTab() {
   const [statePickerOpen, setStatePickerOpen] = useState(false);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [pastExpanded, setPastExpanded] = useState(false);
+  const locationAppliedRef = useRef(false);
 
   async function loadEvents(opts?: { silent?: boolean }) {
     if (opts?.silent) setRefreshing(true);
@@ -109,6 +113,16 @@ function EventsTab() {
     });
     return Array.from(states).sort();
   }, [events]);
+
+  useEffect(() => {
+    if (locationAppliedRef.current) return;
+    if (!approxLocation?.state) return;
+    if (allStates.length === 0) return;
+    if (allStates.includes(approxLocation.state)) {
+      locationAppliedRef.current = true;
+      setSelectedState(approxLocation.state);
+    }
+  }, [allStates, approxLocation]);
 
   const citiesForState = useMemo(() => {
     const cities = new Set<string>();
@@ -535,11 +549,66 @@ function EventsTab() {
   );
 }
 
+function LocationBanner({ onEnable, onDismiss }: { onEnable: () => void; onDismiss: () => void }) {
+  return (
+    <View
+      style={{
+        marginHorizontal: spacing.lg,
+        marginTop: spacing.sm,
+        marginBottom: spacing.xs,
+        borderRadius: radii.lg,
+        borderWidth: 1,
+        borderColor: colors.borderStrong,
+        backgroundColor: (colors as any).glassSurface ?? colors.surface,
+        padding: spacing.md,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.sm,
+      }}
+    >
+      <View style={{ flex: 1, gap: spacing.xs }}>
+        <Text style={[type.sectionHeader, { fontSize: 14, color: colors.textPrimary }]}>
+          Find events and venues near you
+        </Text>
+        <Text style={[type.caption, { color: colors.textSecondary }]}>
+          Enable location to pre-filter by your state.
+        </Text>
+      </View>
+      <Pressable
+        onPress={onEnable}
+        style={({ pressed }) => ({
+          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.xs,
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: colors.accent,
+          backgroundColor: (colors as any).accentFaint ?? "transparent",
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <Text style={[type.labelCaps, { fontSize: 11, color: colors.accent }]}>
+          Enable
+        </Text>
+      </Pressable>
+      <Pressable
+        onPress={onDismiss}
+        hitSlop={8}
+        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+      >
+        <Text style={[type.caption, { color: colors.textMuted }]}>✕</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function DiscoverTab() {
   const insets = useSafeAreaInsets();
   const { height: windowH } = useWindowDimensions();
 
   const [activeDiscoverTab, setActiveDiscoverTab] = useState<DiscoverTabKey>("forYou");
+  const { locationStatus, approxLocation, requestLocation } = useLocationPermission();
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const showBanner = locationStatus === "undetermined" && !bannerDismissed;
 
   const sheetMaxHeight = useMemo(() => {
     return Math.max(
@@ -687,6 +756,13 @@ export default function DiscoverTab() {
         })}
       </View>
 
+      {showBanner && (
+        <LocationBanner
+          onEnable={() => void requestLocation()}
+          onDismiss={() => setBannerDismissed(true)}
+        />
+      )}
+
       {/* ── For You tab ────────────────────────────────────────── */}
       {activeDiscoverTab === "forYou" && (
         <ScrollView
@@ -782,10 +858,10 @@ export default function DiscoverTab() {
       )}
 
       {/* ── Venues tab ─────────────────────────────────────────── */}
-      {activeDiscoverTab === "venues" && <VenuesTab />}
+      {activeDiscoverTab === "venues" && <VenuesTab approxLocation={approxLocation} />}
 
       {/* ── Events tab ─────────────────────────────────────────── */}
-      {activeDiscoverTab === "trending" && <EventsTab />}
+      {activeDiscoverTab === "trending" && <EventsTab approxLocation={approxLocation} />}
 
       <DiscoverModals
         sheetMaxHeight={sheetMaxHeight}
