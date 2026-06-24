@@ -247,6 +247,10 @@ export default function CloudTastingScreen() {
     isBlind?: string | string[];
     blindPosition?: string | string[];
     eventId?: string | string[];
+    venueId?: string | string[];
+    venueName?: string | string[];
+    sourceType?: string | string[];
+    pricePerOz?: string | string[];
   }>();
 
   const tastingId = (asString(params.tastingId) ?? "").trim();
@@ -260,6 +264,10 @@ export default function CloudTastingScreen() {
   const isBlind = (asString(params.isBlind) ?? "") === "true";
   const blindPosition = parseInt(asString(params.blindPosition) ?? "", 10) || null;
   const routeEventId = (asString(params.eventId) ?? "").trim() || null;
+  const routeVenueId = (asString(params.venueId) ?? "").trim() || null;
+  const routeVenueName = (asString(params.venueName) ?? "").trim();
+  const routeSourceType = (asString(params.sourceType) ?? "").trim();
+  const routePricePerOz = (asString(params.pricePerOz) ?? "").trim();
 
   const templateTastingIdRaw = (asString(params.templateTastingId) ?? "").trim();
   const templateTastingId = isUuid(templateTastingIdRaw) ? templateTastingIdRaw : "";
@@ -307,13 +315,13 @@ export default function CloudTastingScreen() {
   const [flavorTags, setFlavorTags] = useState<string[]>([]);
 
   const [sourceType, setSourceType] = useState<"purchased" | "bar">(
-    "purchased"
+    routeSourceType === "bar" ? "bar" : "purchased"
   );
-  const [barName, setBarName] = useState("");
+  const [barName, setBarName] = useState(routeVenueName);
   const [storeName, setStoreName] = useState("");
   const [sourceCity, setSourceCity] = useState("");
   const [sourceState, setSourceState] = useState("");
-  const [pricePerOz, setPricePerOz] = useState("");
+  const [pricePerOz, setPricePerOz] = useState(routePricePerOz);
   const [pricePerBottle, setPricePerBottle] = useState("");
   const [bottleSizeMl, setBottleSizeMl] = useState("750");
   const [pourSizeOz, setPourSizeOz] = useState("2");
@@ -853,6 +861,7 @@ export default function CloudTastingScreen() {
         blindPosition,
         blindWhiskeyName: isBlind ? routeWhiskeyName : undefined,
         eventId: routeEventId,
+        knownVenueId: routeVenueId,
 
         replaceTastingFlavorNodes,
         replaceTastingFlavorNodesWithSentiment,

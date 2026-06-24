@@ -73,6 +73,7 @@ export async function saveCloudTasting(params: {
   blindPosition?: number | null;
   blindWhiskeyName?: string | null;
   eventId?: string | null;
+  knownVenueId?: string | null;
 
   replaceTastingFlavorNodes: (
     tastingId: string,
@@ -124,6 +125,7 @@ export async function saveCloudTasting(params: {
     blindPosition,
     blindWhiskeyName,
     eventId,
+    knownVenueId,
 
     replaceTastingFlavorNodes,
     replaceTastingFlavorNodesWithSentiment,
@@ -200,21 +202,23 @@ export async function saveCloudTasting(params: {
     ...topFromRefine,
   ]).filter((t) => !isFinishLabel(t) && normalizeKey(t) !== "dislikes");
 
-  let venueId: string | null = null;
+  let venueId: string | null = knownVenueId ?? null;
 
-  const sourceName =
-    sourceType === "bar" ? barName?.trim() : storeName?.trim();
+  if (!venueId) {
+    const sourceName =
+      sourceType === "bar" ? barName?.trim() : storeName?.trim();
 
-  if (sourceName) {
-    const { data, error } = await supabase.rpc("get_or_create_venue", {
-      p_name: sourceName,
-      p_city: sourceCity || null,
-      p_region: sourceState || null,
-      p_country: "USA",
-    });
+    if (sourceName) {
+      const { data, error } = await supabase.rpc("get_or_create_venue", {
+        p_name: sourceName,
+        p_city: sourceCity || null,
+        p_region: sourceState || null,
+        p_country: "USA",
+      });
 
-    if (!error && data) {
-      venueId = data;
+      if (!error && data) {
+        venueId = data;
+      }
     }
   }
 const activeEventId = await getActiveEventId();

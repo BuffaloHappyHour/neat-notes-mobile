@@ -26,6 +26,7 @@ import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
 import { hapticTick, withTick } from "../../lib/hapticsPress";
+import { CameraView, useCameraPermissions } from "expo-camera";
 
 /* ---------- TYPES ---------- */
 
@@ -107,10 +108,16 @@ function WhiskeyMenuRow({
   item,
   stats,
   isPremium,
+  venueId,
+  venueName,
+  isLocked,
 }: {
   item: any;
   stats: any;
   isPremium: boolean;
+  venueId: string;
+  venueName: string;
+  isLocked: boolean;
 }) {
   const w = (item.whiskeys as any) ?? {};
   const available = item.available !== false;
@@ -204,16 +211,18 @@ function WhiskeyMenuRow({
 
           {/* Price + action */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 2 }}>
-            {priceStr != null && (
+            {priceStr != null && !isLocked && (
               <Text style={[type.caption, { color: colors.textTertiary }]}>{priceStr}</Text>
             )}
-            {available ? (
+            {isLocked ? (
+              <Text style={[type.labelCaps, { fontSize: 11, color: colors.textMuted }]}>
+                Check in to log
+              </Text>
+            ) : available ? (
               <Pressable
                 onPress={withTick(() =>
                   router.push(
-                    `/log/cloud-tasting?whiskeyId=${encodeURIComponent(
-                      w.id ?? ""
-                    )}&whiskeyName=${encodeURIComponent(name)}&lockName=1` as any
+                    `/log/cloud-tasting?whiskeyId=${encodeURIComponent(w.id ?? "")}&whiskeyName=${encodeURIComponent(name)}&lockName=1&sourceType=bar&venueId=${encodeURIComponent(venueId)}&venueName=${encodeURIComponent(venueName)}&pricePerOz=${encodeURIComponent(item.price_cents_1oz ? String(Math.round(item.price_cents_1oz / 100)) : "")}` as any
                   )
                 )}
                 style={({ pressed }) => ({
@@ -290,12 +299,14 @@ function VenueFilterSheet({
   whiskeyTypes,
   filter,
   onApply,
+  isLocked,
 }: {
   visible: boolean;
   onClose: () => void;
   whiskeyTypes: any[];
   filter: FilterState;
   onApply: (f: FilterState) => void;
+  isLocked: boolean;
 }) {
   const [draft, setDraft] = useState<FilterState>(filter);
   const [typeSectionOpen, setTypeSectionOpen] = useState(false);
@@ -540,7 +551,7 @@ function VenueFilterSheet({
         <View
           style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}
         >
-          {SORT_OPTIONS.map(opt => {
+          {SORT_OPTIONS.filter(opt => !isLocked || opt !== "Palate Match").map(opt => {
             const selected = draft.sortBy === opt;
             return (
               <Pressable
@@ -755,6 +766,13 @@ export default function VenueScreen() {
 
   const [isPremium, setIsPremium] = useState(false);
   const [venueData, setVenueData] = useState<any>(null);
+  const [requireCheckin, setRequireCheckin] = useState(false);
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [scannerPermission, requestScannerPermission] = useCameraPermissions();
+  const [codeEntry, setCodeEntry] = useState("");
+  const [codeEntryVisible, setCodeEntryVisible] = useState(false);
+  const [codeError, setCodeError] = useState("");
+  const [codeLoading, setCodeLoading] = useState(false);
 
   const fetchCheckinCount = async () => {
     const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
@@ -776,12 +794,13 @@ export default function VenueScreen() {
 
         const { data: venue, error: venueErr } = await supabase
           .from("venues")
-          .select("id, name, display_name, venue_type, address, city, state, phone, website, is_active, updated_at")
+          .select("id, name, display_name, venue_type, address, city, state, phone, website, is_active, updated_at, require_checkin, join_code")
           .eq("id", id)
           .single();
         if (venueErr) throw new Error(venueErr.message);
         if (!alive) return;
         setVenueData(venue as any);
+        setRequireCheckin((venue as any)?.require_checkin === true);
 
         const { data: items, error: itemsErr } = await supabase
           .from("venue_menu_items")
@@ -997,6 +1016,28 @@ export default function VenueScreen() {
     { value: formatRelativeTime((venueData as any)?.updated_at), label: "last updated", color: colors.accent },
   ];
 
+  async function handleJoinVenue(code: string) {
+    setCodeLoading(true);
+    setCodeError("");
+    try {
+      const { data, error } = await supabase.rpc("join_venue", {
+        p_join_code: code.trim().toUpperCase(),
+      });
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error("Invalid check-in code.");
+      setCheckedIn(true);
+      setCodeEntryVisible(false);
+      setScannerVisible(false);
+      setCodeEntry("");
+      await fetchCheckinCount();
+      await hapticTick();
+    } catch (e: any) {
+      setCodeError(String(e?.message ?? "Invalid code. Try again."));
+    } finally {
+      setCodeLoading(false);
+    }
+  }
+
   return (
     <>
       <Stack.Screen options={{ title: "" }} />
@@ -1129,21 +1170,30 @@ export default function VenueScreen() {
                       { text: "No thanks", style: "cancel" },
                       {
                         text: "Log a Tasting",
-                        onPress: () => setSearchVisible(true),
+                        onPress: () => router.push(
+                          `/log/cloud-tasting?sourceType=bar&venueId=${encodeURIComponent(id)}&venueName=${encodeURIComponent(venueName)}` as any
+                        ),
                       },
                     ]
                   );
                 } else {
-                  const { data: ci } = await supabase
-                    .from("venue_checkins")
-                    .insert({ venue_id: id, user_id: userId, checked_in_at: new Date().toISOString() })
-                    .select("id")
-                    .single();
-                  if (ci) {
-                    setCheckedIn(true);
-                    setCheckInId((ci as any).id);
-                    setCheckInTime(new Date());
-                    fetchCheckinCount();
+                  if (requireCheckin) {
+                    if (!scannerPermission?.granted) {
+                      await requestScannerPermission();
+                    }
+                    setScannerVisible(true);
+                  } else {
+                    const { data: ci } = await supabase
+                      .from("venue_checkins")
+                      .insert({ venue_id: id, user_id: userId, checked_in_at: new Date().toISOString() })
+                      .select("id")
+                      .single();
+                    if (ci) {
+                      setCheckedIn(true);
+                      setCheckInId((ci as any).id);
+                      setCheckInTime(new Date());
+                      fetchCheckinCount();
+                    }
                   }
                 }
               }}
@@ -1250,6 +1300,28 @@ export default function VenueScreen() {
             </Pressable>
           )}
 
+          {/* ── Check-in required banner ────────────────────────── */}
+          {requireCheckin && !checkedIn && (
+            <View style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.md,
+              padding: spacing.md,
+              borderRadius: radii.md,
+              backgroundColor: colors.accentFaint,
+              borderWidth: 1,
+              borderColor: colors.borderStrong,
+            }}>
+              <Ionicons name="qr-code-outline" size={20} color={colors.accent} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={[type.labelCaps, { color: colors.accent }]}>Check in required</Text>
+                <Text style={[type.caption, { color: colors.textMuted }]}>
+                  Scan the QR code at the venue to see prices and log tastings.
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* ── Menu Toggle ─────────────────────────────────────── */}
           <View
             style={{
@@ -1348,6 +1420,9 @@ export default function VenueScreen() {
                           item={item}
                           stats={itemStats}
                           isPremium={isPremium}
+                          venueId={id}
+                          venueName={venueName}
+                          isLocked={requireCheckin && !checkedIn}
                         />
                         {idx < items.length - 1 && (
                           <View
@@ -1381,6 +1456,7 @@ export default function VenueScreen() {
         whiskeyTypes={whiskeyTypes}
         filter={appliedFilter}
         onApply={f => setAppliedFilter(f)}
+        isLocked={requireCheckin && !checkedIn}
       />
 
       <VenueSearchModal
@@ -1388,6 +1464,135 @@ export default function VenueScreen() {
         onClose={() => setSearchVisible(false)}
         menuItems={menuItems}
       />
+
+      {/* ── QR Scanner Modal ────────────────────────────────── */}
+      <Modal
+        visible={scannerVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setScannerVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: "#000" }}>
+          <View style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingHorizontal: spacing.lg,
+            paddingTop: insets.top + spacing.md,
+            paddingBottom: spacing.md,
+          }}>
+            <Text style={[type.sectionHeader, { color: "#fff" }]}>Scan to Check In</Text>
+            <Pressable onPress={() => setScannerVisible(false)}>
+              <Ionicons name="close" size={24} color="#fff" />
+            </Pressable>
+          </View>
+
+          {scannerPermission?.granted ? (
+            <CameraView
+              style={{ flex: 1 }}
+              barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+              onBarcodeScanned={async ({ data }) => {
+                if (!codeLoading) {
+                  const code = data.replace("neatnotes://venue-checkin/", "").trim();
+                  await handleJoinVenue(code);
+                }
+              }}
+            />
+          ) : (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}>
+              <Text style={[type.body, { color: "#fff", textAlign: "center", marginBottom: spacing.lg }]}>
+                Camera access is needed to scan the QR code.
+              </Text>
+              <Pressable
+                onPress={requestScannerPermission}
+                style={{ paddingVertical: spacing.md, paddingHorizontal: spacing.xl, backgroundColor: colors.accent, borderRadius: 999 }}
+              >
+                <Text style={[type.button, { color: colors.background }]}>Allow Camera</Text>
+              </Pressable>
+            </View>
+          )}
+
+          <View style={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xl }}>
+            {codeError ? (
+              <Text style={[type.caption, { color: colors.danger, textAlign: "center", marginBottom: spacing.md }]}>
+                {codeError}
+              </Text>
+            ) : null}
+            <Pressable
+              onPress={() => { setScannerVisible(false); setCodeEntryVisible(true); }}
+              style={{ alignItems: "center", paddingVertical: spacing.md }}
+            >
+              <Text style={[type.labelCaps, { color: "rgba(255,255,255,0.6)" }]}>
+                Enter code manually instead
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Manual Code Entry Modal ──────────────────────────── */}
+      <Modal
+        visible={codeEntryVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setCodeEntryVisible(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}
+          onPress={() => setCodeEntryVisible(false)}
+        >
+          <View style={{
+            backgroundColor: colors.surface,
+            borderTopLeftRadius: radii.lg,
+            borderTopRightRadius: radii.lg,
+            padding: spacing.xl,
+            paddingBottom: insets.bottom + spacing.xl,
+            gap: spacing.md,
+          }}>
+            <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>Enter Check-In Code</Text>
+            <Text style={[type.caption, { color: colors.textMuted }]}>
+              Ask a staff member for the code if you can't scan the QR.
+            </Text>
+            <TextInput
+              value={codeEntry}
+              onChangeText={v => { setCodeEntry(v.toUpperCase()); setCodeError(""); }}
+              placeholder="e.g. HARTMAN"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              style={[type.body, {
+                color: colors.textPrimary,
+                backgroundColor: colors.surfaceSunken,
+                borderWidth: 1,
+                borderColor: codeError ? colors.danger : colors.borderStrong,
+                borderRadius: radii.md,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+                fontSize: 20,
+                letterSpacing: 4,
+              }]}
+            />
+            {codeError ? (
+              <Text style={[type.caption, { color: colors.danger }]}>{codeError}</Text>
+            ) : null}
+            <Pressable
+              onPress={() => handleJoinVenue(codeEntry)}
+              disabled={codeEntry.trim().length < 3 || codeLoading}
+              style={({ pressed }) => ({
+                paddingVertical: spacing.md,
+                borderRadius: 999,
+                backgroundColor: colors.accent,
+                alignItems: "center",
+                opacity: codeEntry.trim().length < 3 || codeLoading ? 0.45 : pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={[type.button, { color: colors.background }]}>
+                {codeLoading ? "Checking…" : "Check In"}
+              </Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </>
   );
 }
