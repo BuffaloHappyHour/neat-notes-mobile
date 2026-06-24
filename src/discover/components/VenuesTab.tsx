@@ -109,11 +109,13 @@ function SkeletonCard() {
 
 // ── Main component ─────────────────────────────────────────────────
 
-export function VenuesTab({ approxLocation: _approxLocation }: { approxLocation: ApproximateLocation | null }) {
+export function VenuesTab({ approxLocation }: { approxLocation: ApproximateLocation | null }) {
   const [venues, setVenues] = useState<VenueRow[]>([]);
   const [venueQuery, setVenueQuery] = useState("");
+  const [selectedState, setSelectedState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const didInitialLoadRef = useRef(false);
+  const locationAppliedRef = useRef(false);
 
   useEffect(() => {
     if (didInitialLoadRef.current) return;
@@ -154,17 +156,35 @@ export function VenuesTab({ approxLocation: _approxLocation }: { approxLocation:
     return () => { alive = false; };
   }, []);
 
-  // Filter by search query
+  const allStates = useMemo(() => {
+    const states = new Set<string>();
+    venues.forEach((v) => { if (v.state) states.add(v.state); });
+    return Array.from(states).sort();
+  }, [venues]);
+
+  useEffect(() => {
+    if (locationAppliedRef.current) return;
+    if (!approxLocation?.state) return;
+    if (allStates.length === 0) return;
+    if (allStates.includes(approxLocation.state)) {
+      locationAppliedRef.current = true;
+      setSelectedState(approxLocation.state);
+    }
+  }, [allStates, approxLocation]);
+
+  // State filter runs before text search
   const filtered = useMemo(() => {
+    let result = venues;
+    if (selectedState) result = result.filter((v) => v.state === selectedState);
     const q = venueQuery.trim().toLowerCase();
-    if (!q) return venues;
-    return venues.filter(
+    if (!q) return result;
+    return result.filter(
       (v) =>
         v.name.toLowerCase().includes(q) ||
         v.city?.toLowerCase().includes(q) ||
         v.state?.toLowerCase().includes(q)
     );
-  }, [venues, venueQuery]);
+  }, [venues, venueQuery, selectedState]);
 
   // Group: state → city → venues[]
   const grouped = useMemo(() => {
@@ -207,7 +227,7 @@ export function VenuesTab({ approxLocation: _approxLocation }: { approxLocation:
         style={[
           type.body,
           {
-            marginBottom: spacing.md,
+            marginBottom: spacing.sm,
             paddingVertical: 10,
             paddingHorizontal: 14,
             backgroundColor: colors.surface,
@@ -221,6 +241,34 @@ export function VenuesTab({ approxLocation: _approxLocation }: { approxLocation:
         autoCapitalize="none"
       />
 
+      {selectedState ? (
+        <Pressable
+          onPress={() => {
+            setSelectedState(null);
+            locationAppliedRef.current = false;
+          }}
+          style={({ pressed }) => ({
+            alignSelf: "flex-start",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.xs,
+            paddingHorizontal: 12,
+            paddingVertical: 7,
+            borderRadius: 999,
+            borderWidth: 1,
+            borderColor: colors.accent,
+            backgroundColor: (colors as any).accentFaint ?? "transparent",
+            marginBottom: spacing.md,
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <Text style={[type.caption, { color: colors.accent }]}>{selectedState}</Text>
+          <Text style={[type.caption, { color: colors.accent }]}>✕</Text>
+        </Pressable>
+      ) : (
+        <View style={{ marginBottom: spacing.md }} />
+      )}
+
       {loading ? (
         <>
           <SkeletonCard />
@@ -230,7 +278,11 @@ export function VenuesTab({ approxLocation: _approxLocation }: { approxLocation:
       ) : grouped.length === 0 ? (
         <View style={{ alignItems: "center", paddingTop: spacing.xl }}>
           <Text style={[type.body, { color: colors.textMuted }]}>
-            {venueQuery.trim() ? `No venues match "${venueQuery}"` : "No venues yet"}
+            {venueQuery.trim()
+              ? `No venues match "${venueQuery}"`
+              : selectedState
+              ? `No venues in ${selectedState}`
+              : "No venues yet"}
           </Text>
         </View>
       ) : (
