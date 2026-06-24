@@ -14,15 +14,33 @@ Notifications.setNotificationHandler({
   }),
 });
 
-export async function registerForPushNotifications(): Promise<string | null> {
+export type PushRegistrationResult =
+  | { status: "registered"; token: string }
+  | { status: "denied" }
+  | { status: "unavailable" };
+
+export async function canAskForPermissions(): Promise<boolean> {
+  if (!Device.isDevice) return false;
+  const { status } = await Notifications.getPermissionsAsync();
+  return status === "undetermined";
+}
+
+export async function registerForPushNotifications(): Promise<PushRegistrationResult> {
   try {
     if (!Device.isDevice) {
-      return null;
+      return { status: "unavailable" };
     }
 
-    const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== "granted") {
-      return null;
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+
+    let finalStatus = existingStatus;
+    if (existingStatus === "undetermined") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    if (finalStatus !== "granted") {
+      return { status: "denied" };
     }
 
     const projectId = Constants.expoConfig?.extra?.eas?.projectId as
@@ -35,7 +53,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
-    if (!userId) return null;
+    if (!userId) return { status: "unavailable" };
 
     const { error: upsertError } = await supabase.from("user_push_tokens").upsert(
       {
@@ -47,25 +65,25 @@ export async function registerForPushNotifications(): Promise<string | null> {
       { onConflict: "user_id" }
     );
     if (upsertError) {
-      console.error('Failed to save push token:', upsertError);
-      await supabase.from('analytics_events').insert({
+      console.error("Failed to save push token:", upsertError);
+      await supabase.from("analytics_events").insert({
         user_id: userId,
-        event_name: 'push_token_error',
-        properties: { message: upsertError.message, code: upsertError.code }
+        event_name: "push_token_error",
+        properties: { message: upsertError.message, code: upsertError.code },
       });
     }
 
-    return token.data;
+    return { status: "registered", token: token.data };
   } catch (error) {
-    console.error('Push token registration failed:', error);
+    console.error("Push token registration failed:", error);
     try {
       const { data: userData } = await supabase.auth.getUser();
-      await supabase.from('analytics_events').insert({
-        user_id: userData?.user?.id ?? '00000000-0000-0000-0000-000000000000',
-        event_name: 'push_token_registration_failed',
-        properties: { message: String(error), platform: Platform.OS }
+      await supabase.from("analytics_events").insert({
+        user_id: userData?.user?.id ?? "00000000-0000-0000-0000-000000000000",
+        event_name: "push_token_registration_failed",
+        properties: { message: String(error), platform: Platform.OS },
       });
     } catch {}
-    return null;
+    return { status: "unavailable" };
   }
 }

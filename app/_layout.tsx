@@ -53,7 +53,6 @@ function RootLayout() {
       const user = data.session?.user;
       if (user) {
         void checkOnboarding(user.id);
-        void registerForPushNotifications();
         void syncAppVersion(user.id);
         afSetCustomerUserId(user.id);
       }
