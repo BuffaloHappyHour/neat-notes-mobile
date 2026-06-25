@@ -23,6 +23,12 @@ module.exports = {
           "Allow Neat Notes to send you palate updates and event notifications",
         NSAppleSignInUsageDescription:
           "Sign in quickly and securely with your Apple ID",
+        NSAdvertisingAttributionReportEndpoint:
+          "https://appsflyer-skadnetwork.com/",
+        SKAdNetworkItems: [
+          { SKAdNetworkIdentifier: "v9wttpbfk9.skadnetwork" },
+          { SKAdNetworkIdentifier: "n38lu8286q.skadnetwork" },
+        ],
       },
     },
 
