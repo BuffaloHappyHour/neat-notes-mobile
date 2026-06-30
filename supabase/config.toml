@@ -1,4 +1,7 @@
 
+[functions.send-behavioral-notifications]
+verify_jwt = false
+
 [functions.lookup-upc]
 enabled = true
 verify_jwt = true

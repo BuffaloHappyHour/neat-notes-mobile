@@ -11,6 +11,7 @@ import {
   useFonts as useMontserratFonts,
 } from "@expo-google-fonts/montserrat";
 import * as Application from 'expo-application';
+import * as Notifications from 'expo-notifications';
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack, router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
@@ -97,6 +98,32 @@ function RootLayout() {
     }
 
     run();
+  }, []);
+
+  useEffect(() => {
+    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const url = response.notification.request.content.data?.url as string | undefined;
+      if (url) {
+        router.push(url as any);
+      }
+    });
+
+    // Cold start: delay to let router and auth resolve first
+    const timer = setTimeout(async () => {
+      const response = await Notifications.getLastNotificationResponseAsync();
+      if (!response) return;
+      const url = response.notification.request.content.data?.url as string | undefined;
+      if (!url) return;
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        router.push(url as any);
+      }
+    }, 1000);
+
+    return () => {
+      responseSub.remove();
+      clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {

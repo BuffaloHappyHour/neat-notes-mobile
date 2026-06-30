@@ -18,6 +18,16 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
+async function debugLog(supabaseUrl: string, authHeaders: Record<string,string>, label: string, data: unknown) {
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/function_debug_log`, {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ label, data: JSON.stringify(data), created_at: new Date().toISOString() }),
+    });
+  } catch {}
+}
+
 const SEGMENTS = {
   a: {
     title: "Your Palate Is Forming 🥃",
@@ -43,25 +53,41 @@ async function sendExpoBatch(
   tokens: string[],
   title: string,
   body: string
-): Promise<number> {
+): Promise<{ sent: number; receipts: unknown }> {
   let sent = 0;
+  let receipts: unknown = null;
   for (let i = 0; i < tokens.length; i += 100) {
     const batch = tokens.slice(i, i + 100);
-    const messages = batch.map((token) => ({ to: token, title, body, sound: "default" }));
+    const messages = batch.map((token) => ({ to: token, title, body, sound: "default", data: { url: "/(tabs)/profile" } }));
     try {
       const res = await fetch("https://exp.host/--/api/v2/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(messages),
       });
+      console.log(`Expo batch response status: ${res.status}`);
+      const resText = await res.text();
+      console.log(`Expo batch response body: ${resText}`);
       if (res.ok) {
-        const result = await res.json();
+        const result = JSON.parse(resText);
         const data: Array<{ status: string }> = result.data ?? [];
         sent += data.filter((d) => d.status === "ok").length;
+        const ticketIds = result.data?.map((d: any) => d.id).filter(Boolean) ?? [];
+        if (ticketIds.length > 0) {
+          await new Promise(r => setTimeout(r, 3000));
+          try {
+            const receiptRes = await fetch("https://exp.host/--/api/v2/push/getReceipts", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              body: JSON.stringify({ ids: ticketIds }),
+            });
+            receipts = await receiptRes.json();
+          } catch { /* non-fatal */ }
+        }
       }
     } catch { /* non-fatal per batch */ }
   }
-  return sent;
+  return { sent, receipts };
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -209,7 +235,7 @@ serve(async (req: Request) => {
       const segAIds = metricRows.filter((r) => r.tasting_count === 3).map((r) => r.user_id);
       if (segAIds.length > 0) {
         const tokenMap = await getTokenMap(segAIds);
-        counts.a = await sendExpoBatch(Object.values(tokenMap), SEGMENTS.a.title, SEGMENTS.a.body);
+        counts.a = (await sendExpoBatch(Object.values(tokenMap), SEGMENTS.a.title, SEGMENTS.a.body)).sent;
         console.log(`Segment A sent=${counts.a}`);
       }
 
@@ -217,7 +243,7 @@ serve(async (req: Request) => {
       const segBIds = metricRows.filter((r) => r.tasting_count === 10).map((r) => r.user_id);
       if (segBIds.length > 0) {
         const tokenMap = await getTokenMap(segBIds);
-        counts.b = await sendExpoBatch(Object.values(tokenMap), SEGMENTS.b.title, SEGMENTS.b.body);
+        counts.b = (await sendExpoBatch(Object.values(tokenMap), SEGMENTS.b.title, SEGMENTS.b.body)).sent;
         console.log(`Segment B sent=${counts.b}`);
       }
     }
@@ -248,7 +274,7 @@ serve(async (req: Request) => {
       if (segCToSend.length > 0) {
         const tokenMap = await getTokenMap(segCToSend);
         const sentIds = segCToSend.filter((id) => tokenMap[id]);
-        counts.c = await sendExpoBatch(Object.values(tokenMap), SEGMENTS.c.title, SEGMENTS.c.body);
+        counts.c = (await sendExpoBatch(Object.values(tokenMap), SEGMENTS.c.title, SEGMENTS.c.body)).sent;
         await recordSends(sentIds, "c");
         console.log(`Segment C sent=${counts.c}`);
       }
@@ -285,14 +311,12 @@ serve(async (req: Request) => {
       if (segDToSend.length > 0) {
         const tokenMap = await getTokenMap(segDToSend);
         const sentIds = segDToSend.filter((id) => tokenMap[id]);
-        counts.d = await sendExpoBatch(Object.values(tokenMap), SEGMENTS.d.title, SEGMENTS.d.body);
+        counts.d = (await sendExpoBatch(Object.values(tokenMap), SEGMENTS.d.title, SEGMENTS.d.body)).sent;
         await recordSends(sentIds, "d");
         console.log(`Segment D sent=${counts.d}`);
       }
     }
-    // ── SEGMENT E — Monday weekly palate pulse ────────────────────────────────
-    const dayOfWeek = new Date().getUTCDay(); // 0 = Sunday, 1 = Monday
-    if (dayOfWeek === 1) {
+    // ── SEGMENT E — weekly palate pulse ──────────────────────────────────────
     type TrendRow = {
       user_id: string;
       weekly_movement_status: string;
@@ -312,6 +336,7 @@ serve(async (req: Request) => {
       const d6Ago = new Date(now - 6 * 24 * 60 * 60 * 1000).toISOString();
       const alreadySentE = await alreadySentSet(segECandidates, "e", d6Ago);
       const segEToSend = segECandidates.filter((id) => !alreadySentE.has(id));
+      await debugLog(supabaseUrl, authHeaders, "segment_e_candidates", { candidateCount: segECandidates.length, toSendCount: segEToSend.length, sample: segEToSend.slice(0,5) });
 
       if (segEToSend.length > 0) {
         const nameMap = await getUserNames(segEToSend);
@@ -321,7 +346,11 @@ serve(async (req: Request) => {
         let segECount = 0;
         for (const userId of segEToSend) {
           const token = tokenMap[userId];
+          if (userId === segEToSend[0]) {
+            await debugLog(supabaseUrl, authHeaders, "segment_e_first_iteration", { userId, hasToken: !!token, tokenMapSize: Object.keys(tokenMap).length });
+          }
           if (!token) continue;
+          await debugLog(supabaseUrl, authHeaders, "segment_e_has_token", { userId, token: token.substring(0,20) });
           const trend = trendMap[userId];
           const name = nameMap[userId] ?? "Hey";
           const status = trend?.weekly_movement_status ?? "stable";
@@ -345,7 +374,16 @@ serve(async (req: Request) => {
             body = "Keep logging to sharpen your palate profile.";
           }
 
-          const sent = await sendExpoBatch([token], title, body);
+          console.log(`Segment E attempting send to token: ${token} for user: ${userId}`);
+          let sent = 0;
+          try {
+            const sendResult = await sendExpoBatch([token], title, body);
+            sent = sendResult.sent;
+            await debugLog(supabaseUrl, authHeaders, "segment_e_send_result", { userId, sent });
+            await debugLog(supabaseUrl, authHeaders, "expo_receipt", { userId, result: JSON.stringify(sendResult.receipts) });
+          } catch (sendErr) {
+            await debugLog(supabaseUrl, authHeaders, "segment_e_send_error", { userId, error: String(sendErr) });
+          }
           segECount += sent;
         }
 
@@ -354,7 +392,6 @@ serve(async (req: Request) => {
         counts.e = segECount;
       }
     }
-    } // end Monday guard
     // ── Response ──────────────────────────────────────────────────────────────
 
     const total = counts.a + counts.b + counts.c + counts.d + counts.e;
