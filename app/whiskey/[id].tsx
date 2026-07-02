@@ -576,7 +576,7 @@ useEffect(() => {
   const autoOpenedRef = useRef(false);
   const navigation = useNavigation();
 
-  const { axes: whiskeyAxes } = useWhiskeyRadarData(whiskeyId, community.total);
+  const { axes: whiskeyAxes, tier: whiskeyRadarTier } = useWhiskeyRadarData(whiskeyId, community.total);
   const { axes: personalAxes } = useInsightsData();
 
   // dev strict-mode + navigation remount guard (once per routeId)
@@ -2110,7 +2110,7 @@ useEffect(() => {
         </View>
 
         {/* Flavor Profile */}
-        {community.total >= 2 ? (
+        {whiskeyAxes.length > 0 ? (
           <View style={{ gap: 5 }}>
             <Text style={[type.sectionHeader, { fontSize: 20 }]}>Flavor Profile</Text>
             <SectionDivider />
@@ -2209,6 +2209,19 @@ useEffect(() => {
                 </View>
               ) : null}
             </View>
+
+            {whiskeyRadarTier === "fallback" || whiskeyRadarTier === "blended" ? (
+              <Text
+                style={[
+                  type.caption,
+                  { opacity: 0.6, textAlign: "center", marginTop: spacing.sm },
+                ]}
+              >
+                {whiskeyRadarTier === "fallback"
+                  ? "No one has logged this pour yet, so the radar reflects distillery research and category patterns."
+                  : "Only a few tastings so far, so this radar blends real notes with distillery research and category patterns."}
+              </Text>
+            ) : null}
 
             {isPremium && flavorCallouts.length > 0 ? (
               <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>

@@ -15,15 +15,19 @@ type RadarRow = {
   label: string;
   mention_pct: number;
   mention_count: number;
+  tasting_count: number;
+  tier: "fallback" | "blended" | "community";
 };
 
 export function useWhiskeyRadarData(whiskeyId: string, tastingCount: number) {
   const [axes, setAxes] = useState<Axis[]>([]);
+  const [tier, setTier] = useState<"fallback" | "blended" | "community" | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!whiskeyId || tastingCount < 2) {
+    if (!whiskeyId) {
       setAxes([]);
+      setTier(null);
       setLoading(false);
       return;
     }
@@ -35,7 +39,7 @@ export function useWhiskeyRadarData(whiskeyId: string, tastingCount: number) {
       try {
         const { data, error } = await supabase
           .from("whiskey_flavor_radar")
-          .select("slug, label, mention_pct, mention_count")
+          .select("slug, label, mention_pct, mention_count, tasting_count, tier")
           .eq("whiskey_id", whiskeyId);
 
         if (!alive) return;
@@ -72,10 +76,16 @@ export function useWhiskeyRadarData(whiskeyId: string, tastingCount: number) {
           };
         });
 
-        if (alive) setAxes(nextAxes);
+        if (alive) {
+          setAxes(nextAxes);
+          setTier(rows[0]?.tier ?? null);
+        }
       } catch (e) {
         console.warn("useWhiskeyRadarData error:", e);
-        if (alive) setAxes([]);
+        if (alive) {
+          setAxes([]);
+          setTier(null);
+        }
       } finally {
         if (alive) setLoading(false);
       }
@@ -86,5 +96,5 @@ export function useWhiskeyRadarData(whiskeyId: string, tastingCount: number) {
     };
   }, [whiskeyId, tastingCount]);
 
-  return { axes, loading };
+  return { axes, tier, loading };
 }
