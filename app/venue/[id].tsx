@@ -296,6 +296,7 @@ function WhiskeyMenuRow({
 function FullMenuRow({ item }: { item: any }) {
   const available = item.available !== false;
   const name = (item.name as string | null) ?? "Unknown";
+  const description = typeof item.description === "string" ? item.description.trim() : "";
   const price1oz = item.price_cents_1oz != null ? `$${(Number(item.price_cents_1oz) / 100).toFixed(0)} / 1oz` : null;
   const price2oz = item.price_cents_2oz != null ? `$${(Number(item.price_cents_2oz) / 100).toFixed(0)} / 2oz` : null;
   const priceFlat = item.price_cents != null ? `$${(Number(item.price_cents) / 100).toFixed(0)}` : null;
@@ -330,6 +331,11 @@ function FullMenuRow({ item }: { item: any }) {
           </View>
         )}
       </View>
+      {description.length > 0 && (
+        <Text style={[type.caption, { color: colors.textTertiary, marginTop: 2 }]}>
+          {description}
+        </Text>
+      )}
       {priceStr.length > 0 && (
         <Text style={[type.caption, { color: colors.textTertiary, marginTop: 2 }]}>{priceStr}</Text>
       )}
