@@ -293,6 +293,50 @@ function WhiskeyMenuRow({
   );
 }
 
+function FullMenuRow({ item }: { item: any }) {
+  const available = item.available !== false;
+  const name = (item.name as string | null) ?? "Unknown";
+  const price1oz = item.price_cents_1oz != null ? `$${(Number(item.price_cents_1oz) / 100).toFixed(0)} / 1oz` : null;
+  const price2oz = item.price_cents_2oz != null ? `$${(Number(item.price_cents_2oz) / 100).toFixed(0)} / 2oz` : null;
+  const priceFlat = item.price_cents != null ? `$${(Number(item.price_cents) / 100).toFixed(0)}` : null;
+  const priceStr = [price1oz, price2oz, priceFlat].filter(Boolean).join("  ·  ");
+
+  return (
+    <View
+      style={{
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.lg,
+        opacity: available ? 1 : 0.4,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5 }}>
+        <Text style={[type.body, { fontFamily: "Montserrat_500Medium" }]} numberOfLines={2}>
+          {name}
+        </Text>
+        {!available && (
+          <View
+            style={{
+              backgroundColor: colors.surfaceSunken,
+              borderRadius: radii.sm,
+              paddingVertical: 2,
+              paddingHorizontal: 6,
+              borderWidth: 1,
+              borderColor: colors.divider,
+            }}
+          >
+            <Text style={[type.labelCaps, { fontSize: 10, color: colors.textMuted }]}>
+              Out of Stock
+            </Text>
+          </View>
+        )}
+      </View>
+      {priceStr.length > 0 && (
+        <Text style={[type.caption, { color: colors.textTertiary, marginTop: 2 }]}>{priceStr}</Text>
+      )}
+    </View>
+  );
+}
+
 function VenueFilterSheet({
   visible,
   onClose,
@@ -300,6 +344,10 @@ function VenueFilterSheet({
   filter,
   onApply,
   isLocked,
+  activeTab,
+  otherCategoryOptions,
+  otherFilter,
+  onApplyOther,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -307,13 +355,24 @@ function VenueFilterSheet({
   filter: FilterState;
   onApply: (f: FilterState) => void;
   isLocked: boolean;
+  activeTab: "whiskey" | "full";
+  otherCategoryOptions: string[];
+  otherFilter: string[];
+  onApplyOther: (categories: string[]) => void;
 }) {
   const [draft, setDraft] = useState<FilterState>(filter);
+  const [draftOtherCategories, setDraftOtherCategories] = useState<string[]>(otherFilter);
   const [typeSectionOpen, setTypeSectionOpen] = useState(false);
   const [regionSectionOpen, setRegionSectionOpen] = useState(false);
+  const [categorySectionOpen, setCategorySectionOpen] = useState(false);
+
+  const isWhiskeyTab = activeTab === "whiskey";
 
   useEffect(() => {
-    if (visible) setDraft(filter);
+    if (visible) {
+      setDraft(filter);
+      setDraftOtherCategories(otherFilter);
+    }
   }, [visible]);
 
   const toggleType = (id: string) => {
@@ -334,6 +393,12 @@ function VenueFilterSheet({
     }));
   };
 
+  const toggleOtherCategory = (c: string) => {
+    setDraftOtherCategories(prev =>
+      prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]
+    );
+  };
+
   const sheetInputStyle = {
     flex: 1,
     height: 40,
@@ -350,13 +415,14 @@ function VenueFilterSheet({
   return (
     <BulletproofSheet
       visible={visible}
-      title="Filter & Sort"
+      title={isWhiskeyTab ? "Filter & Sort" : "Filter"}
       onClose={onClose}
       footer={
         <View style={{ flexDirection: "row", gap: spacing.sm }}>
           <Pressable
             onPress={() => {
-              setDraft(defaultFilter);
+              if (isWhiskeyTab) setDraft(defaultFilter);
+              else setDraftOtherCategories([]);
               void hapticTick();
             }}
             style={({ pressed }) => ({
@@ -373,7 +439,8 @@ function VenueFilterSheet({
           </Pressable>
           <Pressable
             onPress={() => {
-              onApply(draft);
+              if (isWhiskeyTab) onApply(draft);
+              else onApplyOther(draftOtherCategories);
               void hapticTick();
               onClose();
             }}
@@ -396,6 +463,8 @@ function VenueFilterSheet({
         style={{ flexGrow: 0 }}
         contentContainerStyle={{ gap: spacing.md, paddingBottom: spacing.lg }}
       >
+        {isWhiskeyTab ? (
+        <>
         {/* Whiskey Type */}
         <Pressable
           onPress={() => setTypeSectionOpen(v => !v)}
@@ -579,6 +648,56 @@ function VenueFilterSheet({
             );
           })}
         </View>
+        </>
+        ) : (
+        <>
+        {/* Category */}
+        <Pressable
+          onPress={() => setCategorySectionOpen(v => !v)}
+          style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}
+        >
+          <Text style={[type.labelCaps, { color: colors.textMuted }]}>Category</Text>
+          <View style={{ transform: [{ rotate: categorySectionOpen ? "180deg" : "0deg" }] }}>
+            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+          </View>
+        </Pressable>
+        {categorySectionOpen && (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+            {otherCategoryOptions.length === 0 ? (
+              <Text style={[type.caption, { color: colors.textMuted }]}>No categories yet.</Text>
+            ) : (
+              otherCategoryOptions.map(cat => {
+                const selected = draftOtherCategories.includes(cat);
+                return (
+                  <Pressable
+                    key={cat}
+                    onPress={() => toggleOtherCategory(cat)}
+                    style={{
+                      paddingVertical: 6,
+                      paddingHorizontal: 12,
+                      borderRadius: 999,
+                      backgroundColor: selected ? colors.accentSoft : "transparent",
+                      borderWidth: 1,
+                      borderColor: selected ? colors.accent : "rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: "Montserrat_400Regular",
+                        fontSize: 13,
+                        color: selected ? colors.accent : "rgba(244,241,234,0.75)",
+                      }}
+                    >
+                      {cat}
+                    </Text>
+                  </Pressable>
+                );
+              })
+            )}
+          </View>
+        )}
+        </>
+        )}
       </ScrollView>
     </BulletproofSheet>
   );
@@ -753,6 +872,7 @@ export default function VenueScreen() {
   const [loading, setLoading] = useState(true);
   const [statusError, setStatusError] = useState("");
   const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [fullMenuItems, setFullMenuItems] = useState<any[]>([]);
   const [communityStats, setCommunityStats] = useState<any[]>([]);
   const [whiskeyTypes, setWhiskeyTypes] = useState<any[]>([]);
   const [checkedIn, setCheckedIn] = useState(false);
@@ -763,6 +883,7 @@ export default function VenueScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<"whiskey" | "full">("whiskey");
   const [appliedFilter, setAppliedFilter] = useState<FilterState>(defaultFilter);
+  const [appliedOtherFilter, setAppliedOtherFilter] = useState<string[]>([]);
 
   const [isPremium, setIsPremium] = useState(false);
   const [venueData, setVenueData] = useState<any>(null);
@@ -815,6 +936,14 @@ export default function VenueScreen() {
 
         const nextItems = ((items as any) ?? []) as any[];
         setMenuItems(nextItems);
+
+        const { data: fullMenu, error: fullMenuErr } = await supabase.rpc(
+          "get_venue_full_menu",
+          { p_venue_id: id }
+        );
+        if (fullMenuErr) throw new Error(fullMenuErr.message);
+        if (!alive) return;
+        setFullMenuItems(((fullMenu as any) ?? []) as any[]);
 
         const whiskeyIds = nextItems.map((i: any) => i.whiskey_id).filter(Boolean);
 
@@ -986,6 +1115,46 @@ export default function VenueScreen() {
         }),
       ] as [string, any[]]);
   }, [filteredItems]);
+
+  const otherMenuItems = useMemo(
+    () => fullMenuItems.filter((item: any) => item.category_kind === "other"),
+    [fullMenuItems]
+  );
+
+  const otherCategoryOptions = useMemo(() => {
+    const set = new Set<string>();
+    otherMenuItems.forEach((item: any) => {
+      if (item.type_name) set.add(String(item.type_name));
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [otherMenuItems]);
+
+  const filteredOtherMenuItems = useMemo(() => {
+    if (appliedOtherFilter.length === 0) return otherMenuItems;
+    return otherMenuItems.filter((item: any) =>
+      appliedOtherFilter.includes(String(item.type_name))
+    );
+  }, [otherMenuItems, appliedOtherFilter]);
+
+  const groupedFullMenuItems = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    for (const item of filteredOtherMenuItems) {
+      const key = String(item.type_name ?? "Other");
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    }
+    return Object.entries(groups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, items]) => [
+        key,
+        [...items].sort((a, b) => {
+          const aAvail = a.available !== false ? 0 : 1;
+          const bAvail = b.available !== false ? 0 : 1;
+          if (aAvail !== bAvail) return aAvail - bAvail;
+          return String(a.name ?? "").localeCompare(String(b.name ?? ""));
+        }),
+      ] as [string, any[]]);
+  }, [filteredOtherMenuItems]);
 
   const venueName = (venueData as any)?.display_name ?? (venueData as any)?.name ?? "";
 
@@ -1266,7 +1435,7 @@ export default function VenueScreen() {
             >
               <Ionicons name="options-outline" size={16} color={colors.textSecondary} />
               <Text style={[type.labelCaps, { fontSize: 11, color: colors.textSecondary }]}>
-                Filter & Sort
+                {activeTab === "whiskey" ? "Filter & Sort" : "Filter"}
               </Text>
             </Pressable>
           </Pressable>
@@ -1350,7 +1519,7 @@ export default function VenueScreen() {
                     { color: activeTab === tab ? colors.textPrimary : colors.textMuted },
                   ]}
                 >
-                  {tab === "whiskey" ? "Whiskey" : "Full Menu"}
+                  {tab === "whiskey" ? "Whiskey" : "Other Drinks"}
                 </Text>
               </Pressable>
             ))}
@@ -1442,10 +1611,66 @@ export default function VenueScreen() {
             )}
           </View>
         ) : (
-          <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md }}>
-            <Text style={[type.body, { color: colors.textMuted }]}>
-              Full menu coming soon.
-            </Text>
+          <View style={{ paddingTop: spacing.sm }}>
+            {groupedFullMenuItems.length === 0 ? (
+              <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
+                <Text style={[type.body, { color: colors.textMuted }]}>
+                  No items on the menu yet.
+                </Text>
+              </View>
+            ) : (
+              groupedFullMenuItems.map(([groupName, items]) => (
+                <View key={groupName}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: spacing.sm,
+                      paddingHorizontal: spacing.lg,
+                      paddingVertical: 10,
+                      backgroundColor: colors.surfaceSunken,
+                      borderTopWidth: 1,
+                      borderBottomWidth: 1,
+                      borderColor: colors.divider,
+                      marginTop: spacing.xs,
+                    }}
+                  >
+                    <Text
+                      style={[
+                        type.sectionHeader,
+                        {
+                          fontStyle: "italic",
+                          color: colors.textSecondary,
+                          flex: 1,
+                        },
+                      ]}
+                    >
+                      {groupName}
+                    </Text>
+                    <Text
+                      style={[type.labelCaps, { color: colors.textMuted, fontSize: 11 }]}
+                    >
+                      {items.length}
+                    </Text>
+                  </View>
+                  {items.map((item: any, idx: number) => (
+                    <View key={item.item_id}>
+                      <FullMenuRow item={item} />
+                      {idx < items.length - 1 && (
+                        <View
+                          style={{
+                            height: 1,
+                            backgroundColor: colors.divider,
+                            marginHorizontal: spacing.lg,
+                            opacity: 0.4,
+                          }}
+                        />
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ))
+            )}
           </View>
         )}
       </ScrollView>
@@ -1457,6 +1682,10 @@ export default function VenueScreen() {
         filter={appliedFilter}
         onApply={f => setAppliedFilter(f)}
         isLocked={requireCheckin && !checkedIn}
+        activeTab={activeTab}
+        otherCategoryOptions={otherCategoryOptions}
+        otherFilter={appliedOtherFilter}
+        onApplyOther={cats => setAppliedOtherFilter(cats)}
       />
 
       <VenueSearchModal
