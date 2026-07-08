@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  InputAccessoryView,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,11 +17,11 @@ import {
 } from "react-native";
 
 import { radii } from "../../lib/radii";
-import { shadows } from "../../lib/shadows";
 import { spacing } from "../../lib/spacing";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
+import { type VenueResult } from "../../lib/venueSearch";
 import {
   getEventLineup,
   saveEventLineup,
@@ -39,12 +41,21 @@ import { WhiskeySearchModal } from "../../src/logTab/components/WhiskeySearchMod
 import { BarrelFormModal } from "../../src/events/components/BarrelFormModal";
 import { CustomWhiskeyModal } from "../../src/events/components/CustomWhiskeyModal";
 import { DistilleryBarrelPickerModal } from "../../src/events/components/DistilleryBarrelPickerModal";
+import {
+  DateField,
+  FieldLabel,
+  IosDateTimePickerModal,
+  SectionCard,
+  useEventDateTimePicker,
+  VenuePicker,
+} from "../../src/events/components/EventFormFields";
 import { EventQRModal } from "../../components/EventQRModal";
 import { getAttendeeCount } from "../../lib/eventAttendees";
 
 type EventDetail = {
   id: string;
   name: string;
+  description: string | null;
   starts_at: string | null;
   ends_at: string | null;
   is_blind: boolean;
@@ -69,6 +80,8 @@ type EventDetail = {
   } | null;
 };
 
+const DETAILS_MULTILINE_ACCESSORY_ID = "host-event-details-multiline-done";
+
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-US", {
@@ -78,25 +91,6 @@ function fmtDate(iso: string | null): string {
     hour: "numeric",
     minute: "2-digit",
   });
-}
-
-function SectionCard({ children }: { children: React.ReactNode }) {
-  return (
-    <View
-      style={{
-        backgroundColor: colors.surface,
-        borderRadius: radii.lg,
-        borderWidth: 1,
-        borderColor: colors.borderStrong,
-        ...shadows.card,
-        overflow: "hidden",
-        padding: spacing.lg,
-        gap: spacing.md,
-      }}
-    >
-      {children}
-    </View>
-  );
 }
 
 function RowDivider() {
@@ -341,6 +335,27 @@ export default function HostEventDetailScreen() {
   const [qrVisible, setQrVisible] = useState(false);
   const [attendeeCount, setAttendeeCount] = useState<number | null>(null);
 
+  // Edit event details modal state
+  const [detailsEditVisible, setDetailsEditVisible] = useState(false);
+  const [detailsName, setDetailsName] = useState("");
+  const [detailsDescription, setDetailsDescription] = useState("");
+  const [detailsStartsAt, setDetailsStartsAt] = useState<Date | null>(null);
+  const [detailsEndsAt, setDetailsEndsAt] = useState<Date | null>(null);
+  const [detailsSelectedVenue, setDetailsSelectedVenue] = useState<VenueResult | null>(null);
+  const [detailsVenueManual, setDetailsVenueManual] = useState(false);
+  const [detailsVenueName, setDetailsVenueName] = useState("");
+  const [detailsVenueCity, setDetailsVenueCity] = useState("");
+  const [detailsVenueState, setDetailsVenueState] = useState("");
+  const [detailsPairingNotes, setDetailsPairingNotes] = useState("");
+  const [detailsSaving, setDetailsSaving] = useState(false);
+
+  const detailsDateTimePicker = useEventDateTimePicker({
+    startsAt: detailsStartsAt,
+    endsAt: detailsEndsAt,
+    onChangeStartsAt: setDetailsStartsAt,
+    onChangeEndsAt: setDetailsEndsAt,
+  });
+
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -349,7 +364,7 @@ export default function HostEventDetailScreen() {
       const { data, error: eventErr } = await supabase
         .from("events")
         .select(
-          "id, name, starts_at, ends_at, is_blind, is_active, has_lineup, has_pairing, has_direct_from_barrel, pairing_notes, revealed_at, join_code, status, venue_id, venue_name_free, venue_city, venue_state, venues(display_name, venue_type, address, city, state)"
+          "id, name, description, starts_at, ends_at, is_blind, is_active, has_lineup, has_pairing, has_direct_from_barrel, pairing_notes, revealed_at, join_code, status, venue_id, venue_name_free, venue_city, venue_state, venues(display_name, venue_type, address, city, state)"
         )
         .eq("id", id)
         .maybeSingle();
@@ -423,6 +438,98 @@ export default function HostEventDetailScreen() {
       setEditError(String(e?.message ?? e));
     } finally {
       setEditSaving(false);
+    }
+  }
+
+  function openEditDetails() {
+    if (!event) return;
+    setDetailsName(event.name);
+    setDetailsDescription(event.description ?? "");
+    setDetailsStartsAt(event.starts_at ? new Date(event.starts_at) : null);
+    setDetailsEndsAt(event.ends_at ? new Date(event.ends_at) : null);
+
+    if (event.venue_id && event.venues) {
+      setDetailsSelectedVenue({
+        id: event.venue_id,
+        display_name: event.venues.display_name,
+        venue_type: event.venues.venue_type,
+        address: event.venues.address,
+        city: event.venues.city,
+        state: event.venues.state,
+        country: null,
+        website: null,
+        phone: null,
+        description: null,
+        logo_url: null,
+      });
+      setDetailsVenueManual(false);
+      setDetailsVenueName("");
+      setDetailsVenueCity("");
+      setDetailsVenueState("");
+    } else if (event.venue_name_free) {
+      setDetailsSelectedVenue(null);
+      setDetailsVenueManual(true);
+      setDetailsVenueName(event.venue_name_free);
+      setDetailsVenueCity(event.venue_city ?? "");
+      setDetailsVenueState(event.venue_state ?? "");
+    } else {
+      setDetailsSelectedVenue(null);
+      setDetailsVenueManual(false);
+      setDetailsVenueName("");
+      setDetailsVenueCity("");
+      setDetailsVenueState("");
+    }
+
+    setDetailsPairingNotes(event.pairing_notes ?? "");
+    setDetailsEditVisible(true);
+  }
+
+  async function saveEventDetails() {
+    if (!id) return;
+    if (!detailsStartsAt) {
+      Alert.alert("Error", "Start date is required.");
+      return;
+    }
+    setDetailsSaving(true);
+    try {
+      const venuePayload = detailsSelectedVenue
+        ? {
+            p_venue_id: detailsSelectedVenue.id,
+            p_venue_name_free: null,
+            p_venue_city: null,
+            p_venue_state: null,
+          }
+        : detailsVenueManual && detailsVenueName.trim()
+        ? {
+            p_venue_id: null,
+            p_venue_name_free: detailsVenueName.trim(),
+            p_venue_city: detailsVenueCity.trim() || null,
+            p_venue_state: detailsVenueState.trim() || null,
+          }
+        : {
+            p_venue_id: null,
+            p_venue_name_free: null,
+            p_venue_city: null,
+            p_venue_state: null,
+          };
+
+      const { error: rpcErr } = await supabase.rpc("update_event", {
+        p_event_id: id,
+        p_name: detailsName.trim(),
+        p_description: detailsDescription.trim() || null,
+        p_starts_at: detailsStartsAt.toISOString(),
+        p_ends_at: detailsEndsAt?.toISOString() ?? null,
+        p_pairing_notes: detailsPairingNotes.trim() || null,
+        ...venuePayload,
+      });
+      if (rpcErr) throw rpcErr;
+
+      setDetailsEditVisible(false);
+      load();
+    } catch (e: any) {
+      Alert.alert("Error", String(e?.message ?? e));
+    } finally {
+      setDetailsSaving(false);
     }
   }
 
@@ -546,7 +653,22 @@ export default function HostEventDetailScreen() {
       >
         {/* Header */}
         <View style={{ gap: 6 }}>
-          <Text style={[type.screenTitle, { color: colors.textPrimary }]}>{event.name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: spacing.sm }}>
+            <Text style={[type.screenTitle, { color: colors.textPrimary, flex: 1 }]}>{event.name}</Text>
+            <Pressable
+              onPress={openEditDetails}
+              style={({ pressed }) => ({
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.xs,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: colors.borderStrong,
+                backgroundColor: pressed ? colors.accentSoft : "transparent",
+              })}
+            >
+              <Text style={[type.button, { color: colors.accent, fontSize: 13 }]}>Edit Details</Text>
+            </Pressable>
+          </View>
           <View style={{ flexDirection: "row", gap: spacing.xs, flexWrap: "wrap" }}>
             {event.is_blind ? (
               <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, borderWidth: 1, borderColor: colors.borderSubtle, backgroundColor: colors.accentFaint }}>
@@ -1002,6 +1124,196 @@ export default function HostEventDetailScreen() {
             setCustomWhiskeyInitialName(name);
             setCustomWhiskeyVisible(true);
           }}
+        />
+      </Modal>
+
+      {/* Edit Event Details Modal */}
+      <Modal
+        visible={detailsEditVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setDetailsEditVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1, backgroundColor: colors.background }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          {/* Modal header */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: spacing.lg,
+              paddingVertical: spacing.md,
+              paddingTop: spacing.xl,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.divider,
+            }}
+          >
+            <Pressable onPress={() => setDetailsEditVisible(false)}>
+              <Text style={[type.button, { color: colors.textSecondary }]}>Cancel</Text>
+            </Pressable>
+            <Text style={[type.sectionHeader, { color: colors.textPrimary }]}>Edit Event Details</Text>
+            <Pressable onPress={saveEventDetails} disabled={detailsSaving}>
+              {detailsSaving ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <Text style={[type.button, { color: colors.accent }]}>Save</Text>
+              )}
+            </Pressable>
+          </View>
+
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={{ gap: spacing.xs }}>
+              <FieldLabel label="Event Name" />
+              <TextInput
+                value={detailsName}
+                onChangeText={setDetailsName}
+                placeholder="Event name"
+                placeholderTextColor={colors.textMuted}
+                style={[
+                  type.body,
+                  {
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surfaceSunken,
+                    borderWidth: 1,
+                    borderColor: colors.borderStrong,
+                    borderRadius: radii.md,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                  },
+                ]}
+              />
+            </View>
+
+            <View style={{ gap: spacing.xs }}>
+              <FieldLabel label="Description (optional)" />
+              <TextInput
+                value={detailsDescription}
+                onChangeText={setDetailsDescription}
+                placeholder="Tell attendees what to expect..."
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                inputAccessoryViewID={
+                  Platform.OS === "ios" ? DETAILS_MULTILINE_ACCESSORY_ID : undefined
+                }
+                style={[
+                  type.body,
+                  {
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surfaceSunken,
+                    borderWidth: 1,
+                    borderColor: colors.borderStrong,
+                    borderRadius: radii.md,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                    minHeight: 96,
+                  },
+                ]}
+              />
+            </View>
+
+            <View style={{ gap: spacing.xs }}>
+              <DateField
+                label="Start Date & Time"
+                value={detailsStartsAt}
+                placeholder="Select start date and time"
+                onPress={() => detailsDateTimePicker.openPicker("start")}
+              />
+            </View>
+
+            <View style={{ gap: spacing.xs }}>
+              <DateField
+                label="End Date & Time (optional)"
+                value={detailsEndsAt}
+                placeholder="Select end date and time"
+                onPress={() => detailsDateTimePicker.openPicker("end")}
+              />
+            </View>
+
+            <VenuePicker
+              key={detailsEditVisible ? "details-venue-open" : "details-venue-closed"}
+              selectedVenue={detailsSelectedVenue}
+              onSelectVenue={setDetailsSelectedVenue}
+              venueManual={detailsVenueManual}
+              onVenueManualChange={setDetailsVenueManual}
+              venueName={detailsVenueName}
+              onVenueNameChange={setDetailsVenueName}
+              venueCity={detailsVenueCity}
+              onVenueCityChange={setDetailsVenueCity}
+              venueState={detailsVenueState}
+              onVenueStateChange={setDetailsVenueState}
+            />
+
+            <View style={{ gap: spacing.xs }}>
+              <FieldLabel label="Pairing Notes (optional)" />
+              <TextInput
+                value={detailsPairingNotes}
+                onChangeText={setDetailsPairingNotes}
+                placeholder="e.g. Charcuterie board, dark chocolate, Fuente cigars…"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                inputAccessoryViewID={
+                  Platform.OS === "ios" ? DETAILS_MULTILINE_ACCESSORY_ID : undefined
+                }
+                style={[
+                  type.body,
+                  {
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surfaceSunken,
+                    borderWidth: 1,
+                    borderColor: colors.borderStrong,
+                    borderRadius: radii.md,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                    minHeight: 80,
+                    fontSize: 14,
+                  },
+                ]}
+              />
+            </View>
+          </ScrollView>
+
+          {/* iOS keyboard "Done" toolbar for multiline fields */}
+          {Platform.OS === "ios" ? (
+            <InputAccessoryView nativeID={DETAILS_MULTILINE_ACCESSORY_ID}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "flex-end",
+                  paddingHorizontal: spacing.lg,
+                  paddingVertical: spacing.sm,
+                  backgroundColor: colors.surface,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.divider,
+                }}
+              >
+                <Pressable
+                  onPress={() => Keyboard.dismiss()}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                >
+                  <Text style={[type.button, { color: colors.accent }]}>Done</Text>
+                </Pressable>
+              </View>
+            </InputAccessoryView>
+          ) : null}
+        </KeyboardAvoidingView>
+
+        <IosDateTimePickerModal
+          visible={detailsDateTimePicker.activePicker !== null}
+          value={detailsDateTimePicker.iosPickerValue}
+          onChange={detailsDateTimePicker.setIosPickerValue}
+          onCancel={detailsDateTimePicker.closePicker}
+          onDone={detailsDateTimePicker.commitIosPicker}
         />
       </Modal>
 

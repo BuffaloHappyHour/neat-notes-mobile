@@ -1,7 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker, {
-  DateTimePickerAndroid,
-} from "@react-native-community/datetimepicker";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -9,7 +6,6 @@ import {
   InputAccessoryView,
   Keyboard,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -23,15 +19,22 @@ import { useRoles } from "../../hooks/useRoles";
 import { getMyDistilleryAccount, saveBarrelLineup, type BarrelDraft } from "../../lib/barrelApi";
 import { saveEventLineup, type LineupDraft } from "../../lib/eventLineup";
 import { radii } from "../../lib/radii";
-import { shadows } from "../../lib/shadows";
 import { spacing } from "../../lib/spacing";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
 import { type } from "../../lib/typography";
-import { searchVenues, type VenueResult } from "../../lib/venueSearch";
+import { type VenueResult } from "../../lib/venueSearch";
 import { BarrelFormModal } from "../../src/events/components/BarrelFormModal";
 import { CustomWhiskeyModal } from "../../src/events/components/CustomWhiskeyModal";
 import { DistilleryBarrelPickerModal } from "../../src/events/components/DistilleryBarrelPickerModal";
+import {
+  DateField,
+  FieldLabel,
+  IosDateTimePickerModal,
+  SectionCard,
+  useEventDateTimePicker,
+  VenuePicker,
+} from "../../src/events/components/EventFormFields";
 import { WhiskeySearchModal } from "../../src/logTab/components/WhiskeySearchModal";
 
 const EVENT_TYPES = [
@@ -44,46 +47,7 @@ const EVENT_TYPES = [
 
 const MULTILINE_DONE_ACCESSORY_ID = "create-event-multiline-done";
 
-function fmtDateTime(d: Date): string {
-  return (
-    d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }) +
-    " · " +
-    d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
-  );
-}
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function SectionCard({ children }: { children: React.ReactNode }) {
-  return (
-    <View
-      style={{
-        backgroundColor: colors.surface,
-        borderRadius: radii.lg,
-        borderWidth: 1,
-        borderColor: colors.borderStrong,
-        ...shadows.card,
-        overflow: "hidden",
-        padding: spacing.lg,
-        gap: spacing.md,
-      }}
-    >
-      {children}
-    </View>
-  );
-}
-
-function FieldLabel({ label }: { label: string }) {
-  return (
-    <Text style={[type.labelCaps, { color: colors.textSecondary }]}>
-      {label}
-    </Text>
-  );
-}
 
 function RowDivider() {
   return <View style={{ height: 1, backgroundColor: colors.divider }} />;
@@ -122,53 +86,6 @@ function ToggleRow({
         thumbColor={colors.textPrimary}
       />
     </View>
-  );
-}
-
-function DateField({
-  label,
-  value,
-  placeholder,
-  onPress,
-}: {
-  label: string;
-  value: Date | null;
-  placeholder: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        backgroundColor: colors.surfaceSunken,
-        borderRadius: radii.md,
-        borderWidth: 1,
-        borderColor: colors.borderStrong,
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-        gap: 4,
-        opacity: pressed ? 0.85 : 1,
-      })}
-    >
-      <FieldLabel label={label} />
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <Text
-          style={[
-            type.body,
-            { color: value ? colors.textPrimary : colors.textMuted },
-          ]}
-        >
-          {value ? fmtDateTime(value) : placeholder}
-        </Text>
-        <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
-      </View>
-    </Pressable>
   );
 }
 
@@ -415,8 +332,6 @@ export default function CreateEventScreen() {
   const [distilleryPickerOpen, setDistilleryPickerOpen] = useState(false);
 
   // Venue
-  const [venueQuery, setVenueQuery] = useState("");
-  const [venueResults, setVenueResults] = useState<VenueResult[]>([]);
   const [selectedVenue, setSelectedVenue] = useState<VenueResult | null>(null);
   const [venueManual, setVenueManual] = useState(false);
   const [venueName, setVenueName] = useState("");
@@ -427,9 +342,13 @@ export default function CreateEventScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // iOS date picker
-  const [activePicker, setActivePicker] = useState<"start" | "end" | null>(null);
-  const [iosPickerValue, setIosPickerValue] = useState(new Date());
+  // Date/time picker
+  const dateTimePicker = useEventDateTimePicker({
+    startsAt,
+    endsAt,
+    onChangeStartsAt: setStartsAt,
+    onChangeEndsAt: setEndsAt,
+  });
 
   // Tier cap
   const { isHostPro, isHostStarter, isAdmin } = useRoles();
@@ -467,17 +386,6 @@ export default function CreateEventScreen() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (selectedVenue || venueManual || venueQuery.trim().length < 2) {
-      setVenueResults([]);
-      return;
-    }
-    const timer = setTimeout(() => {
-      searchVenues(venueQuery.trim()).then(setVenueResults).catch(() => {});
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [venueQuery, selectedVenue, venueManual]);
-
   const step1Valid = name.trim().length > 0 && startsAt !== null;
   const endsBeforeStart =
     endsAt !== null && startsAt !== null && endsAt <= startsAt;
@@ -512,43 +420,6 @@ export default function CreateEventScreen() {
     setLineupItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, pairingNote: note } : item))
     );
-  }
-
-  // ── Date picker helpers ──────────────────────────────────────────────────
-
-  function openPicker(field: "start" | "end") {
-    const base =
-      field === "start"
-        ? (startsAt ?? new Date())
-        : (endsAt ?? startsAt ?? new Date());
-
-    if (Platform.OS === "android") {
-      DateTimePickerAndroid.open({
-        value: base,
-        mode: "date",
-        onChange: (_e, dateVal) => {
-          if (!dateVal) return;
-          DateTimePickerAndroid.open({
-            value: dateVal,
-            mode: "time",
-            onChange: (_e2, timeVal) => {
-              if (!timeVal) return;
-              if (field === "start") setStartsAt(timeVal);
-              else setEndsAt(timeVal);
-            },
-          });
-        },
-      });
-    } else {
-      setIosPickerValue(base);
-      setActivePicker(field);
-    }
-  }
-
-  function commitIosPicker() {
-    if (activePicker === "start") setStartsAt(iosPickerValue);
-    else if (activePicker === "end") setEndsAt(iosPickerValue);
-    setActivePicker(null);
   }
 
   // ── Submit ───────────────────────────────────────────────────────────────
@@ -713,179 +584,18 @@ export default function CreateEventScreen() {
           </View>
 
           {/* Venue */}
-          <View style={{ gap: spacing.xs }}>
-            <FieldLabel label="Venue (optional)" />
-            {selectedVenue ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  gap: spacing.sm,
-                  backgroundColor: colors.surfaceSunken,
-                  borderRadius: radii.md,
-                  borderWidth: 1,
-                  borderColor: colors.accent,
-                  padding: spacing.md,
-                }}
-              >
-                <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={[type.body, { color: colors.textPrimary, fontSize: 15 }]}>
-                    {selectedVenue.display_name}
-                  </Text>
-                  {selectedVenue.venue_type ? (
-                    <Text style={[type.labelCaps, { fontSize: 9, color: colors.accent }]}>
-                      {selectedVenue.venue_type}
-                    </Text>
-                  ) : null}
-                  {(selectedVenue.city || selectedVenue.state) ? (
-                    <Text style={[type.caption, { color: colors.textSecondary }]}>
-                      {[selectedVenue.city, selectedVenue.state].filter(Boolean).join(", ")}
-                    </Text>
-                  ) : null}
-                </View>
-                <Pressable
-                  onPress={() => { setSelectedVenue(null); setVenueQuery(""); setVenueResults([]); }}
-                  style={({ pressed }) => ({ padding: 4, opacity: pressed ? 0.7 : 1 })}
-                >
-                  <Ionicons name="close" size={18} color={colors.textMuted} />
-                </Pressable>
-              </View>
-            ) : venueManual ? (
-              <View style={{ gap: spacing.sm }}>
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <Text style={[type.caption, { color: colors.textSecondary }]}>Manual entry</Text>
-                  <Pressable
-                    onPress={() => { setVenueManual(false); setVenueName(""); setVenueCity(""); setVenueState(""); }}
-                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                  >
-                    <Text style={[type.caption, { color: colors.accent }]}>Search instead</Text>
-                  </Pressable>
-                </View>
-                <TextInput
-                  value={venueName}
-                  onChangeText={setVenueName}
-                  placeholder="Venue name"
-                  placeholderTextColor={colors.textMuted}
-                  style={[type.body, {
-                    color: colors.textPrimary,
-                    backgroundColor: colors.surfaceSunken,
-                    borderWidth: 1,
-                    borderColor: colors.borderStrong,
-                    borderRadius: radii.md,
-                    paddingHorizontal: spacing.md,
-                    paddingVertical: spacing.sm,
-                  }]}
-                />
-                <View style={{ flexDirection: "row", gap: spacing.sm }}>
-                  <TextInput
-                    value={venueCity}
-                    onChangeText={setVenueCity}
-                    placeholder="City"
-                    placeholderTextColor={colors.textMuted}
-                    style={[type.body, {
-                      flex: 1,
-                      color: colors.textPrimary,
-                      backgroundColor: colors.surfaceSunken,
-                      borderWidth: 1,
-                      borderColor: colors.borderStrong,
-                      borderRadius: radii.md,
-                      paddingHorizontal: spacing.md,
-                      paddingVertical: spacing.sm,
-                    }]}
-                  />
-                  <TextInput
-                    value={venueState}
-                    onChangeText={setVenueState}
-                    placeholder="State"
-                    placeholderTextColor={colors.textMuted}
-                    style={[type.body, {
-                      width: 80,
-                      color: colors.textPrimary,
-                      backgroundColor: colors.surfaceSunken,
-                      borderWidth: 1,
-                      borderColor: colors.borderStrong,
-                      borderRadius: radii.md,
-                      paddingHorizontal: spacing.md,
-                      paddingVertical: spacing.sm,
-                    }]}
-                  />
-                </View>
-              </View>
-            ) : (
-              <View>
-                <TextInput
-                  value={venueQuery}
-                  onChangeText={setVenueQuery}
-                  placeholder="Search for a venue..."
-                  placeholderTextColor={colors.textMuted}
-                  style={[type.body, {
-                    color: colors.textPrimary,
-                    backgroundColor: colors.surfaceSunken,
-                    borderWidth: 1,
-                    borderColor: colors.borderStrong,
-                    borderRadius: radii.md,
-                    paddingHorizontal: spacing.md,
-                    paddingVertical: spacing.sm,
-                  }]}
-                />
-                {venueQuery.trim().length >= 2 ? (
-                  <View
-                    style={{
-                      marginTop: 2,
-                      backgroundColor: colors.surface,
-                      borderRadius: radii.md,
-                      borderWidth: 1,
-                      borderColor: colors.borderStrong,
-                      overflow: "hidden",
-                      ...shadows.card,
-                    }}
-                  >
-                    {venueResults.map((v, i) => (
-                      <Pressable
-                        key={v.id}
-                        onPress={() => { setSelectedVenue(v); setVenueQuery(""); setVenueResults([]); }}
-                        style={({ pressed }) => ({
-                          paddingHorizontal: spacing.md,
-                          paddingVertical: spacing.sm,
-                          backgroundColor: pressed ? colors.surfaceSunken : "transparent",
-                          borderBottomWidth: 1,
-                          borderBottomColor: colors.divider,
-                        })}
-                      >
-                        <Text style={[type.body, { color: colors.textPrimary, fontSize: 14 }]}>
-                          {v.display_name}
-                        </Text>
-                        {(v.city || v.state) ? (
-                          <Text style={[type.caption, { color: colors.textSecondary }]}>
-                            {[v.city, v.state].filter(Boolean).join(", ")}
-                          </Text>
-                        ) : null}
-                      </Pressable>
-                    ))}
-                    <Pressable
-                      onPress={() => {
-                        setVenueManual(true);
-                        setVenueName(venueQuery.trim());
-                        setVenueQuery("");
-                        setVenueResults([]);
-                      }}
-                      style={({ pressed }) => ({
-                        paddingHorizontal: spacing.md,
-                        paddingVertical: spacing.sm,
-                        backgroundColor: pressed ? colors.surfaceSunken : "transparent",
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: spacing.sm,
-                      })}
-                    >
-                      <Ionicons name="add-circle-outline" size={16} color={colors.accent} />
-                      <Text style={[type.body, { color: colors.accent, fontSize: 14 }]}>Add manually</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-              </View>
-            )}
-          </View>
+          <VenuePicker
+            selectedVenue={selectedVenue}
+            onSelectVenue={setSelectedVenue}
+            venueManual={venueManual}
+            onVenueManualChange={setVenueManual}
+            venueName={venueName}
+            onVenueNameChange={setVenueName}
+            venueCity={venueCity}
+            onVenueCityChange={setVenueCity}
+            venueState={venueState}
+            onVenueStateChange={setVenueState}
+          />
 
           {/* Event Type */}
           <View style={{ gap: spacing.xs }}>
@@ -938,7 +648,7 @@ export default function CreateEventScreen() {
               label="Start Date & Time"
               value={startsAt}
               placeholder="Select start date and time"
-              onPress={() => openPicker("start")}
+              onPress={() => dateTimePicker.openPicker("start")}
             />
           </View>
 
@@ -948,7 +658,7 @@ export default function CreateEventScreen() {
               label="End Date & Time (optional)"
               value={endsAt}
               placeholder="Select end date and time"
-              onPress={() => openPicker("end")}
+              onPress={() => dateTimePicker.openPicker("end")}
             />
             {endsBeforeStart ? (
               <Text style={[type.caption, { color: colors.danger }]}>
@@ -1482,58 +1192,13 @@ export default function CreateEventScreen() {
       ) : null}
 
       {/* iOS date picker modal */}
-      {Platform.OS === "ios" && activePicker !== null ? (
-        <Modal transparent animationType="slide">
-          <View style={{ flex: 1, justifyContent: "flex-end" }}>
-            <Pressable
-              style={{ flex: 1 }}
-              onPress={() => setActivePicker(null)}
-            />
-            <View
-              style={{
-                backgroundColor: colors.surface,
-                borderTopWidth: 1,
-                borderTopColor: colors.divider,
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  paddingHorizontal: spacing.lg,
-                  paddingVertical: spacing.md,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.divider,
-                }}
-              >
-                <Pressable onPress={() => setActivePicker(null)}>
-                  <Text
-                    style={[type.button, { color: colors.textSecondary }]}
-                  >
-                    Cancel
-                  </Text>
-                </Pressable>
-                <Pressable onPress={commitIosPicker}>
-                  <Text style={[type.button, { color: colors.accent }]}>
-                    Done
-                  </Text>
-                </Pressable>
-              </View>
-
-              <DateTimePicker
-                value={iosPickerValue}
-                mode="datetime"
-                display="spinner"
-                textColor={colors.textPrimary}
-                onChange={(_e, date) => {
-                  if (date) setIosPickerValue(date);
-                }}
-              />
-            </View>
-          </View>
-        </Modal>
-      ) : null}
+      <IosDateTimePickerModal
+        visible={dateTimePicker.activePicker !== null}
+        value={dateTimePicker.iosPickerValue}
+        onChange={dateTimePicker.setIosPickerValue}
+        onCancel={dateTimePicker.closePicker}
+        onDone={dateTimePicker.commitIosPicker}
+      />
 
       {/* Whiskey search modal for lineup */}
       {!hasDirectFromBarrel ? (
