@@ -389,6 +389,22 @@ export default function EventHostPage() {
           />
         </View>
 
+        <Pressable
+          onPress={() => router.push(`/host-events/${eventId}` as any)}
+          style={({ pressed }) => ({
+            width: "100%",
+            paddingVertical: 14,
+            borderRadius: 999,
+            alignItems: "center",
+            backgroundColor: colors.accentFaint,
+            borderWidth: 1,
+            borderColor: colors.borderStrong,
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <Text style={[type.button, { color: colors.accent }]}>Manage / Edit Event</Text>
+        </Pressable>
+
         {checkinCode != null ? (
           <View
             style={{
