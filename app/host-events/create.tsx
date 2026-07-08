@@ -6,6 +6,8 @@ import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  InputAccessoryView,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -39,6 +41,8 @@ const EVENT_TYPES = [
   "Corporate",
   "Other",
 ];
+
+const MULTILINE_DONE_ACCESSORY_ID = "create-event-multiline-done";
 
 function fmtDateTime(d: Date): string {
   return (
@@ -1002,6 +1006,9 @@ export default function CreateEventScreen() {
               multiline
               numberOfLines={4}
               textAlignVertical="top"
+              inputAccessoryViewID={
+                Platform.OS === "ios" ? MULTILINE_DONE_ACCESSORY_ID : undefined
+              }
               style={[
                 type.body,
                 {
@@ -1318,6 +1325,9 @@ export default function CreateEventScreen() {
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
+                  inputAccessoryViewID={
+                    Platform.OS === "ios" ? MULTILINE_DONE_ACCESSORY_ID : undefined
+                  }
                   style={[
                     type.body,
                     {
@@ -1446,6 +1456,30 @@ export default function CreateEventScreen() {
 
         {step === 1 ? Step1() : step === 2 ? Step2() : Step3()}
       </ScrollView>
+
+      {/* iOS keyboard "Done" toolbar for multiline fields */}
+      {Platform.OS === "ios" ? (
+        <InputAccessoryView nativeID={MULTILINE_DONE_ACCESSORY_ID}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "flex-end",
+              paddingHorizontal: spacing.lg,
+              paddingVertical: spacing.sm,
+              backgroundColor: colors.surface,
+              borderTopWidth: 1,
+              borderTopColor: colors.divider,
+            }}
+          >
+            <Pressable
+              onPress={() => Keyboard.dismiss()}
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            >
+              <Text style={[type.button, { color: colors.accent }]}>Done</Text>
+            </Pressable>
+          </View>
+        </InputAccessoryView>
+      ) : null}
 
       {/* iOS date picker modal */}
       {Platform.OS === "ios" && activePicker !== null ? (
