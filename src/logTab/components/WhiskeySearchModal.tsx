@@ -153,12 +153,14 @@ export function WhiskeySearchModal({
   onSelect,
   onCustomEntry,
   initialQuery,
+  promptMessage,
 }: {
   visible: boolean;
   onClose: () => void;
   onSelect: (whiskeyId: string, whiskeyName: string) => void;
   onCustomEntry: (name: string) => void;
   initialQuery?: string;
+  promptMessage?: string;
 }) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState(initialQuery ?? "");
@@ -420,6 +422,22 @@ export function WhiskeySearchModal({
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
+          {!loading && promptMessage && query.trim().length === 0 ? (
+            <Text
+              style={[
+                type.body,
+                {
+                  opacity: 0.75,
+                  fontSize: 13,
+                  paddingHorizontal: spacing.lg,
+                  paddingVertical: spacing.md,
+                },
+              ]}
+            >
+              {promptMessage}
+            </Text>
+          ) : null}
+
           {loading ? (
             <View
               style={{

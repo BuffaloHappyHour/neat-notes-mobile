@@ -211,6 +211,7 @@ export default function LogTab() {
   >("idle");
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [barcodeTitle, setBarcodeTitle] = useState<string | null>(null);
+  const [searchModalPrompt, setSearchModalPrompt] = useState<string | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [actionsRow, setActionsRow] = useState<{ id: string; whiskeyName: string } | null>(null);
 
@@ -299,14 +300,20 @@ export default function LogTab() {
           return;
         }
 
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+        const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
         const res = await fetch(
           "https://vfqbioksbylatydjqdhg.supabase.co/functions/v1/lookup-upc",
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "",
-              Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ""}`,
+              apikey: anonKey,
+              Authorization: `Bearer ${accessToken ?? anonKey}`,
             },
             body: JSON.stringify({ barcode: code }),
           }
@@ -324,13 +331,20 @@ export default function LogTab() {
 
         if (data?.found && data?.title) {
           setBarcodeTitle(data.title);
+          setSearchModalPrompt(null);
           setSearchModalOpen(true);
           setBarcodeLookupStatus("not_found");
         } else {
+          setBarcodeTitle(null);
+          setSearchModalPrompt("Couldn't find that barcode — search or add it.");
+          setSearchModalOpen(true);
           setBarcodeLookupStatus("not_found");
         }
       } catch (err) {
         console.log("[log] barcode lookup flow failed:", err);
+        setBarcodeTitle(null);
+        setSearchModalPrompt("Couldn't find that barcode — search or add it.");
+        setSearchModalOpen(true);
         setBarcodeLookupStatus("not_found");
       }
     };
@@ -366,6 +380,10 @@ export default function LogTab() {
             p_confidence: 0.7,
             p_verified: false,
             p_barcode_format: null,
+            // Disambiguates against the older 6-arg overload of this RPC — omitting
+            // this makes the call match both overloads and PostgREST rejects it
+            // with a 300 "ambiguous function" instead of running either one.
+            p_candidate_id: null,
           });
 
           if (error) {
@@ -421,6 +439,7 @@ export default function LogTab() {
         <SearchSection
           onOpenSearch={() => {
             setBarcodeTitle(null);
+            setSearchModalPrompt(null);
             setSearchModalOpen(true);
           }}
           onScanPress={() => router.push("/scan" as any)}
@@ -472,6 +491,7 @@ export default function LogTab() {
         visible={searchModalOpen}
         onClose={() => setSearchModalOpen(false)}
         initialQuery={barcodeTitle ?? undefined}
+        promptMessage={searchModalPrompt ?? undefined}
         onSelect={(whiskeyId) => {
           setSearchModalOpen(false);
           handleSearchSelect(whiskeyId);

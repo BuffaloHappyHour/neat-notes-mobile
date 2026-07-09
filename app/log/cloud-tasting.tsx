@@ -936,6 +936,25 @@ export default function CloudTastingScreen() {
 
         if (tastingUpdateErr) throw new Error(tastingUpdateErr.message);
 
+        if (routeBarcode && resolvedId) {
+          const { error: barcodeMapErr } = await supabase.rpc("save_barcode_mapping", {
+            p_barcode: routeBarcode,
+            p_whiskey_id: resolvedId,
+            p_source: "user_custom_entry",
+            p_confidence: 0.5,
+            p_verified: false,
+            p_barcode_format: null,
+            // Disambiguates against the older 6-arg overload of this RPC — omitting
+            // this makes the call match both overloads and PostgREST rejects it
+            // with a 300 "ambiguous function" instead of running either one.
+            p_candidate_id: null,
+          });
+
+          if (barcodeMapErr) {
+            console.log("[cloud-tasting] save_barcode_mapping error:", barcodeMapErr);
+          }
+        }
+
         router.replace(`/whiskey/${encodeURIComponent(resolvedId!)}?newEntry=true` as any);
       }
     } catch (e: any) {
