@@ -51,7 +51,13 @@ export default function SupabaseTest() {
 
   const signUp = async () => {
     setMessage("Creating account...");
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: "https://www.neatnotesapp.com/auth/callback",
+      },
+    });
 
     if (error) {
       setMessage("❌ " + error.message);

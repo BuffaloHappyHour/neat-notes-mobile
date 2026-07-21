@@ -132,7 +132,7 @@ function RootLayout() {
         const parsed = new URL(url);
 
         const isUniversalLink =
-          parsed.hostname === "neatnotesapp.com" &&
+          parsed.hostname === "www.neatnotesapp.com" &&
           parsed.pathname === "/event/join";
         const isCustomScheme =
           parsed.protocol === "neatnotes:" &&

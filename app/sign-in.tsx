@@ -499,7 +499,13 @@ export default function SignInScreen() {
       }
 
       // Step 2: Create the email account first
-      const { error: signUpError } = await supabase.auth.signUp({ email: em, password: pw });
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: em,
+        password: pw,
+        options: {
+          emailRedirectTo: "https://www.neatnotesapp.com/auth/callback",
+        },
+      });
       if (signUpError) {
         setBusy(false);
         const msg = signUpError.message.toLowerCase();
@@ -537,7 +543,13 @@ export default function SignInScreen() {
     // Email-only path
     setBusy(true);
 
-    const { data, error } = await supabase.auth.signUp({ email: em, password: pw });
+    const { data, error } = await supabase.auth.signUp({
+      email: em,
+      password: pw,
+      options: {
+        emailRedirectTo: "https://www.neatnotesapp.com/auth/callback",
+      },
+    });
 
     setBusy(false);
 

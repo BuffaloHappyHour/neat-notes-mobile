@@ -17,6 +17,7 @@ module.exports = {
         ? "com.neatnotesapp.neatnotes.dev"
         : "com.neatnotesapp.neatnotes",
       buildNumber: "51",
+      associatedDomains: ["applinks:www.neatnotesapp.com"],
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSUserNotificationUsageDescription:
@@ -49,6 +50,19 @@ module.exports = {
       permissions: [
         "android.permission.CAMERA",
         "android.permission.WRITE_EXTERNAL_STORAGE",
+      ],
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          category: ["BROWSABLE", "DEFAULT"],
+          data: [
+            { scheme: "https", host: "www.neatnotesapp.com", pathPrefix: "/auth/callback" },
+            { scheme: "https", host: "www.neatnotesapp.com", pathPrefix: "/auth/reset" },
+            { scheme: "https", host: "www.neatnotesapp.com", pathPrefix: "/auth/confirmed" },
+            { scheme: "https", host: "www.neatnotesapp.com", pathPrefix: "/event/join" },
+          ],
+        },
       ],
     },
 

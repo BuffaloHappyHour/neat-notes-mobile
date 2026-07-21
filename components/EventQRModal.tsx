@@ -18,7 +18,7 @@ type Props = {
 
 export function EventQRModal({ visible, joinCode, onClose }: Props) {
   const qrRef = useRef<View>(null);
-  const qrValue = `neatnotes://event/join?code=${joinCode}`;
+  const qrValue = `https://www.neatnotesapp.com/event/join?code=${joinCode}`;
 
   async function handleSave() {
     const { status } = await MediaLibrary.requestPermissionsAsync(true);
