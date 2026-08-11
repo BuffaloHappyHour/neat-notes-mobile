@@ -61,6 +61,7 @@ module.exports = {
             { scheme: "https", host: "www.neatnotesapp.com", pathPrefix: "/auth/reset" },
             { scheme: "https", host: "www.neatnotesapp.com", pathPrefix: "/auth/confirmed" },
             { scheme: "https", host: "www.neatnotesapp.com", pathPrefix: "/event/join" },
+            { scheme: "https", host: "www.neatnotesapp.com", pathPrefix: "/venue" },
           ],
         },
       ],

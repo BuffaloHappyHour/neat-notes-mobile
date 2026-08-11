@@ -20,6 +20,7 @@ import { type RecommendationItem, useHomeStats } from "../../src/home/hooks/useH
 import { getTierCopy } from "../../src/palate/constants/palateTiers";
 import type { PalateClarityTierLabel } from "../../src/palate/palateClarity.service";
 import { InsightsCTA } from "../../src/profile/components/InsightsCTA";
+import { SignInCard } from "../../src/profile/components/SignInCard";
 
 const warmCardShadow = {
   ...shadows.card,
@@ -1011,6 +1012,8 @@ export default function HomeTab() {
             }}
           />
         </View>
+
+        {!isAuthed ? <SignInCard compact /> : null}
 
         {/* ── Greeting ───────────────────────────────────────────────────── */}
         <View style={{ gap: spacing.xs }}>

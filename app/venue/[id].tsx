@@ -870,9 +870,23 @@ function formatRelativeTime(iso: string | null | undefined): string {
   return `${months}mo ago`;
 }
 
+function extractCheckinCode(scanned: string): string {
+  if (scanned.startsWith("neatnotes://venue-checkin/")) {
+    return scanned.replace("neatnotes://venue-checkin/", "").trim();
+  }
+  try {
+    const url = new URL(scanned);
+    return url.searchParams.get("code")?.trim() ?? "";
+  } catch {
+    return scanned.trim();
+  }
+}
+
 export default function VenueScreen() {
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const params = useLocalSearchParams<{ id?: string | string[]; code?: string | string[] }>();
   const id = (Array.isArray(params.id) ? params.id[0] : params.id) ?? "";
+  const code = (Array.isArray(params.code) ? params.code[0] : params.code) ?? "";
+  const autoCheckInAttempted = useRef(false);
   const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
@@ -922,7 +936,7 @@ export default function VenueScreen() {
         const { data: venue, error: venueErr } = await supabase
           .from("venues")
           .select("id, name, display_name, venue_type, address, city, state, phone, website, is_active, updated_at, require_checkin, join_code")
-          .eq("id", id)
+          .or(`id.eq.${id},normalized_name.eq.${id}`)
           .single();
         if (venueErr) throw new Error(venueErr.message);
         if (!alive) return;
@@ -1005,6 +1019,11 @@ export default function VenueScreen() {
               .eq("user_id", userId)
               .is("checked_out_at", null)
               .lt("checked_in_at", threeHoursAgo);
+
+            if (alive && code && !autoCheckInAttempted.current) {
+              autoCheckInAttempted.current = true;
+              await handleJoinVenue(code);
+            }
           }
         }
         await fetchCheckinCount();
@@ -1728,8 +1747,8 @@ export default function VenueScreen() {
               barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
               onBarcodeScanned={async ({ data }) => {
                 if (!codeLoading) {
-                  const code = data.replace("neatnotes://venue-checkin/", "").trim();
-                  await handleJoinVenue(code);
+                  const scannedCode = extractCheckinCode(data);
+                  await handleJoinVenue(scannedCode);
                 }
               }}
             />

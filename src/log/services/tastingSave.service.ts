@@ -459,9 +459,16 @@ async function checkAndRequestPushPermission(userId: string) {
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId);
 
-    if (count === 3) {
-      const { registerForPushNotifications } = await import("../../../lib/notifications");
-      await registerForPushNotifications();
+    if (count !== null && count >= 3) {
+      const { count: tokenCount } = await supabase
+        .from("user_push_tokens")
+        .select("user_id", { count: "exact", head: true })
+        .eq("user_id", userId);
+
+      if (!tokenCount) {
+        const { registerForPushNotifications } = await import("../../../lib/notifications");
+        await registerForPushNotifications();
+      }
     }
   } catch {
     // never throw, never block

@@ -23,20 +23,49 @@ import { bootstrapApp } from "../lib/bootstrapApp";
 import { registerForPushNotifications } from '../lib/notifications';
 import { supabase } from "../lib/supabase";
 import { colors } from "../lib/theme";
+import { isVersionBelow } from "../lib/versionCompare";
 import OnboardingModal from "../src/onboarding/OnboardingModal";
+import { ForceUpdateOverlay } from "../components/ForceUpdateOverlay";
 
 function RootLayout() {
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [forceUpdateUrl, setForceUpdateUrl] = useState<string | null>(null);
 
   useEffect(() => {
     async function syncAppVersion(userId: string) {
+      const currentVersion = Application.nativeApplicationVersion;
+
       await supabase
         .from('profiles')
         .update({
-          app_version: Application.nativeApplicationVersion,
+          app_version: currentVersion,
           app_version_updated_at: new Date().toISOString(),
         })
         .eq('id', userId);
+
+      try {
+        const { data: versionConfig, error } = await supabase
+          .from('app_version_config')
+          .select('min_supported_version, update_url')
+          .eq('platform', Platform.OS)
+          .maybeSingle();
+
+        if (error) {
+          console.error('[syncAppVersion] app_version_config fetch failed:', error);
+          return;
+        }
+
+        if (
+          versionConfig &&
+          currentVersion &&
+          isVersionBelow(currentVersion, versionConfig.min_supported_version)
+        ) {
+          setForceUpdateUrl(versionConfig.update_url);
+        }
+      } catch (e) {
+        // Fail open: a transient fetch/network error must never lock out users.
+        console.error('[syncAppVersion] version check errored, failing open:', e);
+      }
     }
 
     async function checkOnboarding(userId: string) {
@@ -50,12 +79,27 @@ function RootLayout() {
       }
     }
 
+    // Guards against calling registerForPushNotifications twice on the same
+    // launch if both the cold-start check and a SIGNED_IN event fire for it.
+    let pushRegistrationAttempted = false;
+    function registerPushOnce() {
+      if (pushRegistrationAttempted) return;
+      pushRegistrationAttempted = true;
+      void registerForPushNotifications();
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       const user = data.session?.user;
       if (user) {
         void checkOnboarding(user.id);
+        registerPushOnce();
         void syncAppVersion(user.id);
-        afSetCustomerUserId(user.id);
+        try {
+          afSetCustomerUserId(user.id);
+        } catch (e) {
+          // Fail open: AppsFlyer not being ready must never block sign-in.
+          console.error('[afSetCustomerUserId] failed, failing open:', e);
+        }
       }
     });
 
@@ -64,9 +108,14 @@ function RootLayout() {
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session?.user) {
         void checkOnboarding(session.user.id);
-        void registerForPushNotifications();
+        registerPushOnce();
         void syncAppVersion(session.user.id);
-        afSetCustomerUserId(session.user.id);
+        try {
+          afSetCustomerUserId(session.user.id);
+        } catch (e) {
+          // Fail open: AppsFlyer not being ready must never block sign-in.
+          console.error('[afSetCustomerUserId] failed, failing open:', e);
+        }
       }
     });
 
@@ -222,6 +271,10 @@ function RootLayout() {
           visible={showOnboarding}
           onDismiss={() => setShowOnboarding(false)}
         />
+      <ForceUpdateOverlay
+        visible={!!forceUpdateUrl}
+        updateUrl={forceUpdateUrl ?? ""}
+      />
     </GestureHandlerRootView>
   );
 }

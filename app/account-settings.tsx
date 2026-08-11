@@ -17,6 +17,7 @@ import {
 } from "react-native";
 
 import Purchases from "react-native-purchases";
+import PhoneLinkCard from "../components/PhoneLinkCard";
 import { fetchMyProfile, upsertMyProfile } from "../lib/cloudProfile";
 import { supabase } from "../lib/supabase";
 
@@ -31,14 +32,6 @@ import { withDanger, withTick, withTickError } from "../lib/hapticsPress";
 
 /* ---------- Store compliance URLs ---------- */
 const PRIVACY_URL = "https://buffalohappyhour.org/neat-notes-privacy/";
-
-/* ---------- Phone helpers ---------- */
-function formatPhoneForSupabase(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  return `+${digits}`;
-}
 
 /* ---------- UI helpers ---------- */
 type InputProps = React.ComponentProps<typeof TextInput>;
@@ -240,7 +233,6 @@ export default function AccountSettingsScreen() {
   const [statusLine, setStatusLine] = useState("");
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [email, setEmail] = useState("");
-  const [linkedPhone, setLinkedPhone] = useState("");
 
   const [nameUnified, setNameUnified] = useState("");
   const [privateName, setPrivateName] = useState("");
@@ -258,13 +250,6 @@ export default function AccountSettingsScreen() {
   const [shareAnonymously, setShareAnonymously] = useState(true);
   const [shareNoticeSeen, setShareNoticeSeen] = useState(false);
   const [shareLoaded, setShareLoaded] = useState(false);
-
-  // Phone linking state
-  type PhoneStep = "idle" | "enterPhone" | "enterOtp";
-  const [phoneStep, setPhoneStep] = useState<PhoneStep>("idle");
-  const [phoneInput, setPhoneInput] = useState("");
-  const [phoneOtp, setPhoneOtp] = useState("");
-  const [pendingPhone, setPendingPhone] = useState("");
 
   const passwordValid =
     newPassword.trim().length >= 8 && newPassword.trim() === confirmPassword.trim();
@@ -290,7 +275,6 @@ export default function AccountSettingsScreen() {
     if (!session?.user) {
       setIsSignedIn(false);
       setEmail("");
-      setLinkedPhone("");
       setNameUnified("");
       setPrivateName("");
       setHapticsEnabledState(true);
@@ -305,12 +289,6 @@ export default function AccountSettingsScreen() {
 
     setIsSignedIn(true);
     setEmail(session.user.email ?? "");
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("phone")
-      .eq("id", session.user.id)
-      .single();
-    setLinkedPhone(profileData?.phone ?? "");
 
     const meta: any = session.user.user_metadata ?? {};
     const metaUsername = String(meta.username ?? meta.user_name ?? meta.name ?? "").trim();
@@ -350,90 +328,6 @@ export default function AccountSettingsScreen() {
   useEffect(() => {
     load();
   }, [load]);
-
-  /* ---- Phone linking: send OTP ---- */
-  const sendPhoneLinkOtp = useCallback(async () => {
-    if (busy) return;
-    const formatted = formatPhoneForSupabase(phoneInput);
-
-    if (formatted.length < 10) {
-      return Alert.alert("Invalid number", "Please enter a valid US phone number.");
-    }
-
-    setBusy(true);
-
-    const { error } = await supabase.auth.updateUser({ phone: formatted });
-
-    setBusy(false);
-
-    if (error) {
-      const code = (error as any).code ?? "";
-      const msg = error.message?.toLowerCase() ?? "";
-      if (code === "23505" || msg.includes("duplicate") || msg.includes("unique")) {
-        Alert.alert(
-          "Phone Already Linked",
-          "This phone number is already associated with another account. Sign in with your email instead."
-        );
-        setPhoneStep("idle");
-        setPhoneInput("");
-        return;
-      }
-      return Alert.alert("Error", error.message);
-    }
-
-    setPendingPhone(formatted);
-    setPhoneOtp("");
-    setPhoneStep("enterOtp");
-  }, [busy, phoneInput]);
-
-  /* ---- Phone linking: verify OTP ---- */
-  const verifyPhoneLinkOtp = useCallback(async () => {
-    if (busy) return;
-
-    if (phoneOtp.length !== 6) {
-      return Alert.alert("Invalid code", "Please enter the 6-digit code we sent you.");
-    }
-
-    setBusy(true);
-
-    const { error } = await supabase.auth.verifyOtp({
-      phone: pendingPhone,
-      token: phoneOtp,
-      type: "phone_change",
-    });
-
-    setBusy(false);
-
-    if (error) {
-      return Alert.alert(
-        "Incorrect code",
-        "That code didn't match. Please check and try again."
-      );
-    }
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    const uid = sessionData.session?.user?.id;
-    if (uid) {
-      try {
-        await supabase.from("profiles").update({ phone: pendingPhone }).eq("id", uid);
-      } catch (profileErr) {
-        console.error("profiles.phone write failed after phone_change:", profileErr);
-        Alert.alert(
-          "Phone linked",
-          "Your phone was verified, but we couldn't save it to your profile. Try again from Account Settings."
-        );
-      }
-    }
-
-    setLinkedPhone(pendingPhone);
-    setPhoneStep("idle");
-    setPhoneInput("");
-    setPhoneOtp("");
-    setPendingPhone("");
-    setStatusLine("Phone number linked.");
-    setTimeout(() => setStatusLine(""), 1500);
-    await hapticSuccess();
-  }, [busy, phoneOtp, pendingPhone]);
 
   const startEditAccount = useCallback(
     withTick(() => {
@@ -835,165 +729,12 @@ export default function AccountSettingsScreen() {
         </Card>
 
         {/* ── Phone Number ── */}
-        <Card
-          title="Phone Number"
-          subtitle={
-            linkedPhone
-              ? "Your phone number is linked. You can sign in with it anytime."
-              : "Link your phone for faster sign-in — no password needed."
-          }
-          right={
-            linkedPhone
-              ? <Pill label="Linked" tone="good" />
-              : <Pill label="Not linked" tone="muted" />
-          }
-        >
-          {phoneStep === "enterPhone" ? (
-            <View style={{ gap: spacing.md }}>
-              <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
-                Enter your US phone number. We'll send a verification code.
-              </Text>
-              {linkedPhone ? (
-                <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
-                  This will replace your current linked number.
-                </Text>
-              ) : null}
-              <ThemedInput
-                placeholder="Phone number"
-                value={phoneInput}
-                onChangeText={setPhoneInput}
-                keyboardType="phone-pad"
-                returnKeyType="done"
-                onSubmitEditing={sendPhoneLinkOtp}
-                disabled={busy}
-                autoFocus
-              />
-              <View style={{ flexDirection: "row", gap: spacing.md }}>
-                <View style={{ flex: 1 }}>
-                  <ThemedButton
-                    label="Cancel"
-                    onPress={() => {
-                      setPhoneStep("idle");
-                      setPhoneInput("");
-                    }}
-                    disabled={busy}
-                    tone="secondary"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <ThemedButton
-                    label={busy ? "Sending…" : "Send Code"}
-                    onPress={sendPhoneLinkOtp}
-                    disabled={busy}
-                    tone="primary"
-                  />
-                </View>
-              </View>
-            </View>
-          ) : phoneStep === "enterOtp" ? (
-            <View style={{ gap: spacing.md }}>
-              <Text style={[type.microcopyItalic, { opacity: 0.85 }]}>
-                Enter the 6-digit code sent to {pendingPhone}.
-              </Text>
-              <ThemedInput
-                placeholder="6-digit code"
-                value={phoneOtp}
-                onChangeText={(v) => setPhoneOtp(v.replace(/\D/g, "").slice(0, 6))}
-                keyboardType="number-pad"
-                returnKeyType="done"
-                onSubmitEditing={verifyPhoneLinkOtp}
-                disabled={busy}
-                autoFocus
-              />
-              <View style={{ flexDirection: "row", gap: spacing.md }}>
-                <View style={{ flex: 1 }}>
-                  <ThemedButton
-                    label="Back"
-                    onPress={() => {
-                      setPhoneStep("enterPhone");
-                      setPhoneOtp("");
-                    }}
-                    disabled={busy}
-                    tone="secondary"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <ThemedButton
-                    label={busy ? "Verifying…" : "Verify Code"}
-                    onPress={verifyPhoneLinkOtp}
-                    disabled={busy || phoneOtp.length !== 6}
-                    tone={phoneOtp.length === 6 ? "primary" : "secondary"}
-                  />
-                </View>
-              </View>
-            </View>
-          ) : linkedPhone ? (
-            <View style={{ gap: spacing.md }}>
-              <InfoRow
-                label="Linked number"
-                value={linkedPhone.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3")}
-              />
-              <ThemedButton
-                label="Change"
-                onPress={() => {
-                  setPhoneStep("enterPhone");
-                  setPhoneInput("");
-                }}
-                disabled={busy}
-                tone="secondary"
-                icon={<Ionicons name="create-outline" size={18} color={colors.textPrimary} />}
-              />
-              <ThemedButton
-                label="Remove"
-                onPress={() => {
-                  Alert.alert(
-                    "Remove phone number?",
-                    "You won't be able to sign in with this number anymore.",
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Remove",
-                        style: "destructive",
-                        onPress: async () => {
-                          setBusy(true);
-                          try {
-                            const { data: sd } = await supabase.auth.getSession();
-                            const uid = sd.session?.user?.id;
-                            if (uid) await supabase.from("profiles").update({ phone: null }).eq("id", uid);
-                            await supabase.auth.updateUser({ phone: "" });
-                            setLinkedPhone("");
-                            setPhoneStep("idle");
-                            setStatusLine("Phone number removed.");
-                            setTimeout(() => setStatusLine(""), 1500);
-                            await hapticSuccess();
-                          } catch {
-                            Alert.alert("Error", "Failed to remove phone number. Please try again.");
-                          } finally {
-                            setBusy(false);
-                          }
-                        },
-                      },
-                    ]
-                  );
-                }}
-                disabled={busy}
-                tone="danger"
-                icon={<Ionicons name="close-circle-outline" size={18} color={colors.textPrimary} />}
-              />
-            </View>
-          ) : (
-            <ThemedButton
-              label="Add Phone Number"
-              onPress={() => {
-                setPhoneInput("");
-                setPhoneStep("enterPhone");
-              }}
-              disabled={busy}
-              tone="secondary"
-              icon={<Ionicons name="phone-portrait-outline" size={18} color={colors.textPrimary} />}
-            />
-          )}
-        </Card>
+        <PhoneLinkCard
+          onStatus={(msg) => {
+            setStatusLine(msg);
+            setTimeout(() => setStatusLine(""), 1500);
+          }}
+        />
 
         {/* ── Haptics ── */}
         <Card title="Haptics" subtitle="Intentional feedback for key actions. Toggle anytime.">

@@ -21,7 +21,9 @@ import Purchases from "react-native-purchases";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { useAppleAuth } from "../hooks/useAppleAuth";
+import PhonePromptModal from "../components/PhonePromptModal";
 import { fetchMyProfile } from "../lib/cloudProfile";
+import { shouldShowPhonePrompt } from "../lib/phonePrompt";
 import { syncPremiumStatusFromRevenueCat } from "../lib/premiumSync";
 import { radii } from "../lib/radii";
 import { shadows } from "../lib/shadows";
@@ -230,16 +232,17 @@ function getAppScheme(): string | null {
   return null;
 }
 
-function buildAuthCallbackUrl(): string {
-  const scheme = getAppScheme();
-  try {
-    const url = Linking.createURL("auth/callback", scheme ? { scheme } : undefined);
-    return url;
-  } catch {
-    if (scheme) return `${scheme}://auth/callback`;
-    return "neatnotes://auth/callback";
-  }
-}
+/* -------------------- Timeout helper (same pattern as lib/bootstrapApp.ts) -------------------- */
+const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T | null> =>
+  Promise.race([
+    promise,
+    new Promise<null>((resolve) =>
+      setTimeout(() => {
+        console.warn(`[finishSignIn] ${label} timed out after ${ms}ms`);
+        resolve(null);
+      }, ms)
+    ),
+  ]);
 
 /* -------------------- Phone helpers -------------------- */
 function formatPhoneForSupabase(raw: string): string {
@@ -259,14 +262,13 @@ type Mode =
   | "signup"
   | "signedIn"
   | "phoneSignin"
-  | "otpEntry"
-  | "signupOtpEntry"
-  | "signupName";
+  | "otpEntry";
 
 export default function SignInScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<Mode>("signin");
+  const [showPhonePrompt, setShowPhonePrompt] = useState(false);
 
   const [authedEmail, setAuthedEmail] = useState<string>("");
   const [nameSaved, setNameSaved] = useState<string>("");
@@ -282,11 +284,6 @@ export default function SignInScreen() {
   const [pendingPhone, setPendingPhone] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  // Signup phone-first state
-  const [signupPhone, setSignupPhone] = useState("");
-  const [signupOtp, setSignupOtp] = useState("");
-  const [signupPendingPhone, setSignupPendingPhone] = useState("");
-  const [signupDisplayName, setSignupDisplayName] = useState("");
 
   const { isAvailable: isAppleAvailable, signIn: appleSignIn } = useAppleAuth();
 
@@ -295,8 +292,6 @@ export default function SignInScreen() {
     if (mode === "signedIn") return "Account";
     if (mode === "phoneSignin") return "Sign In";
     if (mode === "otpEntry") return "Enter Code";
-    if (mode === "signupOtpEntry") return "Verify Phone";
-    if (mode === "signupName") return "Almost done!";
     return "Sign In";
   }, [mode]);
 
@@ -309,7 +304,24 @@ export default function SignInScreen() {
   };
 
   async function finishSignIn() {
-    await syncPremiumStatusFromRevenueCat();
+    console.log("[finishSignIn] before syncPremiumStatusFromRevenueCat");
+    await withTimeout(
+      syncPremiumStatusFromRevenueCat(),
+      5000,
+      "syncPremiumStatusFromRevenueCat"
+    ).catch((e) => console.warn("[finishSignIn] premium sync failed:", e));
+    console.log("[finishSignIn] after syncPremiumStatusFromRevenueCat");
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const uid = sessionData.session?.user?.id;
+    console.log("[finishSignIn] before shouldShowPhonePrompt");
+    if (uid && (await shouldShowPhonePrompt(uid))) {
+      console.log("[finishSignIn] after shouldShowPhonePrompt (true)");
+      setShowPhonePrompt(true);
+      return;
+    }
+    console.log("[finishSignIn] after shouldShowPhonePrompt (false)");
+
     router.replace("/(tabs)/home");
   }
 
@@ -465,7 +477,6 @@ export default function SignInScreen() {
     if (busy) return;
     const em = email.trim();
     const pw = password;
-    const rawPhone = signupPhone.trim();
 
     if (!em || !pw) {
       return Alert.alert("Missing info", "Please enter an email and password.");
@@ -475,72 +486,6 @@ export default function SignInScreen() {
       return Alert.alert("Passwords don't match", "Please make sure both password fields match.");
     }
 
-    // Phone-first path
-    if (rawPhone) {
-      const formattedPhone = formatPhoneForSupabase(rawPhone);
-      if (formattedPhone.length < 10) {
-        return Alert.alert("Invalid number", "Please enter a valid US phone number.");
-      }
-
-      setBusy(true);
-
-      // Step 1: Reject if phone already linked to an account
-      const { data: phoneExists } = await supabase.rpc("check_phone_exists", { p_phone: formattedPhone });
-      if (phoneExists) {
-        setBusy(false);
-        return Alert.alert(
-          "Phone already linked",
-          "This phone number is already linked to an account. Please sign in instead.",
-          [
-            { text: "Go to Sign In", onPress: goToSignIn },
-            { text: "OK", style: "cancel" },
-          ]
-        );
-      }
-
-      // Step 2: Create the email account first
-      const { error: signUpError } = await supabase.auth.signUp({
-        email: em,
-        password: pw,
-        options: {
-          emailRedirectTo: "https://www.neatnotesapp.com/auth/callback",
-        },
-      });
-      if (signUpError) {
-        setBusy(false);
-        const msg = signUpError.message.toLowerCase();
-        if (msg.includes("already") || msg.includes("registered") || msg.includes("user already")) {
-          return Alert.alert(
-            "An account with this email already exists. Please sign in.",
-            undefined,
-            [
-              { text: "Go to Sign In", onPress: goToSignIn },
-              { text: "OK", style: "cancel" },
-            ]
-          );
-        }
-        return Alert.alert("Create account failed", signUpError.message);
-      }
-
-      // Step 3: Send verification OTP without creating a new user
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        phone: formattedPhone,
-        options: { shouldCreateUser: false },
-      });
-
-      setBusy(false);
-
-      if (otpError) {
-        return Alert.alert("Error", otpError.message);
-      }
-
-      setSignupPendingPhone(formattedPhone);
-      setSignupOtp("");
-      setMode("signupOtpEntry");
-      return;
-    }
-
-    // Email-only path
     setBusy(true);
 
     const { data, error } = await supabase.auth.signUp({
@@ -610,7 +555,6 @@ export default function SignInScreen() {
   const goToCreateAccount = () => {
     setSignupEmail("");
     setShowPassword(false);
-    setSignupPhone("");
     setMode("signup");
   };
 
@@ -618,90 +562,6 @@ export default function SignInScreen() {
     setSignupEmail("");
     setShowPassword(false);
     setMode("signin");
-  };
-
-  /* ---- Signup OTP: verify phone, link email, set password, write profile ---- */
-  const verifySignUpOtp = async () => {
-    if (busy) return;
-
-    if (signupOtp.length !== 6) {
-      return Alert.alert("Invalid code", "Please enter the 6-digit code we sent you.");
-    }
-
-    setBusy(true);
-
-    const { error } = await supabase.auth.verifyOtp({
-      phone: signupPendingPhone,
-      token: signupOtp,
-      type: "sms",
-    });
-
-    if (error) {
-      setBusy(false);
-      return Alert.alert(
-        "Incorrect code",
-        "That code didn't match. Please check and try again, or go back to resend."
-      );
-    }
-
-    // Link email identity — non-fatal
-    try {
-      await (supabase.auth as any).linkIdentity({
-        provider: "email",
-        options: { email: email.trim(), redirectTo: buildAuthCallbackUrl() },
-      });
-    } catch (linkErr) {
-      console.error("linkIdentity email failed (non-fatal):", linkErr);
-    }
-
-    // Set password — non-fatal
-    try {
-      await supabase.auth.updateUser({ password });
-    } catch (pwErr) {
-      console.error("updateUser password failed (non-fatal):", pwErr);
-    }
-
-    // Write profile row
-    const { data: sessionData } = await supabase.auth.getSession();
-    const uid = sessionData.session?.user?.id;
-    if (uid) {
-      try {
-        await supabase.from("profiles").upsert({
-          id: uid,
-          display_name: email.trim().split("@")[0],
-          phone: signupPendingPhone,
-        });
-      } catch (profileErr) {
-        console.error("profiles upsert failed (non-fatal):", profileErr);
-      }
-    }
-
-    setBusy(false);
-    setSignupDisplayName("");
-    setMode("signupName");
-  };
-
-  /* ---- Signup name collection ---- */
-  const submitSignupName = async () => {
-    if (busy) return;
-    const name = signupDisplayName.trim();
-    setBusy(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const uid = sessionData.session?.user?.id;
-      if (uid && name) {
-        await supabase.from("profiles").update({ display_name: name }).eq("id", uid);
-      }
-    } catch (err) {
-      console.error("display_name update failed (non-fatal):", err);
-    } finally {
-      setBusy(false);
-    }
-    await finishSignIn();
-  };
-
-  const skipSignupName = async () => {
-    await finishSignIn();
   };
 
   /* ---- Apple Sign-In ---- */
@@ -822,6 +682,7 @@ export default function SignInScreen() {
   }
 
   return (
+    <>
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -912,83 +773,6 @@ export default function SignInScreen() {
             </Pressable>
           </Card>
 
-        /* ── Signup OTP Entry ── */
-        ) : mode === "signupOtpEntry" ? (
-          <Card
-            title="Check your texts"
-            subtitle={`We sent a 6-digit code to ${signupPendingPhone}. Enter it below.`}
-          >
-            <ThemedInput
-              placeholder="6-digit code"
-              value={signupOtp}
-              onChangeText={(v) => setSignupOtp(v.replace(/\D/g, "").slice(0, 6))}
-              keyboardType="number-pad"
-              returnKeyType="done"
-              onSubmitEditing={verifySignUpOtp}
-              autoFocus
-            />
-
-            <ThemedButton
-              label={busy ? "Verifying…" : "Verify Code"}
-              onPress={verifySignUpOtp}
-              disabled={busy || signupOtp.length !== 6}
-              tone="primary"
-            />
-
-            <Pressable
-              onPress={() => {
-                setSignupOtp("");
-                setMode("signup");
-              }}
-              style={({ pressed }) => ({
-                alignSelf: "center",
-                opacity: pressed ? 0.7 : 1,
-                paddingVertical: 6,
-              })}
-            >
-              <Text style={[type.microcopyItalic, { color: colors.accent }]}>
-                Go back / resend code
-              </Text>
-            </Pressable>
-          </Card>
-
-        /* ── Signup Name Collection ── */
-        ) : mode === "signupName" ? (
-          <Card
-            title="Almost done!"
-            subtitle="What should we call you? You can change this anytime in settings."
-          >
-            <ThemedInput
-              placeholder="Your name or nickname"
-              value={signupDisplayName}
-              onChangeText={setSignupDisplayName}
-              autoCapitalize="words"
-              returnKeyType="done"
-              onSubmitEditing={submitSignupName}
-              autoFocus
-            />
-
-            <ThemedButton
-              label={busy ? "Working…" : "Continue"}
-              onPress={submitSignupName}
-              disabled={busy}
-              tone="primary"
-            />
-
-            <Pressable
-              onPress={skipSignupName}
-              style={({ pressed }) => ({
-                alignSelf: "center",
-                opacity: pressed ? 0.7 : 1,
-                paddingVertical: 6,
-              })}
-            >
-              <Text style={[type.microcopyItalic, { color: colors.accent }]}>
-                Skip for now
-              </Text>
-            </Pressable>
-          </Card>
-
         /* ── Sign Up (phone-first) ── */
         ) : mode === "signup" ? (
           <Card title="Create Account" subtitle="Start your whiskey journey.">
@@ -1015,19 +799,6 @@ export default function SignInScreen() {
               returnKeyType="next"
             />
 
-            <View style={{ gap: spacing.xs }}>
-              <ThemedInput
-                placeholder="Phone (optional)"
-                value={signupPhone}
-                onChangeText={setSignupPhone}
-                keyboardType="phone-pad"
-                returnKeyType="next"
-              />
-              <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.85 }]}>
-                Recommended — sign in faster with just a text code
-              </Text>
-            </View>
-
             <PasswordRow
               value={password}
               onChangeText={setPassword}
@@ -1045,10 +816,6 @@ export default function SignInScreen() {
               returnKeyType="done"
               onSubmitEditing={createAccount}
             />
-
-            <Text style={[type.microcopyItalic, { color: colors.textSecondary, opacity: 0.8, textAlign: "center" }]}>
-              By tapping Create Account you agree to receive a one-time SMS if you provide a phone number. Message and data rates may apply.
-            </Text>
 
             <ThemedButton
               label={busy ? "Working…" : "Create Account"}
@@ -1222,5 +989,13 @@ export default function SignInScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    <PhonePromptModal
+      visible={showPhonePrompt}
+      onDone={() => {
+        setShowPhonePrompt(false);
+        router.replace("/(tabs)/home");
+      }}
+    />
+    </>
   );
 }

@@ -4,6 +4,8 @@ import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 
+import PhonePromptModal from "../../components/PhonePromptModal";
+import { shouldShowPhonePrompt } from "../../lib/phonePrompt";
 import { spacing } from "../../lib/spacing";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
@@ -45,6 +47,7 @@ function parseParamsFromUrl(url: string) {
 
 export default function AuthCallback() {
   const [status, setStatus] = useState("Finishing authentication…");
+  const [showPhonePrompt, setShowPhonePrompt] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,6 +109,13 @@ export default function AuthCallback() {
         }
 
         // Otherwise normal auth callback (email confirm / magic link)
+        const { data: sessionData } = await supabase.auth.getSession();
+        const uid = sessionData.session?.user?.id;
+        if (uid && (await shouldShowPhonePrompt(uid))) {
+          if (!cancelled) setShowPhonePrompt(true);
+          return;
+        }
+
         router.replace("/(tabs)/home");
       } catch {
         if (!cancelled) router.replace("/sign-in");
@@ -138,6 +148,13 @@ export default function AuthCallback() {
     >
       <ActivityIndicator />
       <Text style={[type.body, { opacity: 0.8, textAlign: "center" }]}>{status}</Text>
+      <PhonePromptModal
+        visible={showPhonePrompt}
+        onDone={() => {
+          setShowPhonePrompt(false);
+          router.replace("/(tabs)/home");
+        }}
+      />
     </View>
   );
 }
