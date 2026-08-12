@@ -80,6 +80,7 @@ export default function AuthCallback() {
 
         if (code) {
           setStatus("Verifying link…");
+          console.log("[auth/callback] code present:", !!code, "length:", code?.length);
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) throw error;
         } else if (access_token && refresh_token) {
@@ -117,7 +118,8 @@ export default function AuthCallback() {
         }
 
         router.replace("/(tabs)/home");
-      } catch {
+      } catch (err) {
+        console.error("[auth/callback] handleUrl failed:", err);
         if (!cancelled) router.replace("/sign-in");
       }
     }
