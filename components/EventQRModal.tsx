@@ -95,7 +95,7 @@ export function EventQRModal({ visible, joinCode, onClose }: Props) {
               ecl="H"
               logo={require("../assets/images/NN_Icon_Transparent.png")}
               logoSize={48}
-              logoBackgroundColor="transparent"
+              logoBackgroundColor={colors.background}
             />
           </View>
 
