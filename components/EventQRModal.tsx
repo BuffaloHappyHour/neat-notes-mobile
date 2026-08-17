@@ -90,8 +90,8 @@ export function EventQRModal({ visible, joinCode, onClose }: Props) {
             <QRCode
               value={qrValue}
               size={240}
-              backgroundColor={colors.surface}
-              color={colors.accent}
+              backgroundColor={colors.scannerBackground}
+              color={colors.background}
               ecl="H"
               logo={require("../assets/images/NN_Icon_Transparent.png")}
               logoSize={48}

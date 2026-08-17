@@ -6,6 +6,7 @@ export const colors = {
   surface: "#1F1F1F", // Soft Espresso (default card)
   surfaceRaised: "#242424", // Elevated card / hero surface
   surfaceSunken: "#1A1A1A", // Inset/containers (tables, chips, list wells)
+  scannerBackground: "#F4F1EA", // Warm Cream, reused hex — required light background for QR/barcode scannability; app is otherwise all-dark by design
 
   // Borders & separators
   divider: "#2A2A2A", // Smoke divider/border
