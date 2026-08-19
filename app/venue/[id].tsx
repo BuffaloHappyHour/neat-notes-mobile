@@ -42,6 +42,8 @@ type FilterState = {
 
 /* ---------- CONSTANTS ---------- */
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const defaultFilter: FilterState = {
   types: [],
   regions: [],
@@ -934,11 +936,12 @@ export default function VenueScreen() {
         setLoading(true);
         setStatusError("");
 
-        const { data: venue, error: venueErr } = await supabase
-          .from("venues")
-          .select("id, name, display_name, venue_type, address, city, state, phone, website, is_active, updated_at, require_checkin, join_code")
-          .or(`id.eq.${id},normalized_name.eq.${id}`)
-          .single();
+        const venueSelect =
+          "id, name, display_name, venue_type, address, city, state, phone, website, is_active, updated_at, require_checkin, join_code";
+        const venueQuery = UUID_RE.test(id)
+          ? supabase.from("venues").select(venueSelect).eq("id", id)
+          : supabase.from("venues").select(venueSelect).eq("normalized_name", id);
+        const { data: venue, error: venueErr } = await venueQuery.single();
         if (venueErr) throw new Error(venueErr.message);
         if (!alive) return;
         const venueId = (venue as any).id as string;
