@@ -907,6 +907,7 @@ export default function VenueScreen() {
 
   const [isPremium, setIsPremium] = useState(false);
   const [venueData, setVenueData] = useState<any>(null);
+  const [resolvedVenueId, setResolvedVenueId] = useState<string | null>(null);
   const [requireCheckin, setRequireCheckin] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
   const [scannerPermission, requestScannerPermission] = useCameraPermissions();
@@ -915,12 +916,12 @@ export default function VenueScreen() {
   const [codeError, setCodeError] = useState("");
   const [codeLoading, setCodeLoading] = useState(false);
 
-  const fetchCheckinCount = async () => {
+  const fetchCheckinCount = async (venueId: string) => {
     const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
     const { count } = await supabase
       .from("venue_checkins")
       .select("id", { count: "exact", head: true })
-      .eq("venue_id", id)
+      .eq("venue_id", venueId)
       .is("checked_out_at", null)
       .gte("checked_in_at", threeHoursAgo);
     setCheckinCount(count ?? 0);
@@ -940,7 +941,9 @@ export default function VenueScreen() {
           .single();
         if (venueErr) throw new Error(venueErr.message);
         if (!alive) return;
+        const venueId = (venue as any).id as string;
         setVenueData(venue as any);
+        setResolvedVenueId(venueId);
         setRequireCheckin((venue as any)?.require_checkin === true);
 
         const { data: items, error: itemsErr } = await supabase
@@ -948,7 +951,7 @@ export default function VenueScreen() {
           .select(
             "id, whiskey_id, price_cents_1oz, price_cents_2oz, available, whiskeys(id, display_name, whiskey_type, whiskey_type_id, category, region, sub_region, proof, distillery)"
           )
-          .eq("venue_id", id)
+          .eq("venue_id", venueId)
           .order("available", { ascending: false });
 
         if (itemsErr) throw new Error(itemsErr.message);
@@ -959,7 +962,7 @@ export default function VenueScreen() {
 
         const { data: fullMenu, error: fullMenuErr } = await supabase.rpc(
           "get_venue_full_menu",
-          { p_venue_id: id }
+          { p_venue_id: venueId }
         );
         if (fullMenuErr) throw new Error(fullMenuErr.message);
         if (!alive) return;
@@ -1000,7 +1003,7 @@ export default function VenueScreen() {
           const { data: ci } = await supabase
             .from("venue_checkins")
             .select("id, checked_in_at")
-            .eq("venue_id", id)
+            .eq("venue_id", venueId)
             .eq("user_id", userId)
             .is("checked_out_at", null)
             .gte("checked_in_at", threeHoursAgo)
@@ -1015,7 +1018,7 @@ export default function VenueScreen() {
             await supabase
               .from("venue_checkins")
               .update({ checked_out_at: new Date().toISOString(), auto_expired: true })
-              .eq("venue_id", id)
+              .eq("venue_id", venueId)
               .eq("user_id", userId)
               .is("checked_out_at", null)
               .lt("checked_in_at", threeHoursAgo);
@@ -1026,7 +1029,7 @@ export default function VenueScreen() {
             }
           }
         }
-        await fetchCheckinCount();
+        await fetchCheckinCount(venueId);
       } catch (e: any) {
         if (alive) setStatusError(String(e?.message ?? e));
       } finally {
@@ -1223,7 +1226,7 @@ export default function VenueScreen() {
       setCodeEntryVisible(false);
       setScannerVisible(false);
       setCodeEntry("");
-      await fetchCheckinCount();
+      if (resolvedVenueId) await fetchCheckinCount(resolvedVenueId);
       await hapticTick();
     } catch (e: any) {
       setCodeError(String(e?.message ?? "Invalid code. Try again."));
@@ -1356,7 +1359,7 @@ export default function VenueScreen() {
                   setCheckedIn(false);
                   setCheckInId(null);
                   setCheckInTime(null);
-                  fetchCheckinCount();
+                  if (resolvedVenueId) fetchCheckinCount(resolvedVenueId);
                   Alert.alert(
                     "Before you go",
                     "Would you like to log a tasting while you were here?",
@@ -1377,16 +1380,17 @@ export default function VenueScreen() {
                     }
                     setScannerVisible(true);
                   } else {
+                    if (!resolvedVenueId) return;
                     const { data: ci } = await supabase
                       .from("venue_checkins")
-                      .insert({ venue_id: id, user_id: userId, checked_in_at: new Date().toISOString() })
+                      .insert({ venue_id: resolvedVenueId, user_id: userId, checked_in_at: new Date().toISOString() })
                       .select("id")
                       .single();
                     if (ci) {
                       setCheckedIn(true);
                       setCheckInId((ci as any).id);
                       setCheckInTime(new Date());
-                      fetchCheckinCount();
+                      fetchCheckinCount(resolvedVenueId);
                     }
                   }
                 }
