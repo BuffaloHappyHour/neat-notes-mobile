@@ -27,6 +27,71 @@ import { isVersionBelow } from "../lib/versionCompare";
 import OnboardingModal from "../src/onboarding/OnboardingModal";
 import { ForceUpdateOverlay } from "../components/ForceUpdateOverlay";
 
+type VenueCheckinPromptData = {
+  type: "venue_checkin_prompt";
+  checkin_id: string;
+  venue_id: string;
+};
+
+function isVenueCheckinPromptData(data: any): data is VenueCheckinPromptData {
+  return data?.type === "venue_checkin_prompt" && !!data?.checkin_id && !!data?.venue_id;
+}
+
+const activeCheckinPrompts = new Set<string>();
+
+async function respondVenueCheckinPrompt(checkinId: string, stillHere: boolean) {
+  const { error } = await supabase.rpc("respond_venue_checkin_prompt", {
+    p_checkin_id: checkinId,
+    p_still_here: stillHere,
+  });
+  if (error) {
+    // Fail open: the checkin may have already been auto-closed server-side
+    // before the user responded — nothing actionable to surface.
+    console.error("[venue_checkin_prompt] respond RPC failed:", error);
+  }
+}
+
+async function presentVenueCheckinPrompt(checkinId: string, venueId: string) {
+  if (activeCheckinPrompts.has(checkinId)) return;
+  activeCheckinPrompts.add(checkinId);
+
+  let venueName = "the venue";
+  try {
+    const { data: venue } = await supabase
+      .from("venues")
+      .select("name, display_name")
+      .eq("id", venueId)
+      .maybeSingle();
+    const name = (venue as any)?.display_name || (venue as any)?.name;
+    if (name) venueName = name;
+  } catch (e) {
+    console.error("[venue_checkin_prompt] venue name fetch failed:", e);
+  }
+
+  Alert.alert(
+    `Still at ${venueName}?`,
+    undefined,
+    [
+      {
+        text: "Yes, still here",
+        onPress: () => {
+          activeCheckinPrompts.delete(checkinId);
+          void respondVenueCheckinPrompt(checkinId, true);
+        },
+      },
+      {
+        text: "No, check me out",
+        style: "destructive",
+        onPress: () => {
+          activeCheckinPrompts.delete(checkinId);
+          void respondVenueCheckinPrompt(checkinId, false);
+        },
+      },
+    ],
+    { cancelable: false }
+  );
+}
+
 function RootLayout() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [forceUpdateUrl, setForceUpdateUrl] = useState<string | null>(null);
@@ -150,8 +215,24 @@ function RootLayout() {
   }, []);
 
   useEffect(() => {
+    const receivedSub = Notifications.addNotificationReceivedListener((notification) => {
+      const data = notification.request.content.data;
+      if (isVenueCheckinPromptData(data)) {
+        void presentVenueCheckinPrompt(data.checkin_id, data.venue_id);
+      }
+    });
+
+    return () => receivedSub.remove();
+  }, []);
+
+  useEffect(() => {
     const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const url = response.notification.request.content.data?.url as string | undefined;
+      const data = response.notification.request.content.data;
+      if (isVenueCheckinPromptData(data)) {
+        void presentVenueCheckinPrompt(data.checkin_id, data.venue_id);
+        return;
+      }
+      const url = data?.url as string | undefined;
       if (url) {
         router.push(url as any);
       }
@@ -161,10 +242,15 @@ function RootLayout() {
     const timer = setTimeout(async () => {
       const response = await Notifications.getLastNotificationResponseAsync();
       if (!response) return;
-      const url = response.notification.request.content.data?.url as string | undefined;
-      if (!url) return;
-      const { data } = await supabase.auth.getSession();
-      if (data.session?.user) {
+      const data = response.notification.request.content.data;
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session?.user) return;
+      if (isVenueCheckinPromptData(data)) {
+        void presentVenueCheckinPrompt(data.checkin_id, data.venue_id);
+        return;
+      }
+      const url = data?.url as string | undefined;
+      if (url) {
         router.push(url as any);
       }
     }, 1000);
