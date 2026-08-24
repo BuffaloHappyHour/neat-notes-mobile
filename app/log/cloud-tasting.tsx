@@ -34,6 +34,8 @@ import {
 import { loadTastingById } from "../../src/log/services/tastingLoad.service";
 import { saveCloudTasting } from "../../src/log/services/tastingSave.service";
 
+import { getActiveVenueId } from "../../lib/activeVenue";
+import { getActiveEventId } from "../../lib/eventStorage";
 import { radii } from "../../lib/radii";
 import { spacing } from "../../lib/spacing";
 import { supabase } from "../../lib/supabase";
@@ -325,6 +327,70 @@ export default function CloudTastingScreen() {
   const [pricePerBottle, setPricePerBottle] = useState("");
   const [bottleSizeMl, setBottleSizeMl] = useState("750");
   const [pourSizeOz, setPourSizeOz] = useState("2");
+
+  // Auto-fill source from an active venue check-in or event when the route
+  // didn't already hand us one (e.g. arriving via barcode scan / manual
+  // search from the Log tab rather than a venue menu row link).
+  useEffect(() => {
+    if (routeVenueId || routeSourceType) return;
+
+    let alive = true;
+    (async () => {
+      const activeVenueId = await getActiveVenueId();
+
+      if (activeVenueId) {
+        const { data: venue } = await supabase
+          .from("venues")
+          .select("name, display_name")
+          .eq("id", activeVenueId)
+          .maybeSingle();
+        if (!alive) return;
+
+        const venueName = (venue as any)?.display_name || (venue as any)?.name;
+        if (venueName) {
+          setSourceType("bar");
+          setBarName(venueName);
+        }
+
+        if (whiskeyId && isUuid(whiskeyId)) {
+          const { data: menuItem } = await supabase
+            .from("venue_menu_items")
+            .select("price_cents_1oz")
+            .eq("venue_id", activeVenueId)
+            .eq("whiskey_id", whiskeyId)
+            .maybeSingle();
+          if (!alive) return;
+
+          const priceCents = (menuItem as any)?.price_cents_1oz;
+          if (typeof priceCents === "number") {
+            setPricePerOz((priceCents / 100).toFixed(2));
+          }
+        }
+        return;
+      }
+
+      const activeEventId = await getActiveEventId();
+      if (!activeEventId) return;
+
+      const { data: event } = await supabase
+        .from("events")
+        .select("name")
+        .eq("id", activeEventId)
+        .maybeSingle();
+      if (!alive) return;
+
+      const eventName = (event as any)?.name;
+      if (eventName) {
+        setSourceType("bar");
+        setBarName(eventName);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [flavorNotesMissing, setFlavorNotesMissing] = useState(false);
   const [isSliding, setIsSliding] = useState(false);

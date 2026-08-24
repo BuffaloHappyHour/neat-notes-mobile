@@ -1,3 +1,4 @@
+import { getActiveVenueId } from "../../../lib/activeVenue";
 import { trackTastingSaved, trackTastingSaveFailed } from "../../../lib/analytics";
 import { getActiveEventId } from "../../../lib/eventStorage";
 import { hapticError, hapticSuccess } from "../../../lib/haptics";
@@ -221,6 +222,11 @@ export async function saveCloudTasting(params: {
       }
     }
   }
+
+  if (!venueId) {
+    venueId = await getActiveVenueId();
+  }
+
 const activeEventId = await getActiveEventId();
 
   const { data: sessionData } = await supabase.auth.getSession();

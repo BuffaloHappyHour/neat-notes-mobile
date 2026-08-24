@@ -896,6 +896,7 @@ export default function VenueScreen() {
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [fullMenuItems, setFullMenuItems] = useState<any[]>([]);
   const [communityStats, setCommunityStats] = useState<any[]>([]);
+  const [totalTastings, setTotalTastings] = useState(0);
   const [whiskeyTypes, setWhiskeyTypes] = useState<any[]>([]);
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkInId, setCheckInId] = useState<string | null>(null);
@@ -984,6 +985,14 @@ export default function VenueScreen() {
           setCommunityStats(((stats as any) ?? []) as any[]);
         }
 
+        const { data: tastingCount, error: tastingCountErr } = await supabase.rpc(
+          "get_venue_tasting_count",
+          { p_venue_id: venueId }
+        );
+        if (tastingCountErr) throw new Error(tastingCountErr.message);
+        if (!alive) return;
+        setTotalTastings(Number(tastingCount ?? 0));
+
         const { data: types, error: typesErr } = await supabase
           .from("whiskey_types")
           .select("id, name");
@@ -1043,11 +1052,6 @@ export default function VenueScreen() {
       alive = false;
     };
   }, [id]);
-
-  const totalTastings = useMemo(
-    () => communityStats.reduce((acc, s) => acc + Number(s.community_count ?? 0), 0),
-    [communityStats]
-  );
 
   const statsMap = useMemo(() => {
     const m: Record<string, any> = {};
