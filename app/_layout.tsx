@@ -108,6 +108,12 @@ function RootLayout() {
         })
         .eq('id', userId);
 
+      if (__DEV__) {
+        // Local dev builds run off a Metro bundle that's always ahead of/unrelated
+        // to whatever min_supported_version is configured — never force-update here.
+        return;
+      }
+
       try {
         const { data: versionConfig, error } = await supabase
           .from('app_version_config')
