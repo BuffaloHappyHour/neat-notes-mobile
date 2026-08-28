@@ -15,6 +15,7 @@ import {
   Share,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -295,14 +296,202 @@ function WhiskeyMenuRow({
   );
 }
 
-function FullMenuRow({ item }: { item: any }) {
+function FeaturedPourPrice({
+  regularPriceCents,
+  salePriceCents,
+  isLocked,
+}: {
+  regularPriceCents: number | null;
+  salePriceCents: number | null;
+  isLocked: boolean;
+}) {
+  if (isLocked) return null;
+  if (regularPriceCents == null && salePriceCents == null) return null;
+
+  const fmt = (cents: number) => `$${(cents / 100).toFixed(0)}`;
+
+  if (regularPriceCents != null && salePriceCents != null) {
+    return (
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+        <Text
+          style={[
+            type.caption,
+            { color: colors.textMuted, textDecorationLine: "line-through" },
+          ]}
+        >
+          {fmt(regularPriceCents)}
+        </Text>
+        <Text
+          style={[
+            type.body,
+            { fontFamily: "Montserrat_500Medium", color: colors.accent },
+          ]}
+        >
+          {fmt(salePriceCents)}
+        </Text>
+      </View>
+    );
+  }
+
+  const price = regularPriceCents ?? salePriceCents;
+  return (
+    <Text style={[type.caption, { color: colors.textTertiary, marginTop: 2 }]}>
+      {fmt(price as number)}
+    </Text>
+  );
+}
+
+function VenueFeaturedPourCard({
+  name,
+  whiskeyType,
+  proof,
+  featureNote,
+  regularPriceCents,
+  salePriceCents,
+  isLocked,
+  onPress,
+  cardWidth,
+}: {
+  name: string;
+  whiskeyType: string | null;
+  proof: number | null;
+  featureNote: string | null;
+  regularPriceCents: number | null;
+  salePriceCents: number | null;
+  isLocked: boolean;
+  onPress: () => void;
+  cardWidth?: number;
+}) {
+  return (
+    <Pressable
+      onPress={withTick(onPress)}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "stretch",
+        width: cardWidth,
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.borderStrong,
+        backgroundColor: pressed ? colors.surfaceSunken : colors.surface,
+        overflow: "hidden",
+      })}
+    >
+      <View style={{ width: 4, backgroundColor: colors.accent }} />
+      <View style={{ flex: 1, paddingVertical: spacing.md, paddingHorizontal: spacing.md, gap: 4 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Ionicons name="flame-outline" size={13} color={colors.accent} />
+          <Text style={[type.labelCaps, { color: colors.accent, fontSize: 10 }]}>
+            Featured Pour of the Night
+          </Text>
+        </View>
+        <Text
+          style={[
+            type.body,
+            { fontFamily: "Montserrat_500Medium", fontSize: 17, color: colors.textPrimary },
+          ]}
+          numberOfLines={2}
+        >
+          {name}
+        </Text>
+        <Text style={[type.caption, { color: colors.textTertiary }]}>
+          {whiskeyType ?? "Whiskey"}
+          {proof != null ? ` • ${proof} proof` : ""}
+        </Text>
+        <FeaturedPourPrice
+          regularPriceCents={regularPriceCents}
+          salePriceCents={salePriceCents}
+          isLocked={isLocked}
+        />
+        {featureNote ? (
+          <Text
+            style={[type.microcopyItalic, { color: colors.textSecondary, marginTop: 2 }]}
+            numberOfLines={3}
+          >
+            "{featureNote}"
+          </Text>
+        ) : null}
+      </View>
+      <View style={{ justifyContent: "center", paddingRight: spacing.md }}>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </View>
+    </Pressable>
+  );
+}
+
+function VenueFeaturedPoursCarousel({
+  pours,
+  isLocked,
+  onPressPour,
+}: {
+  pours: {
+    whiskeyId: string;
+    name: string;
+    type: string | null;
+    proof: number | null;
+    featureNote: string | null;
+    regularPriceCents: number | null;
+    salePriceCents: number | null;
+  }[];
+  isLocked: boolean;
+  onPressPour: (whiskeyId: string) => void;
+}) {
+  const { width: windowWidth } = useWindowDimensions();
+
+  if (pours.length === 0) return null;
+
+  if (pours.length === 1) {
+    const pour = pours[0];
+    return (
+      <VenueFeaturedPourCard
+        name={pour.name}
+        whiskeyType={pour.type}
+        proof={pour.proof}
+        featureNote={pour.featureNote}
+        regularPriceCents={pour.regularPriceCents}
+        salePriceCents={pour.salePriceCents}
+        isLocked={isLocked}
+        onPress={() => onPressPour(pour.whiskeyId)}
+      />
+    );
+  }
+
+  // Size cards so ~1.2 are visible per screen width, hinting there's more to scroll.
+  const cardWidth = (windowWidth - spacing.lg * 2) / 1.2;
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      nestedScrollEnabled
+      style={{ marginHorizontal: -spacing.lg }}
+      contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}
+    >
+      {pours.map(pour => (
+        <VenueFeaturedPourCard
+          key={pour.whiskeyId}
+          name={pour.name}
+          whiskeyType={pour.type}
+          proof={pour.proof}
+          featureNote={pour.featureNote}
+          regularPriceCents={pour.regularPriceCents}
+          salePriceCents={pour.salePriceCents}
+          isLocked={isLocked}
+          cardWidth={cardWidth}
+          onPress={() => onPressPour(pour.whiskeyId)}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
+function FullMenuRow({ item, isLocked }: { item: any; isLocked: boolean }) {
   const available = item.available !== false;
   const name = (item.name as string | null) ?? "Unknown";
   const description = typeof item.description === "string" ? item.description.trim() : "";
   const price1oz = item.price_cents_1oz != null ? `$${(Number(item.price_cents_1oz) / 100).toFixed(0)} / 1oz` : null;
   const price2oz = item.price_cents_2oz != null ? `$${(Number(item.price_cents_2oz) / 100).toFixed(0)} / 2oz` : null;
   const priceFlat = item.price_cents != null ? `$${(Number(item.price_cents) / 100).toFixed(0)}` : null;
-  const priceStr = [price1oz, price2oz, priceFlat].filter(Boolean).join("  ·  ");
+  const priceStr = isLocked ? "" : [price1oz, price2oz, priceFlat].filter(Boolean).join("  ·  ");
 
   return (
     <View
@@ -345,6 +534,121 @@ function FullMenuRow({ item }: { item: any }) {
   );
 }
 
+function isFlightMenuItem(item: any): boolean {
+  return Array.isArray(item?.flight_whiskeys) && item.flight_whiskeys.length > 0;
+}
+
+function FlightMenuCard({
+  item,
+  whiskeyLookup,
+  isLocked,
+}: {
+  item: any;
+  whiskeyLookup: Record<string, { whiskey_type: string | null; proof: number | null }>;
+  isLocked: boolean;
+}) {
+  const available = item.available !== false;
+  const name = (item.name as string | null) ?? "Flight";
+  const priceFlat =
+    !isLocked && item.price_cents != null ? `$${(Number(item.price_cents) / 100).toFixed(0)}` : null;
+  const whiskeys = Array.isArray(item.flight_whiskeys) ? item.flight_whiskeys : [];
+
+  return (
+    <View
+      style={{
+        marginHorizontal: spacing.lg,
+        marginVertical: spacing.xs,
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.borderStrong,
+        backgroundColor: colors.surface,
+        overflow: "hidden",
+        opacity: available ? 1 : 0.4,
+      }}
+    >
+      {/* Header */}
+      <View
+        style={{
+          paddingVertical: spacing.sm,
+          paddingHorizontal: spacing.md,
+          gap: 2,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.divider,
+          backgroundColor: colors.surfaceSunken,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: spacing.sm,
+          }}
+        >
+          <Text
+            style={[type.body, { fontFamily: "Montserrat_500Medium", flex: 1 }]}
+            numberOfLines={2}
+          >
+            {name}
+          </Text>
+          {priceFlat != null && (
+            <Text style={[type.body, { color: colors.accent, fontFamily: "Montserrat_500Medium" }]}>
+              {priceFlat}
+            </Text>
+          )}
+        </View>
+        {!available && (
+          <Text style={[type.labelCaps, { fontSize: 10, color: colors.textMuted }]}>Out of Stock</Text>
+        )}
+      </View>
+
+      {/* Included whiskeys */}
+      {whiskeys.map((fw: any, idx: number) => {
+        const info = fw?.whiskey_id ? whiskeyLookup[fw.whiskey_id] : undefined;
+        const detailBits = [
+          info?.whiskey_type ?? null,
+          info?.proof != null ? `${info.proof} proof` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+        return (
+          <Pressable
+            key={fw?.whiskey_id ?? idx}
+            onPress={withTick(() => {
+              if (!fw?.whiskey_id) return;
+              router.push(`/whiskey/${fw.whiskey_id}` as any);
+            })}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: spacing.sm,
+              paddingVertical: spacing.sm,
+              paddingHorizontal: spacing.md,
+              backgroundColor: pressed ? colors.surfaceSunken : "transparent",
+              borderTopWidth: idx === 0 ? 0 : 1,
+              borderTopColor: colors.divider,
+            })}
+          >
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={[type.caption, { color: colors.textPrimary }]} numberOfLines={1}>
+                {fw?.name ?? "Unknown"}
+              </Text>
+              {detailBits.length > 0 && (
+                <Text style={[type.caption, { fontSize: 11, color: colors.textTertiary }]}>
+                  {detailBits}
+                </Text>
+              )}
+            </View>
+            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function VenueFilterSheet({
   visible,
   onClose,
@@ -363,7 +667,7 @@ function VenueFilterSheet({
   filter: FilterState;
   onApply: (f: FilterState) => void;
   isLocked: boolean;
-  activeTab: "whiskey" | "full";
+  activeTab: "whiskey" | "flights" | "full";
   otherCategoryOptions: string[];
   otherFilter: string[];
   onApplyOther: (categories: string[]) => void;
@@ -904,12 +1208,23 @@ export default function VenueScreen() {
   const [checkinCount, setCheckinCount] = useState(0);
   const [filterVisible, setFilterVisible] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
-  const [activeTab, setActiveTab] = useState<"whiskey" | "full">("whiskey");
+  const [activeTab, setActiveTab] = useState<"whiskey" | "flights" | "full">("whiskey");
   const [appliedFilter, setAppliedFilter] = useState<FilterState>(defaultFilter);
   const [appliedOtherFilter, setAppliedOtherFilter] = useState<string[]>([]);
 
   const [isPremium, setIsPremium] = useState(false);
   const [venueData, setVenueData] = useState<any>(null);
+  const [featuredPours, setFeaturedPours] = useState<
+    {
+      whiskeyId: string;
+      name: string;
+      type: string | null;
+      proof: number | null;
+      featureNote: string | null;
+      regularPriceCents: number | null;
+      salePriceCents: number | null;
+    }[]
+  >([]);
   const [resolvedVenueId, setResolvedVenueId] = useState<string | null>(null);
   const [requireCheckin, setRequireCheckin] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
@@ -963,6 +1278,49 @@ export default function VenueScreen() {
 
         const nextItems = ((items as any) ?? []) as any[];
         setMenuItems(nextItems);
+
+        const { data: pourData, error: pourErr } = await supabase
+          .from("venue_featured_pours")
+          .select(
+            `
+            feature_note,
+            regular_price_cents,
+            sale_price_cents,
+            sort_order,
+            whiskey:whiskeys (
+              id,
+              display_name,
+              whiskey_type,
+              proof
+            )
+          `
+          )
+          .eq("venue_id", venueId)
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true });
+
+        if (!pourErr && alive) {
+          const rows = ((pourData as any) ?? []) as any[];
+          const nextPours = rows
+            .map(row => {
+              const pourWhiskeyRaw = Array.isArray(row?.whiskey) ? row.whiskey[0] : row?.whiskey;
+              if (!pourWhiskeyRaw) return null;
+              return {
+                whiskeyId: pourWhiskeyRaw.id,
+                name: pourWhiskeyRaw.display_name,
+                type: pourWhiskeyRaw.whiskey_type ?? null,
+                proof:
+                  pourWhiskeyRaw.proof == null || !Number.isFinite(Number(pourWhiskeyRaw.proof))
+                    ? null
+                    : Number(pourWhiskeyRaw.proof),
+                featureNote: row?.feature_note ?? null,
+                regularPriceCents: row?.regular_price_cents ?? null,
+                salePriceCents: row?.sale_price_cents ?? null,
+              };
+            })
+            .filter((p): p is NonNullable<typeof p> => p != null);
+          setFeaturedPours(nextPours);
+        }
 
         const { data: fullMenu, error: fullMenuErr } = await supabase.rpc(
           "get_venue_full_menu",
@@ -1059,6 +1417,17 @@ export default function VenueScreen() {
     return m;
   }, [communityStats]);
 
+  const whiskeyLookup = useMemo(() => {
+    const m: Record<string, { whiskey_type: string | null; proof: number | null }> = {};
+    menuItems.forEach((item: any) => {
+      const w = item.whiskeys as any;
+      if (w?.id) {
+        m[w.id] = { whiskey_type: w.whiskey_type ?? null, proof: w.proof ?? null };
+      }
+    });
+    return m;
+  }, [menuItems]);
+
   const filteredItems = useMemo(() => {
     let items = [...menuItems];
 
@@ -1152,9 +1521,22 @@ export default function VenueScreen() {
   }, [filteredItems]);
 
   const otherMenuItems = useMemo(
-    () => fullMenuItems.filter((item: any) => item.category_kind === "other"),
+    () =>
+      fullMenuItems.filter(
+        (item: any) => item.category_kind === "other" && !isFlightMenuItem(item)
+      ),
     [fullMenuItems]
   );
+
+  const flightMenuItems = useMemo(() => {
+    const items = fullMenuItems.filter((item: any) => isFlightMenuItem(item));
+    return [...items].sort((a, b) => {
+      const aAvail = a.available !== false ? 0 : 1;
+      const bAvail = b.available !== false ? 0 : 1;
+      if (aAvail !== bAvail) return aAvail - bAvail;
+      return String(a.name ?? "").localeCompare(String(b.name ?? ""));
+    });
+  }, [fullMenuItems]);
 
   const otherCategoryOptions = useMemo(() => {
     const set = new Set<string>();
@@ -1464,16 +1846,18 @@ export default function VenueScreen() {
             <Text style={[type.body, { flex: 1, color: colors.textMuted, fontSize: 15 }]}>
               Search {menuItems.length > 0 ? `${menuItems.length}+` : ""} whiskeys…
             </Text>
-            <Pressable
-              onPress={withTick(() => setFilterVisible(true))}
-              hitSlop={8}
-              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-            >
-              <Ionicons name="options-outline" size={16} color={colors.textSecondary} />
-              <Text style={[type.labelCaps, { fontSize: 11, color: colors.textSecondary }]}>
-                {activeTab === "whiskey" ? "Filter & Sort" : "Filter"}
-              </Text>
-            </Pressable>
+            {activeTab !== "flights" && (
+              <Pressable
+                onPress={withTick(() => setFilterVisible(true))}
+                hitSlop={8}
+                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+              >
+                <Ionicons name="options-outline" size={16} color={colors.textSecondary} />
+                <Text style={[type.labelCaps, { fontSize: 11, color: colors.textSecondary }]}>
+                  {activeTab === "whiskey" ? "Filter & Sort" : "Filter"}
+                </Text>
+              </Pressable>
+            )}
           </Pressable>
 
           {/* ── Upsell Banner ───────────────────────────────────── */}
@@ -1527,6 +1911,18 @@ export default function VenueScreen() {
             </View>
           )}
 
+          {/* ── Featured Pour(s) of the Night ───────────────────── */}
+          {featuredPours.length > 0 ? (
+            <VenueFeaturedPoursCarousel
+              pours={featuredPours}
+              isLocked={requireCheckin && !checkedIn}
+              onPressPour={whiskeyId => {
+                if (!whiskeyId) return;
+                router.push(`/whiskey/${whiskeyId}` as any);
+              }}
+            />
+          ) : null}
+
           {/* ── Menu Toggle ─────────────────────────────────────── */}
           <View
             style={{
@@ -1537,7 +1933,7 @@ export default function VenueScreen() {
               overflow: "hidden",
             }}
           >
-            {(["whiskey", "full"] as const).map(tab => (
+            {(["whiskey", "flights", "full"] as const).map(tab => (
               <Pressable
                 key={tab}
                 onPress={withTick(() => setActiveTab(tab))}
@@ -1555,7 +1951,7 @@ export default function VenueScreen() {
                     { color: activeTab === tab ? colors.textPrimary : colors.textMuted },
                   ]}
                 >
-                  {tab === "whiskey" ? "Whiskey" : "Other Drinks"}
+                  {tab === "whiskey" ? "Whiskey" : tab === "flights" ? "Flights" : "Other Drinks"}
                 </Text>
               </Pressable>
             ))}
@@ -1646,6 +2042,25 @@ export default function VenueScreen() {
               ))
             )}
           </View>
+        ) : activeTab === "flights" ? (
+          <View style={{ paddingTop: spacing.sm }}>
+            {flightMenuItems.length === 0 ? (
+              <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
+                <Text style={[type.body, { color: colors.textMuted }]}>
+                  No flights on the menu yet.
+                </Text>
+              </View>
+            ) : (
+              flightMenuItems.map((item: any) => (
+                <FlightMenuCard
+                  key={item.item_id}
+                  item={item}
+                  whiskeyLookup={whiskeyLookup}
+                  isLocked={requireCheckin && !checkedIn}
+                />
+              ))
+            )}
+          </View>
         ) : (
           <View style={{ paddingTop: spacing.sm }}>
             {groupedFullMenuItems.length === 0 ? (
@@ -1691,7 +2106,7 @@ export default function VenueScreen() {
                   </View>
                   {items.map((item: any, idx: number) => (
                     <View key={item.item_id}>
-                      <FullMenuRow item={item} />
+                      <FullMenuRow item={item} isLocked={requireCheckin && !checkedIn} />
                       {idx < items.length - 1 && (
                         <View
                           style={{
